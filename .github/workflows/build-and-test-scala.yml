@@ -28,5 +28,5 @@ jobs:
         distribution: 'adopt-hotspot'
         cache: 'sbt'
     - name: Run tests
-      working-directory: src/cliantro
+      working-directory: ./src/cliantro
       run: sbt test
