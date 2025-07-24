@@ -28,9 +28,10 @@ jobs:
         distribution: 'adopt-hotspot'
         cache: 'sbt'
     - name: Debug output
+      working-directory: src
       run: |
           echo "where we are"
-          echo "directory: $working-directory"
+          echo "directory: `pwd`"
           echo "files: `ls`"
     - name: Run tests
       working-directory: ../src/cliantro
