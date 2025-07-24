@@ -27,12 +27,6 @@ jobs:
         java-version: '21'
         distribution: 'adopt-hotspot'
         cache: 'sbt'
-    - name: Debug output
-      working-directory: src
-      run: |
-          echo "where we are"
-          echo "directory: `pwd`"
-          echo "files: `ls`"
     - name: Run tests
-      working-directory: ../src/cliantro
+      working-directory: src/cilantro
       run: sbt test
