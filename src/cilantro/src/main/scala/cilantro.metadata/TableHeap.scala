@@ -12,6 +12,10 @@
 
 package io.spicelabs.cilantro.metadata
 
+import javax.swing.text.Utilities
+import io.spicelabs.cilantro
+import io.spicelabs.cilantro.MetadataConsts
+
 
 enum Table(val value: Byte)
 {
@@ -68,4 +72,24 @@ enum Table(val value: Byte)
     case importScope extends Table(0x35)
     case stateMachineMethod extends Table(0x36)
     case customDebugInformation extends Table(0x37)
+}
+
+class TableInformation() {
+    var offset = 0
+    var length = 0
+    var rowSize = 0
+    def isLarge =
+        length > Char.MaxValue
+}
+
+class TableHeap (data: Array[Byte]) extends Heap(data) {
+    var valid = 0L
+    var sorted = 0L
+    val tables = Array.fill[TableInformation](MetadataConsts.tableCount){TableInformation()}
+
+    def apply(table:Table) =
+        tables(table.value)
+
+    def hasTable(table: Table) =
+        (valid & (1L << table.value)) != 0
 }
