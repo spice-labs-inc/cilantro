@@ -14,6 +14,14 @@ package io.spicelabs.cilantro
 
 import io.spicelabs.cilantro.metadata.*;
 
+class MetadataConsts
+
+object MetadataConsts {
+    val tableCount = 58
+    val codedIndexCount = 14
+}
+
+
 extension (b: Byte)
     def asIntNoSign = b.toInt & 0xff
 
