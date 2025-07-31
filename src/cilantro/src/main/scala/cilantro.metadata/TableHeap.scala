@@ -82,7 +82,7 @@ class TableInformation() {
         length > Char.MaxValue
 }
 
-class TableHeap (data: Array[Byte]) extends Heap(data) {
+class TableHeap (val data: Array[Byte]) extends Heap(data) {
     var valid = 0L
     var sorted = 0L
     val tables = Array.fill[TableInformation](MetadataConsts.tableCount){TableInformation()}

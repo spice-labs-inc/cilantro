@@ -8,9 +8,10 @@
 //
 // Licensed under the MIT/X11 license.
 
-// Derived from https://github.com/jbevain/cecil/blob/3136847ea620fb9b4a3ff96bc4f573148e8bd2e4/Mono.Cecil.Metadata/Heap.cs
-package io.spicelabs.cilantro.metadata
+// Derived from https://github.com/jbevain/cecil/blob/3136847ea620fb9b4a3ff96bc4f573148e8bd2e4/Mono.Cecil/TargetRuntime.cs
 
-abstract class Heap(data: Array[Byte]) {
-    var indexSize = 0
+package io.spicelabs.cilantro
+
+enum TargetRuntime {
+  case net_1_0, net_1_1, net_2_0, net_4_0
 }
