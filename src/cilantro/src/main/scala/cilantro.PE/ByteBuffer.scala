@@ -13,9 +13,9 @@
 package io.spicelabs.cilantro.PE
 
 
-open class ByteBuffer private (var buffer: Array[Byte]) {
-    protected var length = 0
-    protected var position = 0
+open class ByteBuffer (var buffer: Array[Byte]) {
+    var length = 0
+    var position = 0
 
     def this(len: Int) =
         this(Array.ofDim[Byte](len))
