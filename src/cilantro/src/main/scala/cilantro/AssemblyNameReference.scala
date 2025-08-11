@@ -32,33 +32,33 @@ class AssemblyNameReference(private var _name: String, private var _version: Ver
     private var _full_name = ""
 
     def name = _name
-    def name_(value: String) = _name = value
+    def name_=(value: String) = _name = value
 
     def culture = _culture
-    def culture_(value: String) = _culture = value
+    def culture_=(value: String) = _culture = value
 
     def version = _version
-    def version_(value: Version) = _version = checkVersion(value)
+    def version_=(value: Version) = _version = checkVersion(value)
 
     def attributes = _attributes
-    def attributes_(value: Int) = _attributes = value
+    def attributes_=(value: Int) = _attributes = value
 
     def hasPublicKey = getAttributes(_attributes, AssemblyAttributes.publicKey.value)
-    def hasPublicKey_(value: Boolean) = _attributes = setAttributes(_attributes, AssemblyAttributes.publicKey.value, value)
+    def hasPublicKey_=(value: Boolean) = _attributes = setAttributes(_attributes, AssemblyAttributes.publicKey.value, value)
 
     def isSideBySideCompatible = getAttributes(_attributes, AssemblyAttributes.sideBySideCompatible.value)
-    def isSideBySideCompatible_(value: Boolean) = _attributes = setAttributes(_attributes, AssemblyAttributes.sideBySideCompatible.value, value)
+    def isSideBySideCompatible_=(value: Boolean) = _attributes = setAttributes(_attributes, AssemblyAttributes.sideBySideCompatible.value, value)
 
     def isRetargetable = getAttributes(_attributes, AssemblyAttributes.retargetable.value)
-    def isRetargetable_ (value: Boolean) = _attributes = setAttributes(_attributes, AssemblyAttributes.retargetable.value, value)
+    def isRetargetable_=(value: Boolean) = _attributes = setAttributes(_attributes, AssemblyAttributes.retargetable.value, value)
 
     def isWindowsRuntime = getAttributes(_attributes, AssemblyAttributes.windowsRuntime.value)
-    def isWindowsRuntime_ (value: Boolean) = _attributes = setAttributes(_attributes, AssemblyAttributes.windowsRuntime.value, value)
+    def isWindowsRuntime_=(value: Boolean) = _attributes = setAttributes(_attributes, AssemblyAttributes.windowsRuntime.value, value)
 
     def publicKey = _public_key
-    def publicKey_ (value: Array[Byte]) =
+    def publicKey_=(value: Array[Byte]) =
         _public_key = value
-        hasPublicKey_(publicKey != null && publicKey.length > 0)
+        hasPublicKey = publicKey != null && publicKey.length > 0
         _public_key_token = null
         _full_name = null
 
@@ -73,7 +73,7 @@ class AssemblyNameReference(private var _name: String, private var _version: Ver
                 local_public_key_token(dst) = hash(src)
             _public_key_token = local_public_key_token
         if  _public_key_token == null then Array.emptyByteArray else _public_key_token
-    def publicKeyToken_(value: Array[Byte]) =
+    def publicKeyToken_=(value: Array[Byte]) =
         _public_key_token = value
         _full_name = null 
  
@@ -115,13 +115,13 @@ class AssemblyNameReference(private var _name: String, private var _version: Ver
         _full_name
 
     def hashAlgorithm = _hash_algorithm
-    def hashAlgorithm_(value: AssemblyHashAlgorithm) = _hash_algorithm = value
+    def hashAlgorithm_=(value: AssemblyHashAlgorithm) = _hash_algorithm = value
 
     def hash: Array[Byte] = _hash
-    def hash_(value: Array[Byte]) = _hash = value
+    def hash_=(value: Array[Byte]) = _hash = value
 
     def metadataToken = _token
-    def metadataToken_(value: MetadataToken) = _token = value
+    def metadataToken_=(value: MetadataToken) = _token = value
 
     override def toString(): String = this.fullName
 }

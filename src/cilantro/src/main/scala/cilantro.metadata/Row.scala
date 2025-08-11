@@ -12,7 +12,7 @@
 
 package io.spicelabs.cilantro.metadata
 
-class Row2[T1, T2] (private val col1: T1, private val col2: T2) {
+class Row2[T1, T2] (val col1: T1, val col2: T2) {
     given CanEqual[Row2[T1, T2], Row2[T1, T2]] = CanEqual.derived
 
     override def equals(that: Any): Boolean =
@@ -25,7 +25,7 @@ class Row2[T1, T2] (private val col1: T1, private val col2: T2) {
         val c2 = if col2 == null then 0 else col2.hashCode()
         c1 ^ c2
 }
-class Row3[T1, T2, T3] (private val col1: T1, private val col2: T2, private val col3: T3) {
+class Row3[T1, T2, T3] (val col1: T1, val col2: T2, val col3: T3) {
     given CanEqual[Row3[Int, Int, Int], Row3[Int, Int, Int]] = CanEqual.derived
 
     override def equals(that: Any): Boolean =

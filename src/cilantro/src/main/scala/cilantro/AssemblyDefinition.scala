@@ -12,14 +12,15 @@
 
 package io.spicelabs.cilantro
 
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.ArrayBuffer
+import java.io.FileInputStream
 
 class AssemblyDefinition(private var _assemblyName: AssemblyNameDefinition, parameters: ModuleParameters) extends CustomAttributeProvider with AutoCloseable {
     private var _main_module:ModuleDefinition = null
-    private var _modules: ListBuffer[ModuleDefinition] = null
-    private var _custom_attributes: ListBuffer[CustomAttribute] = null
+    private var _modules: ArrayBuffer[ModuleDefinition] = null
+    private var _custom_attributes: ArrayBuffer[CustomAttribute] = null
     // TODO
-    // private var _security_declarations: ListBuffer[SecurityDeclaration] = null
+    // private var _security_declarations: ArrayBuffer[SecurityDeclaration] = null
 
     def name = _assemblyName
     def name_(value: AssemblyNameDefinition) = _assemblyName = value
@@ -27,7 +28,7 @@ class AssemblyDefinition(private var _assemblyName: AssemblyNameDefinition, para
     def fullName = if _assemblyName != null then _assemblyName.fullName else ""
 
     def metadataToken = MetadataToken(TokenType.assembly, 1)
-    def metadataToken_(value: MetadataToken) = ()
+    def metadataToken_=(value: MetadataToken) = ()
 
     def modules =
         if (_modules != null)
@@ -35,10 +36,11 @@ class AssemblyDefinition(private var _assemblyName: AssemblyNameDefinition, para
         if (_main_module.hasImage)
             _modules = _main_module.read(_modules, this, (_, reader) => reader.readModules())
             _modules
-        _modules = ListBuffer.empty[ModuleDefinition]
+        _modules = ArrayBuffer.empty[ModuleDefinition]
         _modules
 
     def mainModule = _main_module
+    def mainModule_=(value: ModuleDefinition) = _main_module = value
 
     // TODO
     // def entryPoint = _main_module.entryPoint
@@ -55,6 +57,8 @@ class AssemblyDefinition(private var _assemblyName: AssemblyNameDefinition, para
         else
             _custom_attributes = getCustomAttributes(_custom_attributes, _main_module)
             _custom_attributes
+    def this() =
+        this(null, null)
 
     override def close(): Unit =
         if (_modules == null)
@@ -83,5 +87,24 @@ object AssemblyDefinition {
         var assembly = ModuleDefinition.createModule(moduleName, parameters).assembly
         assembly.name_(assemblyName)
 
+        assembly
+
+
+    def readAssembly(fileName: String): AssemblyDefinition =
+        readAssembly(ModuleDefinition.readModule(fileName))
+    
+    def readAssembly(fileName: String, parameters: ReaderParameters): AssemblyDefinition =
+        readAssembly(ModuleDefinition.readModule(fileName, parameters))
+    
+    def readAssembly(stream: FileInputStream): AssemblyDefinition =
+        readAssembly (ModuleDefinition.readModule(stream))
+    
+    def readAssembly(stream: FileInputStream, parameters: ReaderParameters): AssemblyDefinition =
+        readAssembly(ModuleDefinition.readModule(stream, parameters))
+    
+    def readAssembly(module: ModuleDefinition): AssemblyDefinition =
+        val assembly = module.assembly
+        if (assembly == null)
+            throw IllegalArgumentException()
         assembly
 }

@@ -21,14 +21,21 @@ enum MetadataKind {
 }
 
 
-enum TargetArchitecture(value: Int) {
+enum TargetArchitecture(val value: Int) {
   case i386 extends TargetArchitecture(0x014c)
   case amd64 extends TargetArchitecture(0x8664)
   case ia64 extends TargetArchitecture(0x0200)
   case arm extends TargetArchitecture(0x01c0)
   case armv7 extends TargetArchitecture(0x01c4)
   case arm64 extends TargetArchitecture(0xaa64)
-  
+}
+
+object TargetArchitecture {
+  def fromOrdinalValue(value: Int) =
+    TargetArchitecture.values.find(x => {x.value == value}) match
+      case Some(result) => result
+      case None => throw IllegalArgumentException(s"value $value not found in TargetArchitecture")
+    
 }
 
 enum ModuleAttributesConstants(val value: Int) {

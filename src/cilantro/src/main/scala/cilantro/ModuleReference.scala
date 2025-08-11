@@ -14,12 +14,12 @@ package io.spicelabs.cilantro
 
 class ModuleReference(private var _name: String = null, var _token: MetadataToken = MetadataToken(TokenType.moduleRef)) extends MetadataScope {
     def name = _name
-    def name_(value: String) = _name = value
+    def name_=(value: String) = _name = value
 
     def metadataScopeType = MetadataScopeType.moduleReference
 
     override def metadataToken = _token
-    override def metadataToken_(value: MetadataToken) = _token = value
+    override def metadataToken_=(value: MetadataToken) = _token = value
 
     override def toString(): String = _name
 }

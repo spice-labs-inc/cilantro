@@ -9,4 +9,12 @@ class SmokeTests extends munit.FunSuite {
         assert(Files.exists(smokePath))
     }
 
+    test("opens smoke file") {
+        intercept[IllegalArgumentException] {
+            var cwd = Paths.get(System.getProperty("user.dir"))
+            var smokePath = cwd.resolve("../../test-files/smoke/Smoke.dll")
+            var strPath = smokePath.toString()
+            var assem = AssemblyDefinition.readAssembly(strPath)
+        }
+    }
 }

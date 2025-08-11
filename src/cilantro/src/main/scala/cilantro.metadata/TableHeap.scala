@@ -74,6 +74,13 @@ enum Table(val value: Byte)
     case customDebugInformation extends Table(0x37)
 }
 
+object Table {
+    def fromOrdinalValue(value: Int) =
+    Table.values.find(x => {x.value == value}) match
+      case Some(result) => result
+      case None => throw IllegalArgumentException(s"value $value not found in Table")  
+}
+
 class TableInformation() {
     var offset = 0
     var length = 0
@@ -82,7 +89,7 @@ class TableInformation() {
         length > Char.MaxValue
 }
 
-class TableHeap (val data: Array[Byte]) extends Heap(data) {
+class TableHeap (_data: Array[Byte]) extends Heap(_data) {
     var valid = 0L
     var sorted = 0L
     val tables = Array.fill[TableInformation](MetadataConsts.tableCount){TableInformation()}

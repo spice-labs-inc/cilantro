@@ -19,5 +19,5 @@ enum MetadataScopeType {
 trait MetadataScope extends MetadataTokenProvider {
     def metadataScopeType: MetadataScopeType
     def name: String
-    def name_(value: String): Unit
+    def name_=(value: String): Unit
 }
