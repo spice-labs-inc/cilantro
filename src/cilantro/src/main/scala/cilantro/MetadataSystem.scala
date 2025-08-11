@@ -8,12 +8,10 @@
 //
 // Licensed under the MIT/X11 license.
 
-// Derived from https://github.com/jbevain/cecil/blob/3136847ea620fb9b4a3ff96bc4f573148e8bd2e4/Mono.Cecil/IMetadataTokenProvider.cs
+// Derived from https://github.com/jbevain/cecil/blob/3136847ea620fb9b4a3ff96bc4f573148e8bd2e4/Mono.Cecil/MetadataSystem.cs
 
 package io.spicelabs.cilantro
 
-trait MetadataTokenProvider {
-
-    def metadataToken: MetadataToken
-    def metadataToken_=(value: MetadataToken) : Unit
+class Range(var index: Int, var length: Int) {
+    def this() = this(0, 0)
 }

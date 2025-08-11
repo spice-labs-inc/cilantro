@@ -17,7 +17,7 @@ import java.nio.channels.FileChannel.MapMode
 import java.nio.ByteOrder
 import io.spicelabs.cilantro.PE.DataDirectory
 
-class BinaryStreamReader(fileInputStream: FileInputStream) {
+class BinaryStreamReader(protected val fileInputStream: FileInputStream) {
     private val channel = fileInputStream.getChannel()
     private val byteBuffer = {
         val bb =channel.map(MapMode.READ_ONLY, 0, channel.size)
@@ -25,11 +25,17 @@ class BinaryStreamReader(fileInputStream: FileInputStream) {
         bb
     }
 
+    def position = fileInputStream.getChannel().position().toInt
+    def position_ (value: Int) = fileInputStream.getChannel().position(value.toLong & 0xffffffff)
+
+    def length = fileInputStream.getChannel().size().toInt
+
     def readByte() = byteBuffer.get()
 
     def readInt16() = byteBuffer.getShort()
     def readUInt16() = byteBuffer.getShort().toChar
     def readInt32() = byteBuffer.getInt()
+    def readInt64() = byteBuffer.getLong()
     def readBoolean() = byteBuffer.get() != 0
     def readBytes(length: Int) =
         val bytes = Array.ofDim[Byte](length)

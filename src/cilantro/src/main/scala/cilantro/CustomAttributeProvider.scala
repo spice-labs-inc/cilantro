@@ -12,16 +12,17 @@
 
 package io.spicelabs.cilantro
 
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.ArrayBuffer
 
-trait CustomAttributeProvider {
-    def customAttributes: ListBuffer[CustomAttribute]
+trait CustomAttributeProvider extends MetadataTokenProvider {
+    def customAttributes: ArrayBuffer[CustomAttribute]
+    def hasCustomAttributes: Boolean
 
     def getHasCustomAttributes(module: ModuleDefinition) =
         module.hasImage && module.read(this, (provider, reader) => reader.hasCustomAttributes(provider))
 
-    def getCustomAttributes(variable: ListBuffer[CustomAttribute], module: ModuleDefinition) =
+    def getCustomAttributes(variable: ArrayBuffer[CustomAttribute], module: ModuleDefinition) =
         if (module.hasImage)
             module.read(variable, this, (provider, reader) => reader.readCustomAttributes(provider))
-        ListBuffer.empty[CustomAttribute]
+        ArrayBuffer.empty[CustomAttribute]
 }

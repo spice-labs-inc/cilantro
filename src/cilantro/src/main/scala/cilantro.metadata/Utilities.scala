@@ -19,6 +19,8 @@ class MetadataConsts
 object MetadataConsts {
     val tableCount = 58
     val codedIndexCount = 14
+    val noDataMarker: Short = -1
+    val notResolvedMarker: Short = -2
 }
 
 
@@ -47,7 +49,7 @@ extension (self: CodedIndex)
     self match
         case CodedIndex.typeDefOrRef =>
             val rid = data >>> 2
-            val tt = data & 3 match
+            data & 3 match
                 case 0 => MetadataToken(TokenType.typeDef, rid)
                 case 1 => MetadataToken(TokenType.typeRef, rid)
                 case 2 => MetadataToken(TokenType.typeSpec, rid)
@@ -55,7 +57,7 @@ extension (self: CodedIndex)
 
         case CodedIndex.hasConstant =>
             val rid = data >>> 2
-            val tt = data & 3 match
+            data & 3 match
                 case 0 => MetadataToken(TokenType.field, rid)
                 case 1 => MetadataToken(TokenType.param, rid)
                 case 2 => MetadataToken(TokenType.property, rid)
@@ -169,6 +171,7 @@ extension (self: CodedIndex)
                 case 25 => MetadataToken(TokenType.localConstant, rid)
                 case 26 => MetadataToken(TokenType.importScope, rid)
                 case _ => MetadataToken.zero
+        case null => MetadataToken.zero
     
     def compressMetadataToken (token: MetadataToken) =
         val ret: Option[Int] =

@@ -12,7 +12,7 @@
 
 package io.spicelabs.cilantro.metadata
 
-class PdbHeap(data: Array[Byte]) extends Heap(data)
+class PdbHeap(_data: Array[Byte]) extends Heap(_data)
 {
     var id: Array[Byte] = Array.emptyByteArray
     var entryPoint: Int = 0

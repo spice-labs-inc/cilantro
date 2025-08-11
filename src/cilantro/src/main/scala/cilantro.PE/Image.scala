@@ -67,8 +67,9 @@ sealed class Image extends AutoCloseable {
         coded_index_sizes(index) = size
         size
     
-    def resolveVirtualAddress(rva: Int) =        
-        getSectionAtVirtualAddress(rva) match
+    def resolveVirtualAddress(rva: Int) =
+        val section = getSectionAtVirtualAddress(rva)
+        section match
             case Some(section) => resolveVirtualAddressInSection(rva, section)
             case _ => throw IllegalArgumentException()
 
@@ -79,7 +80,8 @@ sealed class Image extends AutoCloseable {
         sections.find(sec => sec.name == name)
 
     def getSectionAtVirtualAddress(rva: Int) =
-        sections.find((section) => rva >= section.virtualAddress && rva < section.virtualAddress + section.sizeOfRawData)
+        sections.find((section) =>
+            rva >= section.virtualAddress && rva < section.virtualAddress + section.sizeOfRawData)
     
     def getReaderAt(rva: Int): BinaryStreamReader =
         val section = getSectionAtVirtualAddress(rva)

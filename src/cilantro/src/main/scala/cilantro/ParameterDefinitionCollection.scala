@@ -1,3 +1,4 @@
+
 //
 // Author:
 //   Jb Evain (jbevain@gmail.com) and Steve Hawley (sdh@spicelabs.io)
@@ -8,12 +9,12 @@
 //
 // Licensed under the MIT/X11 license.
 
-// Derived from https://github.com/jbevain/cecil/blob/3136847ea620fb9b4a3ff96bc4f573148e8bd2e4/Mono.Cecil/IMetadataTokenProvider.cs
+// Derived from https://github.com/jbevain/cecil/blob/3136847ea620fb9b4a3ff96bc4f573148e8bd2e4/Mono.Cecil/ParameterDefinitionCollection.cs
 
 package io.spicelabs.cilantro
 
-trait MetadataTokenProvider {
+import scala.collection.mutable.ArrayBuffer
 
-    def metadataToken: MetadataToken
-    def metadataToken_=(value: MetadataToken) : Unit
+class ParameterDefinitionCollection extends ArrayBuffer[ParameterDefinition] {
+  
 }

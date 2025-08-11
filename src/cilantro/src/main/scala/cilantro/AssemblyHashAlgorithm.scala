@@ -21,3 +21,10 @@ enum AssemblyHashAlgorithm(val value: Int) {
   case sha512 extends AssemblyHashAlgorithm(0x800e)
   case reserved extends AssemblyHashAlgorithm(0x8003) // md5
 }
+
+object  AssemblyHashAlgorithm {
+  def fromOrdinalValue(value: Int) =
+    AssemblyHashAlgorithm.values.find(x => {x.value == value}) match
+      case Some(result) => result
+      case None => throw IllegalArgumentException(s"value $value not found in AssemblyHashAlgorithm")  
+}

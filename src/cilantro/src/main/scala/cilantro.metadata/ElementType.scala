@@ -11,6 +11,8 @@
 // Derived from https://github.com/jbevain/cecil/blob/3136847ea620fb9b4a3ff96bc4f573148e8bd2e4/Mono.Cecil.Metadata/ElementType.cs
 
 package io.spicelabs.cilantro.metadata
+import io.spicelabs.cilantro.MetadataType
+
 
 enum ElementType (val value: Byte) {
   case none extends ElementType(0x00)
@@ -53,11 +55,15 @@ enum ElementType (val value: Byte) {
   case `type` extends ElementType(0x50)
   case boxed extends ElementType(0x51)
   case `enum` extends ElementType(0x55)
+
+  def asMetadataType: MetadataType =
+    MetadataType.fromOrdinalValue(value)
 }
 
 object ElementType {
   def fromOrdinalValue(value: Byte) =
     ElementType.values.find(x => {x.value == value}) match
       case Some(result) => result
-      case None => throw IllegalArgumentException(s"value $value not found in TokenType")  
+      case None => throw IllegalArgumentException(s"value $value not found in ElementType")
+
 }

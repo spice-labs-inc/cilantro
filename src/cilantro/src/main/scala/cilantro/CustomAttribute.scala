@@ -12,7 +12,7 @@
 
 package io.spicelabs.cilantro
 
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.ArrayBuffer
 import javax.naming.OperationNotSupportedException
 
 class CustomAttributeArgument(private val _type: TypeReference, private val _value: Object)
@@ -42,16 +42,16 @@ trait CustomAttributeTrait {
     def hasFields: Boolean
     def hasProperties: Boolean
     def hasConstructorArguments: Boolean
-    def fields: ListBuffer[CustomAttributeNamedArgument]
-    def properties: ListBuffer[CustomAttributeNamedArgument]
-    def constructorArguments: ListBuffer[CustomAttributeArgument]
+    def fields: ArrayBuffer[CustomAttributeNamedArgument]
+    def properties: ArrayBuffer[CustomAttributeNamedArgument]
+    def constructorArguments: ArrayBuffer[CustomAttributeArgument]
 }
 
 sealed class CustomAttribute(private var _signature: Int, private var _constructor: MethodReference, var _blob:Array[Byte], var _resolved: Boolean) extends CustomAttributeTrait {
     
-    private var arguments: ListBuffer[CustomAttributeArgument] = null
-    private var _fields: ListBuffer[CustomAttributeNamedArgument] = null
-    private var _properties: ListBuffer[CustomAttributeNamedArgument] = null
+    private var arguments: ArrayBuffer[CustomAttributeArgument] = null
+    private var _fields: ArrayBuffer[CustomAttributeNamedArgument] = null
+    private var _properties: ArrayBuffer[CustomAttributeNamedArgument] = null
 
     def constructor = _constructor
     def constructor_(value: MethodReference) = _constructor = value
@@ -64,11 +64,11 @@ sealed class CustomAttribute(private var _signature: Int, private var _construct
         resolve()
         arguments != null && !arguments.isEmpty
 
-    def constructorArguments : ListBuffer[CustomAttributeArgument] =
+    def constructorArguments : ArrayBuffer[CustomAttributeArgument] =
         resolve()
 
         if (arguments == null)
-            arguments = ListBuffer.empty[CustomAttributeArgument]
+            arguments = ArrayBuffer.empty[CustomAttributeArgument]
 
         arguments
 
@@ -80,7 +80,7 @@ sealed class CustomAttribute(private var _signature: Int, private var _construct
         resolve()
 
         if (_fields == null)
-            _fields = ListBuffer.empty[CustomAttributeNamedArgument]
+            _fields = ArrayBuffer.empty[CustomAttributeNamedArgument]
 
         _fields
 
@@ -92,7 +92,7 @@ sealed class CustomAttribute(private var _signature: Int, private var _construct
         resolve()
 
         if (_properties == null)
-            _properties = ListBuffer.empty[CustomAttributeNamedArgument]
+            _properties = ArrayBuffer.empty[CustomAttributeNamedArgument]
         
         _properties
     
