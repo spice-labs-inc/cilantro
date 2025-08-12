@@ -47,8 +47,7 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
     private var table_heap_offset = 0
     private var pdb_heap_offset = 0
 
-    private def moveTo(directory: DataDirectory) =
-        fileInputStream.getChannel().position(image.resolveVirtualAddress(directory.virtualAddress))
+    private def moveTo(directory: DataDirectory) = position = image.resolveVirtualAddress(directory.virtualAddress)
     
     private def readImage(): Unit =
         if (fileInputStream.getChannel().size() < 128)
@@ -219,7 +218,7 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
     private def readSections(count: Char) =
         val sections = Array.ofDim[Section](count)
         
-        for i <- 0 to count-1 do
+        for i <- 0 until count do
             val section = Section()
 
             // Name
@@ -293,7 +292,7 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
         
         image.metadataSection = section
 
-        for i <- 0 to streams do
+        for i <- 0 until streams do
             readMetadataStream(section)
         
         if (image.pdbHeap != null)
@@ -311,7 +310,7 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
 
         var entries = Array.ofDim[ImageDebugHeaderEntry](image.debug.size / ImageDebugDirectory.size)
         
-        for i <- 0 to entries.length do
+        for i <- 0 until entries.length do
             var directory = ImageDebugDirectory()
             directory.characteristics = readInt32()
             directory.timeDataStamp = readInt32()
@@ -332,7 +331,7 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
                     val data = readBytes(directory.sizeOfData)
                     entries(i) = ImageDebugHeaderEntry(directory, data)
                 finally
-                    this.position_(position)
+                    this.position = position
 
         image.debugHeader = ImageDebugHeader(entries)
 
@@ -359,10 +358,10 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
                 pdb_heap_offset = offset
 
     private def readHeapData(offset: Int, size: Int) =
-        val position = fileInputStream.getChannel().position()
+        val position = this.position
         moveTo(offset + image.metadataSection.pointerToRawData)
         val data = readBytes(size)
-        fileInputStream.getChannel().position(position)
+        this.position = position
         data
 
     private def readTableHeap() =
@@ -388,13 +387,19 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
         heap.sorted = readInt64()
 
         if (image.pdbHeap != null)
-            for i <- 0 to MetadataConsts.tableCount do
-                if (image.pdbHeap.hasTable(Table.fromOrdinalValue(i)))
-                    heap.tables(i).length = image.pdbHeap.typeSystemTableRows(i)
+            for i <- 0 until MetadataConsts.tableCount do
+                Table.fromOrdinalValueMaybe(i) match
+                    case Some(table) =>
+                        if (image.pdbHeap.hasTable(table))
+                            heap.tables(i).length = image.pdbHeap.typeSystemTableRows(i)
+                    case None => { }
         
-        for i <- 0 to MetadataConsts.tableCount do
-            if (heap.hasTable(Table.fromOrdinalValue(i)))
-                heap.tables(i).length = readInt32()
+        for i <- 0 until MetadataConsts.tableCount do
+            Table.fromOrdinalValueMaybe(i) match
+                case Some(table) =>            
+                    if (heap.hasTable(table))
+                        heap.tables(i).length = readInt32()
+                case None => { }
 
         setIndexSize(image.stringHeap, sizes, 0x1)
         setIndexSize(image.guidHeap, sizes, 0x2)
@@ -409,7 +414,7 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
         image.getCodedIndexSize(index)
 
     private def computeTableInformations() =
-        var offset = (fileInputStream.getChannel().position() - table_heap_offset - image.metadataSection.pointerToRawData).toInt // header
+        var offset = (position - table_heap_offset - image.metadataSection.pointerToRawData).toInt // header
 
         val stridx_size = if image.stringHeap != null then image.stringHeap.indexSize else 2
         val guididx_size = if image.guidHeap != null then image.guidHeap.indexSize else 2
@@ -418,10 +423,11 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
         val heap = image.tableHeap
         val tables = heap.tables
 
-        for i <- 0 to MetadataConsts.tableCount do
-            val table = Table.fromOrdinalValue(i)
+        for i <- 0 until MetadataConsts.tableCount do
+            val tableOpt = Table.fromOrdinalValueMaybe(i)
 
-            if (heap.hasTable(table))
+            if (heap.hasTable(tableOpt))
+                val table = tableOpt.get
                 val size = table match
                     case Table.module => 2 + stridx_size + (guididx_size * 3)
                     case Table.typeRef =>
@@ -500,8 +506,8 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
         heap.typeSystemTables = buffer.readInt64()
         heap.typeSystemTableRows = Array.ofDim[Int](MetadataConsts.tableCount)
 
-        for i <- 0 to MetadataConsts.tableCount do
-            val table = Table.fromOrdinalValue(i)
+        for i <- 0 until MetadataConsts.tableCount do
+            val table = Table.fromOrdinalValueMaybe(i)
             if (heap.hasTable(table))
                 heap.typeSystemTableRows(i) = buffer.readInt32()
 
@@ -518,11 +524,9 @@ object ImageReader {
     private def getModuleKind(characteristics: Char, subsystem: Char) =
         if ((characteristics & 0x2000) != 0)
             ModuleKind.dll
-        
-        if (subsystem == 0x02 || subsystem == 0x9)
+        else if (subsystem == 0x02 || subsystem == 0x9)
             ModuleKind.windows
-
-        ModuleKind.console
+        else ModuleKind.console
 
     private def setIndexSize(heap: Heap, sizes: Int, flag: Int) =
         if (heap != null)
@@ -534,7 +538,12 @@ object ImageReader {
             reader.readImage()
             reader.image
         catch
-            case err: IOException => throw DataFormatException(file_name)
+            case err: IOException =>
+                throw DataFormatException(file_name)
+            case others: Exception => {
+                throw others
+            }
+        finally { }
 
     def readPortablePdb(stream: Disposable[FileInputStream], file_name: String): (Image, Int) =
         try 

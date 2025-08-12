@@ -25,8 +25,10 @@ class BinaryStreamReader(protected val fileInputStream: FileInputStream) {
         bb
     }
 
-    def position = fileInputStream.getChannel().position().toInt
-    def position_ (value: Int) = fileInputStream.getChannel().position(value.toLong & 0xffffffff)
+    
+
+    def position = byteBuffer.position()  //fileInputStream.getChannel().position().toInt
+    def position_=(value: Int) = byteBuffer.position(value) //fileInputStream.getChannel().position(value.toLong & 0xffffffff)
 
     def length = fileInputStream.getChannel().size().toInt
 

@@ -143,7 +143,7 @@ class DefaultSymbolReaderProvider(private val throwIfNoSymbol: Boolean) extends 
         // var isNativePdb = true
 
         // boundary {
-        //     for i <- 1 to bytesHeader.length do
+        //     for i <- 1 until bytesHeader.length do
         //         if (bytesHeader(i) != nativePdbHeader.charAt(i).toByte)
         //             isNativePdb = false
         //             break()

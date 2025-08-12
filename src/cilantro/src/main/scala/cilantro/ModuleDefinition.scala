@@ -147,7 +147,7 @@ sealed class ModuleDefinition() extends ModuleReference(null, MetadataToken(Toke
     var assembly_resolver: Disposable[AssemblyResolver] = null
     var metadata_resolver: MetadataResolverTrait = null
     // var type_system: TypeSystem // TODO
-    var reader: MetadataReader = null // TODO
+    var reader: MetadataReader = null
     var file_name: String = null
     var runtime_version: String = null
     var kind: ModuleKind = ModuleKind.dll
@@ -404,8 +404,7 @@ sealed class ModuleDefinition() extends ModuleReference(null, MetadataToken(Toke
         this.subsystem_minor = image.subSystemMinor
         this.file_name = image.fileName
         this.timestamp = image.timeStamp
-        // TODO
-//        this.reader = MetadataReader(this)
+        this.reader = MetadataReader(this)
 
 
     def close(): Unit =
@@ -490,7 +489,7 @@ sealed class ModuleDefinition() extends ModuleReference(null, MetadataToken(Toke
         // if (`type` == null)
         //     return null
         
-        // for i <- 1 to names.length do
+        // for i <- 1 until names.length do
         //     val nested_type = `type`.getNestedType(names(i))
         //     if (nested_type == null)
         //         return null
@@ -686,9 +685,11 @@ object ModuleDefinition {
         try
             readModule(Disposable.owned(stream), fileName, parameters)
         catch
-            case err: Exception =>
+            case err: Exception => {
                 stream.close()
                 throw err
+            }
+        finally { }
     
     def readModule(stream: FileInputStream): ModuleDefinition =
         val rp = ReaderParameters()
@@ -730,7 +731,7 @@ object ModuleDefinition {
                 return None
         
         private def pushReverse(items: Seq[TypeDefinition]) =
-            for i <- items.length - 1 to 0 do
+            for i <- items.length - 1 to 0 by -1 do
                 st.push(items(i))
     }
 
@@ -803,7 +804,7 @@ def getTimeStamp() =
 def fromHexString(s: String): Array[Byte] =
     val size = s.length / 2
     var arr = Array.ofDim[Byte](size)
-    for i <- 0 to s.length / 2 do
+    for i <- 0 until s.length / 2 do
         val pair = s.substring(2 * i, 2 * i + 2)
         val iVal = Integer.parseInt(pair, 16)
         arr(i) = iVal.toByte

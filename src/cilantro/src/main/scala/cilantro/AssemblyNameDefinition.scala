@@ -12,9 +12,7 @@
 
 package io.spicelabs.cilantro
 
-import java.lang.Runtime.Version
-
-class AssemblyNameDefinition(name: String, version: Version) extends AssemblyNameReference(name, version, MetadataToken(TokenType.assembly, 1)) {
+class AssemblyNameDefinition(name: String, version: CSVersion) extends AssemblyNameReference(name, version, MetadataToken(TokenType.assembly, 1)) {
 
     override def hash: Array[Byte] = Array.emptyByteArray
 
