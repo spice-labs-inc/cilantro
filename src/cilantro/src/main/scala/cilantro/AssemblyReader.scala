@@ -539,7 +539,6 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         val rev = readUInt16().toInt
         val build = readUInt16().toInt
         name.version = CSVersion(maj, min, rev, build)
-        val p = name.version.toString()
         name.attributes = readUInt32()
 
     private def populateNameAndCulture(name: AssemblyNameReference) =
