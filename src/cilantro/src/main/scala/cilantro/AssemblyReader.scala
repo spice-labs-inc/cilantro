@@ -24,7 +24,6 @@ import io.spicelabs.cilantro.cil.DefaultSymbolReaderProvider
 import javax.naming.OperationNotSupportedException
 import java.io.File
 import java.nio.file.Paths
-import java.lang.Runtime.Version
 import io.spicelabs.cilantro.metadata.Row3
 import io.spicelabs.cilantro.metadata.ElementType
 import io.spicelabs.cilantro.metadata.Row2
@@ -47,7 +46,7 @@ abstract class ModuleReader() {
         readAssembly(reader)
 
     private def readAssembly(reader: MetadataReader): Unit =
-        val name = null // reader.readAssemblyNameDefintion()
+        val name = reader.readAssemblyNameDefinition()
         if (name == null)
             module.moduleKind_(ModuleKind.netModule)
             return ()
@@ -473,7 +472,7 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         val modules = ArrayBuffer[ModuleDefinition](this.module)
 
         val length = moveTo(Table.file)
-        for i <- 1 to length do
+        for i <- 1 to length do // this inclusive intentionally
             val attributes = FileAttributes.fromOrdinal(readUInt32())
             val name = readString()
             readBlobIndex()
@@ -535,11 +534,12 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         if bytes != null then bytes else Array.emptyByteArray
     
     private def populateVersionAndFlags(name: AssemblyNameReference) =
-        val maj = readInt32()
-        val min = readInt32()
-        val rev = readInt32()
-        val build = readInt32()
-        name.version = Version.parse(s"$maj.$min.$rev.$build")
+        val maj = readUInt16().toInt
+        val min = readUInt16().toInt
+        val rev = readUInt16().toInt
+        val build = readUInt16().toInt
+        name.version = CSVersion(maj, min, rev, build)
+        val p = name.version.toString()
         name.attributes = readUInt32()
 
     private def populateNameAndCulture(name: AssemblyNameReference) =
@@ -578,7 +578,7 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         // tryGetNestedTypeMapping(`type`) match
         //     case Some(mapping) =>
         //         val nested_types = MemberDefinitionCollection[TypeDefinition](`type`, mapping.length)
-        //         for i <- 0 to mapping.length do
+        //         for i <- 0 until mapping.length do
         //             val nested_type = getTypeDefinition(mapping(i))
         //             if (nested_type != null)
         //                 nested_types.addOne(nested_type)
@@ -692,7 +692,7 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
 
         var `type`: TypeReference = null
         boundary:
-            for i <- 1 to length + 1 do
+            for i <- 1 to length do // intentionally inclusive
                 `type` = getTypeReference(i)
                 if (`type`.fullName == full_name)
                     if (scope == null || scope.length == 0)
@@ -772,7 +772,7 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         val length = image.getTableLength(Table.typeRef)
         val type_references = Array.ofDim[TypeReference](length)
 
-        for i <- 1 to length do
+        for i <- 1 to length do // intentionally inclusive
             type_references(i - 1) = getTypeReference(i)
         
         type_references
@@ -886,7 +886,7 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
 
     private def readPointers[TMember <: MemberDefinition](ptr: Table, table: Table, range: Range,
         members: ArrayBuffer[TMember], reader: (Int, ArrayBuffer[TMember]) => Unit) =
-        for i <- 0 to range.length do
+        for i <- 0 until range.length do
             moveTo(ptr, range.index + i)
             val rid = readTableIndex(table)
             moveTo(table, rid)

@@ -13,6 +13,7 @@
 package io.spicelabs.cilantro.metadata
 import scala.collection.mutable.Map
 import java.nio.charset.StandardCharsets
+import scala.annotation.tailrec
 
 
 class StringHeap(data: Array[Byte]) extends Heap(data)
@@ -32,13 +33,16 @@ class StringHeap(data: Array[Byte]) extends Heap(data)
         return str
     
     protected def readStringAt(index: Int) : String =
-        var length = 0
-        for
-            i <- index to data.length
-            if (data(i) != 0)
-        do
-            length = length + 1
+        var length = strLength(index, 0)
 
         return String(data, index, length, StandardCharsets.UTF_8)
+    
+    @tailrec
+    private def strLength(index: Int, currLen: Int): Int =
+        if (index >= data.length || data(index) == 0)
+            currLen
+        else
+            strLength(index + 1, currLen + 1)
+
 }
 

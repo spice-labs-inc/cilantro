@@ -22,7 +22,7 @@ class UserStringHeap(data: Array[Byte]) extends StringHeap(data) {
     val chars = Array.ofDim[Char](length / 2)
 
     var j = 0
-    for i <- start to start + length by 2 do
+    for i <- start until start + length by 2 do
         chars(j) = (data(i).toInt | ((data(i + 1).toInt & 0xff) << 8)).toChar
     
     String(chars)

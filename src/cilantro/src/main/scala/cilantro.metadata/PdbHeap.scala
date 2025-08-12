@@ -19,7 +19,13 @@ class PdbHeap(_data: Array[Byte]) extends Heap(_data)
     var typeSystemTables: Long = 0
     var typeSystemTableRows: Array[Int] = Array.emptyIntArray
 
-    def hasTable (table: Table) =
+    def hasTable (table: Table): Boolean =
         (typeSystemTables & (1L << table.value)) != 0
+    
+    def hasTable(tableOpt: Option[Table]): Boolean =
+        tableOpt match
+            case Some(table) => hasTable(table)
+            case None => false
+        
 }
 

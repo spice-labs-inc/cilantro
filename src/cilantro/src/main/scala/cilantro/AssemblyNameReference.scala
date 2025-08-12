@@ -18,7 +18,7 @@ import io.spicelabs.cilantro.AssemblyNameReference.getAttributes
 import io.spicelabs.cilantro.AssemblyNameReference.setAttributes
 import java.security.MessageDigest
 
-class AssemblyNameReference(private var _name: String, private var _version: Version, protected var _token: MetadataToken = MetadataToken (TokenType.assemblyRef)) extends MetadataScope {
+class AssemblyNameReference(private var _name: String, private var _version: CSVersion, protected var _token: MetadataToken = MetadataToken (TokenType.assemblyRef)) extends MetadataScope {
     def this() =
         this(null, AssemblyNameReference.zeroVersion)
     
@@ -38,7 +38,7 @@ class AssemblyNameReference(private var _name: String, private var _version: Ver
     def culture_=(value: String) = _culture = value
 
     def version = _version
-    def version_=(value: Version) = _version = checkVersion(value)
+    def version_=(value: CSVersion) = _version = checkVersion(value)
 
     def attributes = _attributes
     def attributes_=(value: Int) = _attributes = value
@@ -68,7 +68,7 @@ class AssemblyNameReference(private var _name: String, private var _version: Ver
             val local_public_key_token = Array.ofDim[Byte](8)
 
             // set public key token to the last 8 bytes of the hash reverse
-            for dst <- 0 to 7 do
+            for dst <- 0 until 8 do
                 val src = 15 - dst
                 local_public_key_token(dst) = hash(src)
             _public_key_token = local_public_key_token
@@ -127,7 +127,7 @@ class AssemblyNameReference(private var _name: String, private var _version: Ver
 }
 
 object AssemblyNameReference {
-    def apply(name: String, version: Version): AssemblyNameReference =
+    def apply(name: String, version: CSVersion): AssemblyNameReference =
         var assem = new AssemblyNameReference(checkName(name), version)
         assem._hash_algorithm = AssemblyHashAlgorithm.none
         assem._token = MetadataToken(TokenType.assemblyRef)
@@ -161,7 +161,11 @@ object AssemblyNameReference {
                     throw IllegalArgumentException("Malformed name")
                 
                 parts(0).toLowerCase(Locale.ROOT) match
-                    case "version" => name._version = Version.parse(parts(1))
+                    case "version" => name._version =
+                        CSVersion.parse(parts(1)) match
+                            case Some(vers) => vers
+                            case None => zeroVersion
+                        
                     case "culture" => name._culture = if (parts(1) == "neutral") then "" else parts(1)
                     case "publickeytoken" =>
                         name._public_key_token = fromHexString(parts(1))
@@ -170,7 +174,7 @@ object AssemblyNameReference {
 
         name
     
-    val zeroVersion = java.lang.Runtime.Version.parse("0.0.0")
+    val zeroVersion = CSVersion(0, 0, 0, 0)
 
     def getAttributes(value:Int, attributes: Int) =
         (value & attributes) != 0
@@ -182,14 +186,9 @@ object AssemblyNameReference {
 }
 
 
-def checkVersion(version: Version) : Version =
+def checkVersion(version: CSVersion) : CSVersion =
     if (version == null)
         AssemblyNameReference.zeroVersion
     
-    if (version.security() <= 0)
-        Version.parse(f"${version.major}%d.${version.minor()}%d.0.0")
-    
-    if (version.build().isEmpty())
-        Version.parse(f"${version.major}%d.${version.minor()}%d.${version.security()}.0")
     
     version

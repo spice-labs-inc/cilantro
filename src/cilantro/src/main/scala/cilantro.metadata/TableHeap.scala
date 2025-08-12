@@ -79,6 +79,8 @@ object Table {
     Table.values.find(x => {x.value == value}) match
       case Some(result) => result
       case None => throw IllegalArgumentException(s"value $value not found in Table")  
+    def fromOrdinalValueMaybe(value: Int) =
+        Table.values.find(x => {x.value == value})
 }
 
 class TableInformation() {
@@ -97,6 +99,11 @@ class TableHeap (_data: Array[Byte]) extends Heap(_data) {
     def apply(table:Table) =
         tables(table.value)
 
-    def hasTable(table: Table) =
+    def hasTable(table: Table): Boolean =
         (valid & (1L << table.value)) != 0
+    def hasTable(someTable: Option[Table]): Boolean =
+        someTable match
+            case Some(table) => hasTable(table)
+            case None => false
+        
 }
