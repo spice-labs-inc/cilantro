@@ -41,4 +41,16 @@ class SmokeTests extends munit.FunSuite {
         for i <- 0 until 512 do
             assertEquals(origBytes(i), newBytes(i), clue = s"diff at index $i")
     }
+
+    test ("name etc") {
+        var cwd = Paths.get(System.getProperty("user.dir"))
+        var smokePath = cwd.resolve("../../test-files/smoke/Smoke.dll")
+        var strPath = smokePath.toString()
+        var assem = AssemblyDefinition.readAssembly(strPath)
+        assertEquals(assem.name.name, "Smoke")
+        assertEquals(assem.name.version.toString(), "1.0.0.0")
+        assertEquals(assem.name.hashAlgorithm, AssemblyHashAlgorithm.sha1)
+        assertEquals(assem.mainModule.kind, ModuleKind.dll)
+        assertEquals(assem.mainModule.mvid.toString(), "3d2fd839-bce1-4920-8f4c-43be15435c20")
+    }
 }
