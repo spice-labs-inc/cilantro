@@ -2,11 +2,14 @@ package io.spicelabs.cilantro
 
 import scala.collection.mutable.ArrayBuffer
 import javax.naming.OperationNotSupportedException
+import io.spicelabs.cilantro.AnyExtension.as
 
-class MethodReference extends MemberReference with GenericParameterProvider with GenericContext { // TODO
+class MethodReference extends MemberReference with MethodSignature with GenericParameterProvider with GenericContext { // TODO
     private var _module: ModuleDefinition = null;
 
     var _parameters: ParameterDefinitionCollection = null
+
+    private var _return_type:MethodReturnType = null
 
     override def hasImage = false
 
@@ -14,6 +17,7 @@ class MethodReference extends MemberReference with GenericParameterProvider with
 
     private var _has_this = false
     private var _explicit_this = false
+    private var _calling_convention: MethodCallingConvention = MethodCallingConvention.default
 
     var _generic_parameters: ArrayBuffer[GenericParameter] = null
 
@@ -23,9 +27,8 @@ class MethodReference extends MemberReference with GenericParameterProvider with
     def explicitThis = _explicit_this
     def explicitThis_=(value: Boolean) = _explicit_this = value
 
-    // TODO
-    // def callingConvention = ...
-    // def callingContention_=(value: MethodCallingConvention) = ...
+    def callingConvention = _calling_convention
+    def callingConvention_=(value: MethodCallingConvention) = _calling_convention = value
 
     def hasParameters =
         _parameters != null && _parameters.length > 0
@@ -38,12 +41,11 @@ class MethodReference extends MemberReference with GenericParameterProvider with
 
     override def `type` =
         val declaring_type = this.declaringType
-        declaring_type // TODO
-        // val instance = declaring_type.asInstanceOf[GenericInstanceType]
-        // if (instance != null)
-        //     instance.elementType
-        // else
-            // declaringType
+        val instance = declaring_type.as[GenericInstanceType]
+        if (instance != null)
+            instance.elementType
+        else
+            declaringType
 
     override def method = this
 
@@ -56,6 +58,17 @@ class MethodReference extends MemberReference with GenericParameterProvider with
         if (_generic_parameters == null)
             _generic_parameters = ArrayBuffer[GenericParameter]() // FIXME wrong type
         _generic_parameters
+
+    def returnType:TypeReference =
+        val return_type = methodReturnType
+        if return_type != null then return_type.returnType else null
+    def returnType_=(value: TypeReference) =
+        val return_type = methodReturnType
+        if (return_type != null)
+            return_type.returnType = value
+    
+    def methodReturnType = _return_type
+    def methodReturnType_=(value: MethodReturnType) = _return_type = value
 
 
     override def fullName = // FIXME

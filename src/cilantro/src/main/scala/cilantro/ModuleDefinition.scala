@@ -139,7 +139,7 @@ sealed class WriterParameters() { // TODO
 
 sealed class ModuleDefinition() extends ModuleReference(null, MetadataToken(TokenType.module, 1)) with CustomAttributeProvider with CustomDebugInformationProvider with AutoCloseable {
     var image: Image = null
-    // var metadataSystem: MetadataSystem = MetadataSystem() // TODO
+    var metadataSystem: MetadataSystem = MetadataSystem()
     var readingMode: ReadingMode = ReadingMode.immediate
     var symbolReaderProvider: SymbolReaderProvider = null
 
@@ -640,6 +640,10 @@ sealed class ModuleDefinition() extends ModuleReference(null, MetadataToken(Toke
         if (hasImage && readingMode == ReadingMode.immediate)
             val immediate_reader = ImmediateModuleReader(image)
             immediate_reader.readSymbols(this)
+    
+    def tryGetAssemblyNameReference(name_reference: AssemblyNameReference): Option[AssemblyNameReference] =
+        val references = assemblyReferences
+        references.find((anr) => anr.equals(name_reference))
 }
 
 object ModuleDefinition {

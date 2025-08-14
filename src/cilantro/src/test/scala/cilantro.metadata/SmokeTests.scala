@@ -5,24 +5,20 @@ import java.io.FileInputStream
 import io.spicelabs.cilantro.PE.BinaryStreamReader
 
 class SmokeTests extends munit.FunSuite {
+    import SmokeTests.smokePath
+    import SmokeTests.smokePathStr
+
     test("smoke exists") {
-        var cwd = Paths.get(System.getProperty("user.dir"))
-        var smokePath = cwd.resolve("../../test-files/smoke/Smoke.dll")
-        assert(Files.exists(smokePath))
+        assert(Files.exists(smokePath()))
     }
 
     test("opens smoke file") {
-        var cwd = Paths.get(System.getProperty("user.dir"))
-        var smokePath = cwd.resolve("../../test-files/smoke/Smoke.dll")
-        var strPath = smokePath.toString()
+        var strPath = smokePathStr()
         var assem = AssemblyDefinition.readAssembly(strPath)
     }
 
     test("open-seek-read") {
-        var cwd = Paths.get(System.getProperty("user.dir"))
-
-        var smokePath = cwd.resolve("../../test-files/smoke/Smoke.dll")
-        var strPath = smokePath.toString()
+        var strPath = smokePathStr()
 
         var filestream = new FileInputStream(strPath)
         filestream.readNBytes(60)
@@ -43,9 +39,7 @@ class SmokeTests extends munit.FunSuite {
     }
 
     test ("name etc") {
-        var cwd = Paths.get(System.getProperty("user.dir"))
-        var smokePath = cwd.resolve("../../test-files/smoke/Smoke.dll")
-        var strPath = smokePath.toString()
+        var strPath = smokePathStr()
         var assem = AssemblyDefinition.readAssembly(strPath)
         assertEquals(assem.name.name, "Smoke")
         assertEquals(assem.name.version.toString(), "1.0.0.0")
@@ -53,4 +47,30 @@ class SmokeTests extends munit.FunSuite {
         assertEquals(assem.mainModule.kind, ModuleKind.dll)
         assertEquals(assem.mainModule.mvid.toString(), "3d2fd839-bce1-4920-8f4c-43be15435c20")
     }
+
+    test ("check-refs") {
+        var strPath = smokePathStr()
+        var assem = AssemblyDefinition.readAssembly(strPath)
+        var modules = assem.modules
+        assertEquals(modules.length, 1)
+        var module = modules(0)
+        var modrefs = module.moduleReferences
+        assertEquals(modrefs.length, 0)
+        var asrefs = module.assemblyReferences
+        assertEquals(asrefs.length, 1)
+
+
+    }
+}
+
+object SmokeTests {
+    def smokePath() =
+        val cwd = Paths.get(System.getProperty("user.dir"))
+        val smokePath = cwd.resolve("../../test-files/smoke/Smoke.dll")
+        smokePath
+    
+    def smokePathStr() =
+        smokePath().toString()
+
+
 }

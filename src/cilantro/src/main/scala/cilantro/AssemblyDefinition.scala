@@ -33,10 +33,10 @@ class AssemblyDefinition(private var _assemblyName: AssemblyNameDefinition, para
     def modules =
         if (_modules != null)
             _modules
-        if (_main_module.hasImage)
+        else if (_main_module.hasImage)
             _modules = _main_module.read(_modules, this, (_, reader) => reader.readModules())
-            _modules
-        _modules = ArrayBuffer.empty[ModuleDefinition]
+        else
+            _modules = ArrayBuffer.empty[ModuleDefinition]
         _modules
 
     def mainModule = _main_module
