@@ -18,7 +18,7 @@ import io.spicelabs.cilantro.AssemblyNameReference.getAttributes
 import io.spicelabs.cilantro.AssemblyNameReference.setAttributes
 import java.security.MessageDigest
 
-class AssemblyNameReference(private var _name: String, private var _version: CSVersion, protected var _token: MetadataToken = MetadataToken (TokenType.assemblyRef)) extends MetadataScope {
+class AssemblyNameReference(private var _name: String, private var _version: CSVersion, var _token: MetadataToken = MetadataToken (TokenType.assemblyRef)) extends MetadataScope {
     def this() =
         this(null, AssemblyNameReference.zeroVersion)
     
@@ -124,6 +124,20 @@ class AssemblyNameReference(private var _name: String, private var _version: CSV
     def metadataToken_=(value: MetadataToken) = _token = value
 
     override def toString(): String = this.fullName
+
+    override def equals(that: Any): Boolean =
+        if (!that.isInstanceOf[AssemblyNameReference])
+            return false
+        val other = that.asInstanceOf[AssemblyNameReference]
+        if (name != other.name)
+            return false
+        if (!version.equals(other.version))
+            return false
+        if (culture != other.culture)
+            return false
+        if (publicKeyToken != null && !publicKeyToken.sameElements(other.publicKeyToken))
+            return false
+        true
 }
 
 object AssemblyNameReference {

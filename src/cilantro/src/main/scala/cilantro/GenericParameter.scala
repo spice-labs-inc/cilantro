@@ -16,6 +16,7 @@ import scala.collection.mutable.ArrayBuffer
 import javax.naming.OperationNotSupportedException
 import io.spicelabs.cilantro.metadata.ElementType
 import scala.collection.mutable
+import io.spicelabs.cilantro.AnyExtension.as
 
 sealed class GenericParameter(_name:String, var _owner: GenericParameterProvider)
     extends TypeReference("", _name) with CustomAttributeProvider {
@@ -67,17 +68,24 @@ sealed class GenericParameter(_name:String, var _owner: GenericParameterProvider
             _custom_attributes = getCustomAttributes(_custom_attributes, module)
             _custom_attributes
         
-        override def scope: MetadataScope = null
-            // TODO
-            // if (owner == null)
-            //     return null
-            // if (owner.genericParameterType == GenericParameterType.method)
-            //     owner.asInstanceOf[MethodReference].declaringType.scope
-            // else
-            //     owner.asInstanceOf[TypeReference].scope
+        override def scope: MetadataScope =
+            if (owner == null)
+                return null
+            if (owner.genericParameterType == GenericParameterType.method)
+                owner.asInstanceOf[MethodReference].declaringType.scope
+            else
+                owner.asInstanceOf[TypeReference].scope
         override def scope_=(value: MetadataScope) =
             throw OperationNotSupportedException()
-        
+
+        override def declaringType = owner.as[TypeReference]
+        override def declaringType_=(value: TypeReference) = throw OperationNotSupportedException()
+
+        def declaringMethod = owner.as[MethodReference]
+
+        override def module =
+            if _module != null then _module else owner.module
+
         override def name =
             if (super.name != null && super.name.length > 0)
                 super.name

@@ -348,8 +348,8 @@ sealed class DeferredModuleReader(image: Image) extends ModuleReader(image, Read
 }
 
 sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val metadata_reader: MetadataReader) extends ByteBuffer(image.tableHeap.data) {
+    val metadata: MetadataSystem = module.metadataSystem
     // TODO
-    // val metadata: MetadataSystem = module.metadataSystem
     // private var code: CodeReader
     var _context: GenericContext = null
 
@@ -446,12 +446,34 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
 
     // TODO - finish
 
-    private def initializeAssemblyReferences(): Unit = { }
+    private def initializeAssemblyReferences(): Unit =
+        if (metadata._assemblyReferences != null)
+            ()
+        else
+            val length = moveTo(Table.assemblyRef)
+            metadata._assemblyReferences = Array.ofDim[AssemblyNameReference](length)
+            val references = metadata._assemblyReferences
+            for i <- 0 until length do
+                val reference = AssemblyNameReference()
+                reference._token = MetadataToken(TokenType.assemblyRef, i + 1)
+
+                populateVersionAndFlags(reference)
+                var key_or_token = readBlob()
+
+                if (reference.hasPublicKey)
+                    reference.publicKey = key_or_token
+                else
+                    reference.publicKeyToken = key_or_token
+                
+                populateNameAndCulture(reference)
+
+                reference.hash = readBlob()
+                references(i) = reference
 
     def readAssemblyReferences() =
         initializeAssemblyReferences()
 
-        var references = ArrayBuffer[AssemblyNameReference]()
+        var references = ArrayBuffer[AssemblyNameReference]().addAll(metadata._assemblyReferences)
 
         // TODO
         // if (module.isWindowsMetadata())
@@ -497,15 +519,25 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
             path.resolve(name).toAbsolutePath()
 
 
-    private def initializeModuleReferences() = { }
+    private def initializeModuleReferences(): Unit =
+        if (metadata._moduleReferences != null)
+            return {}
+        
+        val length = moveTo(Table.moduleRef)
+        metadata._moduleReferences = Array.ofDim[ModuleReference](length)
+        val references = metadata._moduleReferences
+
+        for i <- 0 until length do
+            val reference = ModuleReference(readString())
+            reference._token = MetadataToken(TokenType.moduleRef, i + 1)
+            references(i) = reference
 
     def readModuleReferences() =
         initializeModuleReferences()
 
         var references = ArrayBuffer.empty[ModuleReference]
 
-        // TODO
-        // references.append(metadata.moduleReferences)
+        references.addAll(metadata._moduleReferences)
 
         references
     
