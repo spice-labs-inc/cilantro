@@ -473,7 +473,7 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
     def readAssemblyReferences() =
         initializeAssemblyReferences()
 
-        var references = ArrayBuffer[AssemblyNameReference]()
+        var references = ArrayBuffer[AssemblyNameReference]().addAll(metadata._assemblyReferences)
 
         // TODO
         // if (module.isWindowsMetadata())
