@@ -22,7 +22,7 @@ abstract class MemberReference(var _name : String) extends MetadataTokenProvider
     var token: MetadataToken = null
     var projection: Any = null
 
-    def name = _name
+    def name: String = _name
     def name_=(value: String) = {
         if (isWindowsRuntimeProjection && value != name)
             throw new OperationNotSupportedException()

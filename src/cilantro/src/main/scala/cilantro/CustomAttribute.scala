@@ -15,14 +15,14 @@ package io.spicelabs.cilantro
 import scala.collection.mutable.ArrayBuffer
 import javax.naming.OperationNotSupportedException
 
-class CustomAttributeArgument(private val _type: TypeReference, private val _value: Object)
+class CustomAttributeArgument(private val _type: TypeReference, private val _value: Any)
 {
     def `type` = _type
     def value = _value
 }
 
 object CustomAttributeArgument {
-    def apply(`type`: TypeReference, value: Object) = 
+    def apply(`type`: TypeReference, value: Any) = 
         new CustomAttributeArgument(checkType(`type`), value)
 }
 
@@ -47,9 +47,9 @@ trait CustomAttributeTrait {
     def constructorArguments: ArrayBuffer[CustomAttributeArgument]
 }
 
-sealed class CustomAttribute(private var _signature: Int, private var _constructor: MethodReference, var _blob:Array[Byte], var _resolved: Boolean) extends CustomAttributeTrait {
+sealed class CustomAttribute(var _signature: Int, private var _constructor: MethodReference, var _blob:Array[Byte], private var _resolved: Boolean) extends CustomAttributeTrait {
     
-    private var arguments: ArrayBuffer[CustomAttributeArgument] = null
+    var _arguments: ArrayBuffer[CustomAttributeArgument] = null
     private var _fields: ArrayBuffer[CustomAttributeNamedArgument] = null
     private var _properties: ArrayBuffer[CustomAttributeNamedArgument] = null
 
@@ -62,15 +62,15 @@ sealed class CustomAttribute(private var _signature: Int, private var _construct
 
     def hasConstructorArguments =
         resolve()
-        arguments != null && !arguments.isEmpty
+        _arguments != null && !_arguments.isEmpty
 
     def constructorArguments : ArrayBuffer[CustomAttributeArgument] =
         resolve()
 
-        if (arguments == null)
-            arguments = ArrayBuffer.empty[CustomAttributeArgument]
+        if (_arguments == null)
+            _arguments = ArrayBuffer.empty[CustomAttributeArgument]
 
-        arguments
+        _arguments
 
     def hasFields =
         resolve()
@@ -120,29 +120,30 @@ sealed class CustomAttribute(private var _signature: Int, private var _construct
 
     private def resolve() : Unit =
         if (_resolved || !hasImage)
-            ()
+            return ()
         
         module.syncRoot.synchronized {
             if (_resolved)
                 ()
-            module.read(this, (attribute, reader) => {
-                try
-                    reader.readCustomAttributesSignature(attribute)
-                    _resolved = true
-                    ()
-                catch
-                    case r: ResolutionException =>
-                        if (arguments != null)
-                            arguments.clear()
-                        if (_fields != null)
-                            _fields.clear()
-                        if (_properties != null)
-                            _properties.clear()
-                        _resolved = false
+            else 
+                module.read(this, (attribute, reader) => {
+                    try
+                        reader.readCustomAttributesSignature(attribute)
+                        _resolved = true
                         ()
-                    case _ => ()
+                    catch
+                        case r: ResolutionException =>
+                            if (_arguments != null)
+                                _arguments.clear()
+                            if (_fields != null)
+                                _fields.clear()
+                            if (_properties != null)
+                                _properties.clear()
+                            _resolved = false
+                            ()
+                        case _ => ()
 
-            })
+                })
         }
 
         ()

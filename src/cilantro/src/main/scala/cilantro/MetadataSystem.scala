@@ -45,8 +45,8 @@ sealed class MetadataSystem {
     var _fieldMarshals: HashMap[MetadataToken, Int] = null
     var _constants: HashMap[MetadataToken, Row2[ElementType, Int]] = null
     var _overrides: HashMap[Int, ArrayBuffer[MetadataToken]] = null
-    var _customAttributes: HashMap[MetadataToken, Array[Range]] = null
-    var _securityDeclarations: HashMap[MetadataToken, Array[Range]] = null
+    var _customAttributes: HashMap[MetadataToken, ArrayBuffer[Range]] = null
+    var _securityDeclarations: HashMap[MetadataToken, ArrayBuffer[Range]] = null
     var _events: HashMap[Int, Range] = null
     var _properties: HashMap[Int, Range] = null
     // TODO

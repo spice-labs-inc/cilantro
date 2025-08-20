@@ -63,9 +63,10 @@ sealed class Image extends AutoCloseable {
         var size = coded_index_sizes(index)
         if (size != 0)
             size
-        size = coded_index.getSize(counter)
-        coded_index_sizes(index) = size
-        size
+        else
+            size = coded_index.getSize(counter)
+            coded_index_sizes(index) = size
+            size
     
     def resolveVirtualAddress(rva: Int) =
         val section = getSectionAtVirtualAddress(rva)

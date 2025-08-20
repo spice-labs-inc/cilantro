@@ -18,9 +18,8 @@ import javax.naming.OperationNotSupportedException
 
 
 // TODO ctor parameters
-class MethodDefinition extends MethodReference with MemberDefinition {
+class MethodDefinition(_name: String, private var _attributes: Char, returnType: TypeReference) extends MethodReference(_name, returnType) with MemberDefinition {
     this.token = MetadataToken(TokenType.method)
-    private var _attributes: Char = 0
     private var _impl_attributes: Char = 0
 
     var _sem_attrs_ready: Boolean = false
@@ -41,10 +40,11 @@ class MethodDefinition extends MethodReference with MemberDefinition {
     // var _debug_info: MethodDebugInformation = null
     var _custom_infos: ArrayBuffer[CustomDebugInformation] = null
 
-    override def name =
-        super.name
+    def this() =
+        this("", 0, null)
+
     override def name_=(value: String) =
-        if (isWindowsRuntimeProjection && value != super.name)
+        if (isWindowsRuntimeProjection && value != name)
             throw OperationNotSupportedException()
         super.name = value
     

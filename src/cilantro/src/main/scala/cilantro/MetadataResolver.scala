@@ -21,5 +21,8 @@ class ResolutionException extends  Exception {
     
 }
 
-trait MetadataResolverTrait { // TODO
+trait MetadataResolverTrait {
+    def resolve(`type`: TypeReference): TypeDefinition
+    def resolve(field: FieldReference): FieldDefinition
+    def resolve(method: MethodReference): MethodDefinition
 }

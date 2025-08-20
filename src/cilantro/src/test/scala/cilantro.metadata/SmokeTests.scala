@@ -3,6 +3,7 @@ import java.nio.*
 import java.nio.file.*
 import java.io.FileInputStream
 import io.spicelabs.cilantro.PE.BinaryStreamReader
+import io.spicelabs.cilantro.AnyExtension.as
 
 class SmokeTests extends munit.FunSuite {
     import SmokeTests.smokePath
@@ -60,6 +61,22 @@ class SmokeTests extends munit.FunSuite {
         assertEquals(asrefs.length, 1)
 
 
+    }
+
+    test ("check-assembly-info") {
+        val strPath = smokePathStr()
+        val assem = AssemblyDefinition.readAssembly(strPath)
+        assertEquals(assem.customAttributes.length, 10)
+        val attr = assem.customAttributes(4)
+        val hasCtorArgs = attr.hasConstructorArguments
+        assert(hasCtorArgs)
+        val args = attr.constructorArguments
+        assertEquals(args.length, 1)
+        val arg = args(0)
+        assertEquals(arg.`type`.fullName, "System.String")
+        val value = arg.value.as[String]
+        assertNotEquals(value, null)
+        assertEquals(value, "Smoke")
     }
 }
 

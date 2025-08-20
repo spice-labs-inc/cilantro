@@ -22,3 +22,10 @@ enum MethodCallingConvention(val value: Byte) {
   case unmanaged extends MethodCallingConvention(0x9)
   case generic extends MethodCallingConvention(0x10)
 }
+object MethodCallingConvention {
+  def fromOrdinalValue(value: Int) =
+    MethodCallingConvention.values.find(x => {x.value == value}) match
+      case Some(result) => result
+      case None => throw IllegalArgumentException(s"value $value not found in MethodCallingConvention")  
+
+}

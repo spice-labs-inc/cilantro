@@ -18,6 +18,8 @@ import io.spicelabs.cilantro.cil.CustomDebugInformation
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import io.spicelabs.cilantro.metadata.Row2
+import io.spicelabs.cilantro.AnyExtension.as
+import java.rmi.server.Operation
 
 
 
@@ -248,19 +250,159 @@ class TypeDefinition(namespace: String, name: String, private var _attributes: I
     def isNotPublic_=(value: Boolean) =
         _attributes = MemberDefinition.setMaskedAttributes(_attributes, TypeAttributes.visibilityMask.value, TypeAttributes.notPublic.value, value)
 
-    // TODO
+    def isPublic =
+        MemberDefinition.getMaskedAttributes(_attributes, TypeAttributes.visibilityMask.value, TypeAttributes.public.value)
+    def isPublic_=(value: Boolean) =
+        _attributes = MemberDefinition.setMaskedAttributes(_attributes, TypeAttributes.visibilityMask.value, TypeAttributes.public.value, value)
 
+    def isNestedPublic =
+        MemberDefinition.getMaskedAttributes(_attributes, TypeAttributes.visibilityMask.value, TypeAttributes.nestedPublic.value)
+    def isNestedPublic_=(value: Boolean) =
+        _attributes = MemberDefinition.setMaskedAttributes(_attributes, TypeAttributes.visibilityMask.value, TypeAttributes.nestedPublic.value, value)
+
+    def isNestedPrivate =
+        MemberDefinition.getMaskedAttributes(_attributes, TypeAttributes.visibilityMask.value, TypeAttributes.nestedPrivate.value)
+    def isNestedPrivate_=(value: Boolean) =
+        _attributes = MemberDefinition.setMaskedAttributes(_attributes, TypeAttributes.visibilityMask.value, TypeAttributes.nestedPrivate.value, value)
+
+    def isNestedFamily =
+        MemberDefinition.getMaskedAttributes(_attributes, TypeAttributes.visibilityMask.value, TypeAttributes.nestedFamily.value)
+    def isNestedFamily_=(value: Boolean) =
+        _attributes = MemberDefinition.setMaskedAttributes(_attributes, TypeAttributes.visibilityMask.value, TypeAttributes.nestedFamily.value, value)
+
+    def isNestedAssembly =
+        MemberDefinition.getMaskedAttributes(_attributes, TypeAttributes.visibilityMask.value, TypeAttributes.nestedAssembly.value)
+    def isNestedAssembly_=(value: Boolean) =
+        _attributes = MemberDefinition.setMaskedAttributes(_attributes, TypeAttributes.visibilityMask.value, TypeAttributes.nestedAssembly.value, value)
+
+    def isNestedFamilyAndAssembly =
+        MemberDefinition.getMaskedAttributes(_attributes, TypeAttributes.visibilityMask.value, TypeAttributes.nestedFamANDAssem.value)
+    def isNestedFamilyAndAssembly_=(value: Boolean) =
+        _attributes = MemberDefinition.setMaskedAttributes(_attributes, TypeAttributes.visibilityMask.value, TypeAttributes.nestedFamANDAssem.value, value)
+
+    def isNestedFamilyOrAssembly =
+        MemberDefinition.getMaskedAttributes(_attributes, TypeAttributes.visibilityMask.value, TypeAttributes.nestedFamORAssem.value)
+    def isNestedFamilyOrAssembly_=(value: Boolean) =
+        _attributes = MemberDefinition.setMaskedAttributes(_attributes, TypeAttributes.visibilityMask.value, TypeAttributes.nestedFamORAssem.value, value)
+
+    def isAutoLayout =
+        MemberDefinition.getMaskedAttributes(_attributes, TypeAttributes.layoutMask.value, TypeAttributes.autoLayout.value)
+    def isAutoLayout_=(value: Boolean) =
+        _attributes = MemberDefinition.setMaskedAttributes(_attributes, TypeAttributes.layoutMask.value, TypeAttributes.autoLayout.value, value)
+
+    def isSequentialLayout =
+        MemberDefinition.getMaskedAttributes(_attributes, TypeAttributes.layoutMask.value, TypeAttributes.sequentialLayout.value)
+    def isSequentialLayout_=(value: Boolean) =
+        _attributes = MemberDefinition.setMaskedAttributes(_attributes, TypeAttributes.layoutMask.value, TypeAttributes.sequentialLayout.value, value)
+
+    def isExplicitLayout =
+        MemberDefinition.getMaskedAttributes(_attributes, TypeAttributes.layoutMask.value, TypeAttributes.explicitLayout.value)
+    def isExplicitLayout_=(value: Boolean) =
+        _attributes = MemberDefinition.setMaskedAttributes(_attributes, TypeAttributes.layoutMask.value, TypeAttributes.explicitLayout.value, value)
+
+    def isClass =
+        MemberDefinition.getMaskedAttributes(_attributes, TypeAttributes.classSemanticMask.value, TypeAttributes.`class`.value)
+    def isClass_=(value: Boolean) =
+        _attributes = MemberDefinition.setMaskedAttributes(_attributes, TypeAttributes.classSemanticMask.value, TypeAttributes.`class`.value, value)
+
+    def isInterface =
+        MemberDefinition.getMaskedAttributes(_attributes, TypeAttributes.classSemanticMask.value, TypeAttributes.interface.value)
+    def isInterface_=(value: Boolean) =
+        _attributes = MemberDefinition.setMaskedAttributes(_attributes, TypeAttributes.classSemanticMask.value, TypeAttributes.interface.value, value)
+
+    def isAbstract =
+        MemberDefinition.getAttributes(attributes, TypeAttributes.`abstract`.value)
+    def isAbstract_=(value: Boolean) =
+        _attributes = MemberDefinition.setAttributes(attributes, TypeAttributes.`abstract`.value, value)
+
+    def isSealed =
+        MemberDefinition.getAttributes(attributes, TypeAttributes.`sealed`.value)
+    def isSealed_=(value: Boolean) =
+        _attributes = MemberDefinition.setAttributes(attributes, TypeAttributes.`sealed`.value, value)
 
     def isSpecialName =
         MemberDefinition.getAttributes(_attributes, TypeAttributes.specialName.value)
     def isSpecialName_=(value: Boolean) =
         _attributes = MemberDefinition.setAttributes(_attributes, TypeAttributes.specialName.value, value)
 
+    def isImport =
+        MemberDefinition.getAttributes(attributes, TypeAttributes.`import`.value)
+    def isImport_=(value: Boolean) =
+        _attributes = MemberDefinition.setAttributes(attributes, TypeAttributes.`import`.value, value)
+
+    def isSerializable =
+        MemberDefinition.getAttributes(attributes, TypeAttributes.serializable.value)
+    def isSerializable_=(value: Boolean) =
+        _attributes = MemberDefinition.setAttributes(attributes, TypeAttributes.serializable.value, value)
+
+    def isWindowsRuntime =
+        MemberDefinition.getAttributes(attributes, TypeAttributes.windowsRuntime.value)
+    def isWindowsRuntime_=(value: Boolean) =
+        _attributes = MemberDefinition.setAttributes(attributes, TypeAttributes.windowsRuntime.value, value)
+
+    def isAnsiClass =
+        MemberDefinition.getMaskedAttributes(_attributes, TypeAttributes.stringFormatMask.value, TypeAttributes.ansiClass.value)
+    def isAnsiClass_=(value: Boolean) =
+        _attributes = MemberDefinition.setMaskedAttributes(_attributes, TypeAttributes.stringFormatMask.value, TypeAttributes.ansiClass.value, value)
+
+    def isUnicodeClass =
+        MemberDefinition.getMaskedAttributes(_attributes, TypeAttributes.stringFormatMask.value, TypeAttributes.unicodeClass.value)
+    def isUnicodeClass_=(value: Boolean) =
+        _attributes = MemberDefinition.setMaskedAttributes(_attributes, TypeAttributes.stringFormatMask.value, TypeAttributes.unicodeClass.value, value)
+
+    def isAutoClass =
+        MemberDefinition.getMaskedAttributes(_attributes, TypeAttributes.stringFormatMask.value, TypeAttributes.autoClass.value)
+    def isAutoClass_=(value: Boolean) =
+        _attributes = MemberDefinition.setMaskedAttributes(_attributes, TypeAttributes.stringFormatMask.value, TypeAttributes.autoClass.value, value)
+
+    def isBeforeFieldInit =
+        MemberDefinition.getAttributes(_attributes, TypeAttributes.beforeFieldInit.value)
+    def isBeforeFieldInit_=(value: Boolean) =
+        _attributes = MemberDefinition.setAttributes(_attributes, TypeAttributes.beforeFieldInit.value, value)
+
     def isRuntimeSpecialName =
         MemberDefinition.getAttributes(_attributes, TypeAttributes.rtSpecialName.value)
     def isRuntimeSpecialName_=(value: Boolean) =
         _attributes = MemberDefinition.setAttributes(_attributes, TypeAttributes.rtSpecialName.value, value)
+
+    def hasSecurity =
+        MemberDefinition.getAttributes(_attributes, TypeAttributes.hasSecurity.value)
+    def hasSecurity_=(value: Boolean) =
+        _attributes = MemberDefinition.setAttributes(_attributes, TypeAttributes.hasSecurity.value, value)
+
+    def isEnum = base_type != null && base_type.isTypeOf("System", "Enum")
+
+    override def isValueType: Boolean =
+        if (base_type == null)
+            return false
+        base_type.isTypeOf("System", "Enum") || (base_type.isTypeOf("System", "ValueType") && !this.isTypeOf("System", "Enum"))
+    override def isValueType_=(value: Boolean): Unit = throw OperationNotSupportedException()
+
+    override def isPrimitive: Boolean =
+        MetadataSystem.tryGetPrimitiveElementType(this) match
+            case Some(primitive_etype) => primitive_etype.isPrimitive
+            case None => false
+        
+    override def metadataType: MetadataType =
+        MetadataSystem.tryGetPrimitiveElementType(this) match
+            case Some(primitive_type) => primitive_type.asMetadataType
+            case None => super.metadataType
+    
+    def getEnumUnderlyingType() =
+        var fields = _fields
+        fields.find((f) => f.isStatic) match
+            case Some(field) => field.fieldType
+            case None => throw IllegalArgumentException()
+        
+    def getNestedType(fullname: String) =
+        if (!hasNestedTypes)
+            null
+        else
+            nestedTypes.find((nt) => nt.typeFullName() == fullname) match
+                case Some(nt) => nt
+                case None => null
 }
+
 
 sealed class InterfaceImplementation(theInterfaceType: TypeReference, token: MetadataToken) extends CustomAttributeProvider {
     var _type: TypeDefinition = null

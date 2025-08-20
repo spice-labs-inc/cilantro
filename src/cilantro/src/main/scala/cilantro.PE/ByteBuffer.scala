@@ -66,15 +66,15 @@ open class ByteBuffer (var buffer: Array[Byte]) {
         val l1 = readInt32().toLong
         l0 | (l1 << 32)
 
-    def readCompressedUInt32() =
+    def readCompressedUInt32(): Int =
         val first = readByte()
         if ((first & 0x80) == 0)
-            first.toInt
+            return first.toInt
         
         if ((first & 0x40) == 0)
-            ((first & 0x7f).toInt << 8) | readByteAsUnsignedInt()
+            return ((first & 0x7f).toInt << 8) | readByteAsUnsignedInt()
         
-        ((first.toInt & 0x3f) << 24) | (readByteAsUnsignedInt() << 16) | (readByteAsUnsignedInt() << 8) | readByteAsUnsignedInt()
+        return ((first.toInt & 0x3f) << 24) | (readByteAsUnsignedInt() << 16) | (readByteAsUnsignedInt() << 8) | readByteAsUnsignedInt()
 
     def readCompressedInt32() : Int =
         val b = buffer(position)

@@ -146,7 +146,7 @@ sealed class ModuleDefinition() extends ModuleReference(null, MetadataToken(Toke
     var symbol_reader: SymbolReader = null
     var assembly_resolver: Disposable[AssemblyResolver] = null
     var metadata_resolver: MetadataResolverTrait = null
-    // var type_system: TypeSystem // TODO
+    private var type_system: TypeSystem = null
     var reader: MetadataReader = null
     var file_name: String = null
     var runtime_version: String = null
@@ -177,7 +177,7 @@ sealed class ModuleDefinition() extends ModuleReference(null, MetadataToken(Toke
     private var _references: ArrayBuffer[AssemblyNameReference] = null
     private var _modules: ArrayBuffer[ModuleReference] = null
     // private var _resources: ArrayBuffer[Resource] = null // TODO
-    // private var exported_types: ArrayBuffer[ExportedType] = null // TODO
+    private var _exported_types: ArrayBuffer[ExportedType] = null
     private var _types: TypeDefinitionCollection = null // TODO
 
     var custom_infos: ArrayBuffer[CustomDebugInformation] = null
@@ -197,8 +197,16 @@ sealed class ModuleDefinition() extends ModuleReference(null, MetadataToken(Toke
     // def projections = _projections
     // def projections_(value: WindowsRuntimeProjections) = _projections = value
 
+    def runtime = _runtime
+    def runtime_=(value: TargetRuntime) =
+        _runtime = value
+        runtime_version = _runtime.runtimeVersionString()
+
+
     def runtimeVersion = runtime_version
-    def runtimeVersion_(value: String) = runtime_version = value
+    def runtimeVersion_(value: String) =
+        runtime_version = value
+        _runtime = TargetRuntime.parseRuntime(runtime_version)
 
     def targetArchitecture = _architecture
     def targetArchitecture_(value: TargetArchitecture) = _architecture = value
@@ -249,11 +257,10 @@ sealed class ModuleDefinition() extends ModuleReference(null, MetadataToken(Toke
         //     metadata_resolver = MetadataResolver(assemblyResolver)
         metadata_resolver
 
-    // TODO
-    // def typeSystem =
-    //     if (type_system == null)
-    //         type_system = TypeSystem.createTypesystem(this)
-    //     type_system
+    def typeSystem =
+        if (type_system == null)
+            type_system = TypeSystem.createTypeSystem(this)
+        type_system
 
     def hasAssemblyReferences =
         if (_references != null)
@@ -342,22 +349,22 @@ sealed class ModuleDefinition() extends ModuleReference(null, MetadataToken(Toke
             _types
         }
 
-    // def hasExportedTypes =
-    //     if (_exported_types != null)
-    //         _exported_types.length > 0
-    //     else
-    //         hasImage && image.hasTable(Table.exportedType)
+    def hasExportedTypes =
+        if (_exported_types != null)
+            _exported_types.length > 0
+        else
+            hasImage && image.hasTable(Table.exportedType)
 
-    // def exportedTypes =
-    //     if (_exported_types != null)
-    //         _exported_types
-    //     else {
-    //         if (hasImage)
-    //             _exported_types = read (this, (_, reader) => reader.readExportedTypes())
-    //         else
-    //             _exported_types = ArrayBuffer.empty[ExportedType]
-    //         _exported_types
-    //     }
+    def exportedTypes =
+        if (_exported_types != null)
+            _exported_types
+        else {
+            if (hasImage)
+                _exported_types = read (this, (_, reader) => reader.readExportedTypes())
+            else
+                _exported_types = ArrayBuffer.empty[ExportedType]
+            _exported_types
+        }
 
     // def entryPoint =
     //     if (_entry_point_set)
@@ -497,13 +504,13 @@ sealed class ModuleDefinition() extends ModuleReference(null, MetadataToken(Toke
         // `type`
     
     def resolve(field: FieldReference): FieldDefinition =
-        null // TODO
+        this.metadata_resolver.resolve(field)
     
     def resolve(method: MethodReference): MethodDefinition =
-        null // TODO
+        this.metadata_resolver.resolve(method)
 
     def resolve(`type`: TypeReference): TypeDefinition =
-        null // TODO
+        this.metadata_resolver.resolve(`type`)
     
 
     // there is a chunk of code to import references that are based on .NET types, this
@@ -644,6 +651,22 @@ sealed class ModuleDefinition() extends ModuleReference(null, MetadataToken(Toke
     def tryGetAssemblyNameReference(name_reference: AssemblyNameReference): Option[AssemblyNameReference] =
         val references = assemblyReferences
         references.find((anr) => anr.equals(name_reference))
+
+    def tryGetCoreLibraryReference(): Option[AssemblyNameReference] =
+        val references = assemblyReferences
+
+        references.find(ModuleDefinition.isCoreLibrary)
+
+    def isCoreLibrary(): Boolean =
+        if (assembly == null)
+            return false
+        
+        if (!ModuleDefinition.isCoreLibrary(assembly.name))
+            return false
+        
+        if (hasImage && read(this, (m, reader) => reader.image.getTableLength(Table.assemblyRef) > 0))
+            return false
+        true
 }
 
 object ModuleDefinition {
@@ -747,6 +770,15 @@ object ModuleDefinition {
                 case Some(value) => Some((value, state))
             
         }
+    
+    private def isCoreLibrary(reference: AssemblyNameReference): Boolean =
+        val name = reference.name
+        name == mscorlib || name == system_runtime || name == system_private_corelib || name == netstandard
+
+    val mscorlib = "mscorlib"
+    val system_runtime = "System.Runtime"
+    val system_private_corelib = "System.Private.CoreLib"
+    val netstandard = "netstandard"
 }
 
 
