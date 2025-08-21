@@ -126,7 +126,7 @@ extension (self: CodedIndex)
                 case _ => MetadataToken.zero
         case CodedIndex.customAttributeType =>
             val rid = data >>> 3
-            data & 3 match
+            data & 7 match
                 case 2 => MetadataToken(TokenType.method, rid)
                 case 3 => MetadataToken(TokenType.memberRef, rid)
                 case _ => MetadataToken.zero
