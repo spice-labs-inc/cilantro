@@ -14,4 +14,22 @@ package io.spicelabs.cilantro
 
 enum TargetRuntime {
   case net_1_0, net_1_1, net_2_0, net_4_0
+  def runtimeVersionString() =
+    this match
+      case TargetRuntime.net_1_0 => "v1.0.3705"
+      case TargetRuntime.net_1_1 => "v1.1.4322"
+      case TargetRuntime.net_2_0 => "v2.0.50727"
+      case _ => "v4.0.30319"
+}
+
+object TargetRuntime {
+  def parseRuntime(self: String) =
+    if (self == null || self.length() == 0)
+      TargetRuntime.net_4_0
+    self.charAt(1) match
+      case '1' =>
+        if self.charAt(3) == '0' then TargetRuntime.net_1_0 else TargetRuntime.net_1_1
+      case '2' => TargetRuntime.net_2_0
+      case _ => TargetRuntime.net_4_0
+    
 }

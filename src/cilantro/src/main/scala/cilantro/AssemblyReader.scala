@@ -28,6 +28,13 @@ import io.spicelabs.cilantro.metadata.Row3
 import io.spicelabs.cilantro.metadata.ElementType
 import io.spicelabs.cilantro.metadata.Row2
 import scala.util.boundary, boundary.break
+import io.spicelabs.cilantro.MetadataReader.addRange
+import io.spicelabs.cilantro.SignatureReader.checkGenericContext
+import io.spicelabs.cilantro.AnyExtension.as
+import java.nio.charset.StandardCharsets
+import io.spicelabs.cilantro.ConstantProvider.noValue
+import io.spicelabs.cilantro.MetadataReader.rangesSize
+import io.spicelabs.cilantro.MetadataReader.isNested
 
 
 abstract class ModuleReader() {
@@ -579,11 +586,12 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
     
     def readTypes() =
         initializeTypeDefinitions()
-        // val mtypes = _metadata.`types`
+        val mtypes = metadata._types
         val type_count = 0 // mtypes.length - metadata.nestedTypes.length
         val types = TypeDefinitionCollection(module, type_count)
 
-        // TODO
+        mtypes.foreach((`type`) => if (!isNested(`type`.attributes)) types.addOne(`type`))
+
         types
     
     private def completeTypes() = ()
@@ -623,8 +631,57 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         () // TODO
 
 
-    // TODO
-    private def initializeCustomAttributes() = { }
+    private def initializeCustomAttributes(): Unit =
+        if (metadata._customAttributes != null)
+            return ()
+        
+        metadata._customAttributes = initializeRanges(
+            Table.customAttribute, () => {
+                val next = readMetadataToken(CodedIndex.hasCustomAttribute);
+                readMetadataToken(CodedIndex.customAttributeType)
+                readBlobIndex()
+                next
+            }
+        )
+
+    def hasCustomAttributes(owner: CustomAttributeProvider) =
+        initializeCustomAttributes()
+        val rangeOpt = metadata.tryGetCustomAttributeRanges(owner)
+        rangeOpt match
+            case Some(ranges) => rangesSize(ranges) > 0
+            case _ => false
+
+    def readCustomAttributes(owner: CustomAttributeProvider): ArrayBuffer[CustomAttribute] =
+        initializeCustomAttributes()
+        val custom_attributes = ArrayBuffer.empty[CustomAttribute]
+
+        val rangeOpt = metadata.tryGetCustomAttributeRanges(owner)
+        rangeOpt match
+            case Some(ranges) => {
+                for range <- ranges do
+                    readCustomAttributeRange(range, custom_attributes)
+            }
+            case _ => return custom_attributes
+
+        // TODO
+        // if (module.isWindowsMetadata)
+        //     for custom_attribute <- custom_attributes do
+        //         windowsRuntimeProjections.project(owner, custom_attributes, custom_attribute)        
+
+        custom_attributes
+    
+    def readCustomAttributeRange(range: Range, custom_attributes: ArrayBuffer[CustomAttribute]): Unit =
+        if (!moveTo(Table.customAttribute, range.index))
+            return ()
+        
+        for i <- 0 until range.length do
+            readMetadataToken(CodedIndex.hasCustomAttribute)
+
+            val constructor = lookupToken(readMetadataToken(CodedIndex.customAttributeType)).asInstanceOf[MethodReference]
+            val signature = readBlobIndex()
+            custom_attributes.addOne(CustomAttribute(signature, constructor))
+        
+
 
     private def readType(rid: Int) = 
         if (!moveTo(Table.typeDef, rid))
@@ -713,8 +770,11 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
             readType(rid)
 
     
-    // TODO
-    private def initializeTypeReferences() = { }
+    private def initializeTypeReferences() =
+        if (metadata._typeReferences != null)
+            ()
+        else
+            metadata._typeReferences = Array.ofDim[TypeReference](image.getTableLength(Table.typeRef))
 
     def getTypeReference(scope: String, full_name: String): TypeReference =
         initializeTypeReferences()
@@ -736,7 +796,7 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
     private def getTypeReference(rid: Int): TypeReference =
         initializeTypeReferences()
 
-        val `type`:TypeReference = null // metadata.getTypeReference(rid)
+        val `type`:TypeReference = metadata.getTypeReference(rid)
         if (`type` != null)
             `type`
         else
@@ -754,9 +814,9 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         val name = readString()
         val namespace = readString()
         val `type` = TypeReference(namespace, name, module, null)
+        `type`.token = MetadataToken(TokenType.typeRef, rid)
 
-        // TODO
-        // metadata.addTypeReference(`type`)
+        metadata.addTypeReference(`type`)
         
         if (scope_token.tokenType == TokenType.typeRef)
             if (scope_token.RID != rid)
@@ -770,9 +830,9 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         `type`.scope = scope
         `type`.declaringType = declaring_type
 
-        // TODO
-        // MetadataSystem.tryProcessPrimitiveTypeReference(`type`)
+        MetadataSystem.tryProcessPrimitiveTypeReference(`type`)
 
+        // TODO
         // if (`type`.module.isWindowsMetadata())
         //     windowsRuntimeProjections.project(`type`)
 
@@ -785,17 +845,17 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
             var scopes: Array[MetadataScope] = scope.tokenType match
                 case TokenType.assemblyRef =>
                     initializeAssemblyReferences()
-                    null // metadata.assemblyReferences
+                    metadata._assemblyReferences.map((ar)=> ar.asInstanceOf[MetadataScope])
                 case TokenType.moduleRef =>
                     initializeModuleReferences()
-                    null // metadata.moduleReferences
+                    metadata._moduleReferences.map((ar) => ar.asInstanceOf[MetadataScope])
                 case _ => throw OperationNotSupportedException()
 
-                var index = scope.RID - 1
-                if (index < 0 || index >= scopes.length)
-                    null
-                else
-                    scopes(index)
+            var index = scope.RID - 1
+            if (index < 0 || index >= scopes.length)
+                null
+            else
+                scopes(index)
 
     def getTypeReferences(): Iterable[TypeReference] =
         initializeTypeReferences()
@@ -859,16 +919,6 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         val bytes = image.getReaderAt(rva, size, (s, reader) => reader.readBytes(s))
         if bytes != null then bytes else Array.emptyByteArray
 
-    def hasCustomAttributes(owner: CustomAttributeProvider) =
-        initializeCustomAttributes()
-        // TODO
-        // val rangeOpt = metadata.tryGetCustomAttributeRanges(owner)
-        // rangeOpt match
-        //     case Some(ranges) => rangeSize(anges) > 0
-        //     case _ => false
-        
-        false
-
     private def initializeFieldRVAs() = { } // TODO
 
     def readFieldLayout(field: FieldDefinition) = 0 // TODO
@@ -923,26 +973,6 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
             moveTo(table, rid)
 
             reader(rid, members)
-
-
-    def readCustomAttributes(owner: CustomAttributeProvider): ArrayBuffer[CustomAttribute] =
-        initializeCustomAttributes()
-        val custom_attributes = ArrayBuffer.empty[CustomAttribute]
-
-        // TOOD
-        // val rangeOpt = metadata.tryGetCustomAttributeRanges(owner)
-        // rangeOpt match
-        //     case Some(ranges) => {
-        //         for range <- ranges do
-        //             readCustomAttributeRange(ranges, custom_attributes)
-        //     }
-        //     case _ => return custom_attributes
-
-        // if (module.isWindowsMetadata)
-        //     for custom_attribute <- custom_attributes do
-        //         windowsRuntimeProjections.project(owner, custom_attributes, custom_attribute)        
-
-        custom_attributes
     
     private def initializeMethods() = { } // TODO
 
@@ -970,7 +1000,30 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
 
     private def initializeGenericParameters() = { } // TODO
 
-    private def initializeRanges(table: Table, get_next: () => MetadataToken): HashMap[MetadataToken, Array[Range]] = null // TODO
+    private def initializeRanges(table: Table, get_next: () => MetadataToken): HashMap[MetadataToken, ArrayBuffer[Range]] =
+        val length = moveTo(table)
+        val ranges = HashMap[MetadataToken, ArrayBuffer[Range]]()
+
+        if (length == 0)
+            return ranges
+
+        var owner = MetadataToken.zero
+        var range = new Range(1, 0)
+
+        for i <- 1 to length do // yes, to and not until
+            val next = get_next()
+            if (i == 1)
+                owner = next
+                range = new Range(range.index, range.length + 1)
+            else if (next != owner)
+                addRange(ranges, owner, range)
+                range = new Range(i, 1)
+                owner = next
+            else
+                range = new Range(range.index, range.length + 1)
+        
+        addRange(ranges, owner, range)
+        ranges
 
     def hasGenericConstraints(generic_parameter: GenericParameter) = false // TODO
 
@@ -1011,30 +1064,89 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
             case TokenType.typeDef => getTypeDefinition(rid)
             case TokenType.typeRef => getTypeReference(rid)
             case TokenType.typeSpec => getTypeSpecification(rid)
-            // case TokenType.field => getFieldDefinition(rid)
-            // case TokenType.method => getMethodDefinition(rid)
-            // case TokenType.memberRef => getMemberReference(rid)
-            // case TokenType.methodSpec => getMethodSpecification(rid)
+            case TokenType.field => getFieldDefinition(rid)
+            case TokenType.method => getMethodDefinition(rid)
+            case TokenType.memberRef => getMemberReference(rid)
+            case TokenType.methodSpec => getMethodSpecification(rid)
             case _ => null
 
         this.position = position
         this._context = context
         element
 
-    def getFieldDefinition(rid: Int): FieldDefinition = null // TODO
+    def getFieldDefinition(rid: Int): FieldDefinition =
+        initializeTypeDefinitions()
+        val field = metadata.getFieldDefinition(rid)
+        if (field != null)
+            field
+        else
+            lookupField(rid)
 
-    private def lookupField(rid: Int): FieldDefinition = null // TODO
+    private def lookupField(rid: Int): FieldDefinition =
+        val `type` = metadata.getFieldDeclaringType(rid)
+        if (`type` == null)
+            null
+        else
+            mixinRead(`type`.fields)
+            metadata.getFieldDefinition(rid)
 
-    def getMethodDefinition(rid: Int): MethodDefinition = null // TODO
+    def getMethodDefinition(rid: Int): MethodDefinition =
+        initializeTypeDefinitions()
+        val method = metadata.getMethodDefinition(rid)
+        if (method != null)
+            method
+        else
+            lookupMethod(rid)
 
-    private def lookupMethod(rid: Int): MethodDefinition = null // TODO
+    private def lookupMethod(rid: Int): MethodDefinition =
+        val `type` = metadata.getMethodDeclaringType(rid)
+        if (`type` == null)
+            null
+        else
+            mixinRead(`type`.methods)
+            metadata.getMethodDefinition(rid)
 
-    // private def getMethodSpecification(rid: Int): MethodSpecification = null // TODO
 
-    // private def readMethodSpecSignature(signature: Int, method: MethodReference): MethodSpecfication = null
+    private def getMethodSpecification(rid: Int): MethodSpecification =
+        if (!moveTo(Table.methodSpec, rid))
+            return null
+        
+        val element_method = lookupToken(readMetadataToken(CodedIndex.methodDefOrRef)).asInstanceOf[MethodReference]
+        val signature = readBlobIndex()
 
+        val method_spec = readMethodSpecSignature(signature, element_method)
+        method_spec.token = MetadataToken(TokenType.methodSpec, rid)
+        method_spec
+
+    private def readMethodSpecSignature(signature: Int, method: MethodReference): MethodSpecification =
+        val reader = readSignature(signature)
+        val methodspec_sig = 0x0a.toByte
+        val call_conv = reader.readByte()
+
+        if (call_conv != methodspec_sig)
+            throw OperationNotSupportedException()
+        
+        val arity = reader.readCompressedUInt32()
+        val instance = GenericInstanceMethod(method, arity.toInt & 0xff)
+
+        reader.readGenericInstanceSignature(method, instance, arity)
+
+        instance
 
     private def getMemberReference(rid: Int): MemberReference =
+        initializeMemberReferences()
+
+        var member = metadata.getMemberReference(rid)
+        if (member != null)
+            member
+        else
+            member = readMemberReference(rid)
+            if (member != null && !member.containsGenericParameter)
+                metadata.addMemberReference(member)
+            member
+
+
+    private def readMemberReference(rid: Int): MemberReference =
         if (!moveTo(Table.memberRef, rid))
             return null
         
@@ -1070,24 +1182,59 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         if (reader.buffer(reader.position) == field_sig)
             reader.position += 1
             val field = FieldReference()
-            // TODO
-            field.asInstanceOf[MemberReference]
+            field.declaringType = declaring_type
+            field.fieldType = reader.readTypeSignature()
+            field
         else
             val method = MethodReference()
-            // TODO
-            method.asInstanceOf[MemberReference]
+            method.declaringType = declaring_type
+            reader.readMethodSignature(method)
+            method
 
     private def readMethodMemberReference(token: MetadataToken, name: String, signature: Int) =
         val method = getMethodDefinition(token.RID)
-        // TODO
-        // this._context = method
+        this._context = method
 
-        // val member = readMemberReferenceSignature(signature, method.declaringType)
+        val member = readMemberReferenceSignature(signature, method.declaringType)
+        member.name = name
 
-        // member
-        null
+        member
 
-    private def initializeConstants() = { } // TODO
+    private def initializeMemberReferences(): Unit =
+        if (metadata._memberReferences != null)
+            return ()
+
+        metadata._memberReferences = Array.ofDim[MemberReference](image.getTableLength(Table.memberRef))
+
+    def getMemberReferences(): Iterable[MemberReference] =
+        initializeMemberReferences()
+        val length = image.getTableLength(Table.memberRef)
+
+        val type_system = module.typeSystem
+
+        val context = MethodDefinition("", MethodAttributes.static.value, type_system.void)
+        context.declaringType = TypeDefinition("", "", TypeAttributes.public.value)
+
+        val member_references = Array.ofDim[MemberReference](length)
+        for i <- 1 to length do
+            this._context = context
+            member_references(i - 1) = getMemberReference(i)
+        member_references
+
+    private def initializeConstants(): Unit =
+        if (metadata._constants != null)
+            return ()
+
+        val length = moveTo(Table.constant)
+
+        metadata._constants = HashMap[MetadataToken, Row2[ElementType, Int]]()
+        val constants = metadata._constants
+
+        for i <- 1 to length do
+            val `type` = ElementType.fromOrdinalValue(readUInt16().toByte)
+            val owner = readMetadataToken(CodedIndex.hasConstant)
+            val signature = readBlobIndex()
+            constants.addOne(owner, Row2[ElementType, Int](`type`, signature))
 
     def readConstantSignature(token: MetadataToken): TypeReference =
         if (token.tokenType != TokenType.signature)
@@ -1101,8 +1248,15 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         
         readFieldType(readBlobIndex())
 
-    // TODO
-    // def readConstant(owner: ConstantProvider): Any = null
+    def readConstant(owner: ConstantProvider): Any =
+        initializeConstants()
+
+        metadata._constants.get(owner.metadataToken) match
+            case Some(row) =>
+                metadata._constants.remove(owner.metadataToken)
+                readConstantValue(row.col1, row.col2)
+            case None => noValue
+        
 
     private def readConstantValue(etype: ElementType, signature: Int): Any =
         etype match
@@ -1118,22 +1272,44 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         String(blob, index, actualCount, "UTF-16")
 
     private def readConstantPrimitive(`type`: ElementType, signature: Int): Any =
-        null // TODO
+        val reader = readSignature(signature)
+        reader.readConstantSignature(`type`)
 
-    def getMemberReferences(): Iterable[MemberReference] =
-        // TODO
-        Array[MemberReference]()
 
     def getCustomAttributes(): Iterable[CustomAttribute] =
-        // TODO
-        Array[CustomAttribute]()
+        initializeTypeDefinitions()
+        val length = image.tableHeap(Table.customAttribute).length
+        val custom_attributes = ArrayBuffer[CustomAttribute]()
+        readCustomAttributeRange(new Range(1, length), custom_attributes)
+        custom_attributes
 
     def readCustomAttributeBlob(signature: Int) =
         readBlob(signature)
 
-    // TODO
+    
     def readCustomAttributesSignature(attribute: CustomAttribute): Unit =
-        ()
+        val reader = readSignature(attribute._signature)
+        if (!reader.canReadMore())
+            return ()
+        
+        if (reader.readUInt16() != 0x0001)
+            throw OperationNotSupportedException()
+        
+        val constructor = attribute.constructor
+        if (constructor.hasParameters)
+            reader.readCustomAttributeConstructorArguments(attribute, constructor.parameters)
+        
+        if (!reader.canReadMore())
+            return ()
+        
+        val named = reader.readUInt16()
+
+        if (named == 0)
+            return ()
+        
+        val (fields, props) = reader.readCustomArgumentAttributeNamedArguments(named)
+        attribute.fields.addAll(fields)
+        attribute.properties.addAll(props)
 
     private def initializeMarshalInfos() = { } // TODO
 
@@ -1156,6 +1332,72 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
 
     private def readXmlSecurityDeclaration(signature: Int, declaration: SecurityDeclaration) = { } // TODO
 
+    def readExportedTypes() =
+        val length = moveTo(Table.exportedType)
+        if (length == 0)
+            ArrayBuffer[ExportedType]()
+        else
+            val exported_types = ArrayBuffer[ExportedType]()
+
+            for i <- 1 to length do // yes, to is intentional
+                val attributes = readUInt32()
+                val identifier = readUInt32()
+                val name = readString()
+                val namespace = readString()
+                val implementation = readMetadataToken(CodedIndex.implementation)
+
+                var declaring_type:ExportedType = null
+                var scope: MetadataScope = null
+
+                implementation.tokenType match
+                    case TokenType.assemblyRef | TokenType.file =>
+                        scope = getExportedTypeScope(implementation)
+                    case TokenType.exportedType =>
+                        // FIXME: if the table is not properly sorted
+                        declaring_type = exported_types(implementation.RID - 1)
+                    case _ => { }
+
+                val exported_type = ExportedType(namespace, name, module, scope)
+                exported_type.attributes = attributes
+                exported_type.identifier = identifier
+                exported_type.declaringType = declaring_type
+                exported_type.metadataToken = MetadataToken(TokenType.exportedType, i)
+
+                exported_types.addOne(exported_type)
+            
+            exported_types
+
+    def getExportedTypeScope(token: MetadataToken) =
+        val position = this.position
+        val scope = token.tokenType match
+            case TokenType.assemblyRef =>
+                initializeAssemblyReferences()
+                metadata.getAssemblyNameReference(token.RID)
+            case TokenType.file =>
+                initializeModuleReferences()
+                getModuleReferenceFromFile(token)
+            case _ => throw OperationNotSupportedException()
+        
+        this.position = position
+        scope
+
+    def getModuleReferenceFromFile(token: MetadataToken): ModuleReference =
+        if (!moveTo(Table.file, token.RID))
+            null
+        else
+            readUInt32()
+            val file_name = readString()
+            val modules = module.moduleReferences
+
+            val reference = modules.find((m) => m.name == file_name) match
+                case Some(ref) => ref
+                case None =>
+                    val newRef = ModuleReference(file_name)
+                    modules.addOne(newRef)
+                    newRef
+            reference
+    
+            
 
 }
 
@@ -1215,16 +1457,376 @@ object MetadataReader {
     private def isDeleted(member: MemberDefinition) = false
 //        member.isSpecialName && member.name == "_Deleted"
 
-    private def addRange(ranges: HashMap[MetadataToken, Array[Range]], owner: MetadataToken, range: Range) = { } // TODO
+    private def rangesSize(ranges: ArrayBuffer[Range]) =
+        ranges.view.map((r) => r.length).fold(0)((a, b) => a + b)    
 
-    private def rangeSize(ranges: Array[Range]) =
-        ranges.view.map((r) => r.length).fold(0)((a, b) => a + b)           
+    private def addRange(ranges: HashMap[MetadataToken, ArrayBuffer[Range]], owner: MetadataToken, range: Range): Unit =
+        if (owner.RID == 0)
+            return ()
+        ranges.get(owner) match
+            case None =>
+                ranges.addOne(owner, ArrayBuffer(range))
+            case Some(slots) =>
+                slots.addOne(range)
+        
+        
+
 }
 
-sealed class SignatureReader(blob: Int, private val _reader: MetadataReader)
-extends ByteBuffer(_reader.image.blobHeap.data) {
+sealed class SignatureReader(blob: Int, private val _reader: MetadataReader) extends ByteBuffer(_reader.image.blobHeap.data) {
     this.position = blob
-    private val sig_length = readCompressedInt32()
-    private val start = position
+    private val _sig_length = readCompressedUInt32()
+    private val _start = position
 
+    private def _typeSystem = _reader.module.typeSystem
+
+    private def readTypeTokenSignature() =
+        CodedIndex.typeDefOrRef.getMetadataToken(readCompressedUInt32())
+    
+
+    private def getGenericParameter(`type`: GenericParameterType, `var`: Int) =
+        val context = _reader._context
+        val index = `var`
+
+        if (context == null)
+            getUnboundGenericParameter(`type`, index)
+        else
+            val provider = `type` match
+                case GenericParameterType.`type` => context.`type`
+                case GenericParameterType.method => context.method
+                case null => throw OperationNotSupportedException()
+            
+            if (!context.isDefinition)
+                checkGenericContext(provider, index)
+            
+            if (index >= provider.genericParameters.length)
+                getUnboundGenericParameter(`type`, index)
+            else
+                provider.genericParameters(index)
+    
+    private def getUnboundGenericParameter(`type`: GenericParameterType, index: Int) =
+        GenericParameter(index, `type`, _reader.module)
+
+    def readGenericInstanceSignature(provider: GenericParameterProvider, instance: GenericInstance, arity: Int) =
+        if (!provider.isDefinition)
+            checkGenericContext(provider, arity - 1)
+        val instance_arguments = instance.genericArguments
+
+        for i <- 0 until arity do 
+            instance_arguments.addOne(readTypeSignature())
+            
+    private def readArrayTypeSignature() =
+        val array = ArrayType(readTypeSignature())
+        val rank = readCompressedUInt32()
+
+        val sizes = Array.ofDim[Int](readCompressedUInt32())
+        for i <- 0 until sizes.length do
+            sizes(i) = readCompressedUInt32()
+        
+        val low_bounds = Array.ofDim[Int](readCompressedUInt32())
+        for i <- 0 until low_bounds.length do
+            low_bounds(i) = readCompressedUInt32()
+        
+        array.dimensions.clear()
+
+        for i <- 0 until rank do
+            var lower: Option[Int] = None
+            var upper: Option[Int] = None
+
+            if (i < low_bounds.length)
+                lower = Some(low_bounds(i))
+            
+            if (i < sizes.length)
+                upper = Some(lower.get + sizes(i) - 1)
+            
+            array.dimensions.addOne(ArrayDimension(lower, upper))
+        array
+
+    private def getTypeDefOrRef(token: MetadataToken) =
+        _reader.getTypeDefOrRef(token)
+    
+    def readTypeSignature(): TypeReference =
+        readTypeSignature(ElementType.fromOrdinalValue(readByte()))
+    
+    def readTypeToken(): TypeReference =
+        getTypeDefOrRef(readTypeTokenSignature())
+    
+    def readTypeSignature(etype: ElementType): TypeReference =
+        etype match
+            case ElementType.valueType =>
+                val value_type = getTypeDefOrRef(readTypeTokenSignature())
+                value_type.knownValueType()
+                value_type
+            case ElementType.`class` =>
+                getTypeDefOrRef(readTypeTokenSignature())
+            case ElementType.ptr =>
+                PointerType(readTypeSignature())
+            case ElementType.fnPtr =>
+                val fptr = FunctionPointerType()
+                readMethodSignature(fptr)
+                fptr
+            case ElementType.byRef =>
+                ByReferenceType(readTypeSignature())
+            case ElementType.pinned =>
+                PinnedType(readTypeSignature())
+            case ElementType.szArray =>
+                ArrayType(readTypeSignature())
+            case ElementType.array =>
+                readArrayTypeSignature()
+            case ElementType.cModOpt =>
+                OptionalModifierType(getTypeDefOrRef(readTypeTokenSignature()), readTypeSignature())
+            case ElementType.cModReqD =>
+                RequiredModifierType(getTypeDefOrRef(readTypeTokenSignature()), readTypeSignature())
+            case ElementType.sentinel =>
+                SentinelType(readTypeSignature())
+            case ElementType.`var` =>
+                getGenericParameter(GenericParameterType.`type`, readCompressedUInt32())
+            case ElementType.mVar =>
+                getGenericParameter(GenericParameterType.method, readCompressedUInt32())
+            case ElementType.genericInst =>
+                val is_value_type = readByte() == ElementType.valueType.value
+                val element_type = getTypeDefOrRef(readTypeTokenSignature())
+
+                val arity = readCompressedUInt32()
+                val generic_instance = GenericInstanceType(element_type, arity)
+
+                readGenericInstanceSignature(element_type, generic_instance, arity)
+                if (is_value_type)
+                    generic_instance.knownValueType()
+                    element_type.getElementType().knownValueType()
+                
+                generic_instance
+            case ElementType.`object` => _typeSystem.`object`
+            case ElementType.void => _typeSystem.void
+            case ElementType.typedByRef => _typeSystem.typedReference
+            case ElementType.i => _typeSystem.intPtr
+            case ElementType.u => _typeSystem.uintPtr
+            case _ => getPrimitiveType(etype)
+
+
+    def readMethodSignature(method: MethodSignature) =
+        var calling_convention = readByte()
+        val has_this = 0x20
+        val explicit_this = 0x40
+        val arity = 0x10
+
+        if ((calling_convention.toInt & has_this) != 0)
+            method.hasThis = true
+            calling_convention = (calling_convention.toInt & ~has_this).toByte
+        
+        if ((calling_convention.toInt & explicit_this) != 0)
+            method.explicitThis = true
+            calling_convention = (calling_convention.toInt & ~explicit_this).toByte
+        
+        var has_arity = false
+        if ((calling_convention.toInt & arity) != 0)
+            has_arity = true
+            calling_convention = (calling_convention.toInt & ~arity).toByte
+
+        
+        method.callingConvention = MethodCallingConvention.fromOrdinalValue(calling_convention)
+
+        val generic_context = method.as[MethodReference]
+        if (generic_context != null && !generic_context.declaringType.isArray)
+            _reader._context = generic_context
+        
+        if (has_arity)
+            val theArity = readCompressedUInt32()
+            if (generic_context != null && !generic_context.isDefinition)
+                checkGenericContext(generic_context, theArity - 1)
+            
+        val param_count = readCompressedUInt32()
+
+        method.methodReturnType.returnType = readTypeSignature()
+
+        if (param_count != 0)
+            val method_ref = method.as[MethodReference]
+            val parameters =
+                if (method_ref != null)
+                    method_ref._parameters = ParameterDefinitionCollection(method, param_count)
+                    method_ref.parameters
+                else
+                    method_ref.parameters
+            for i <- 0 until param_count do
+                parameters.addOne(ParameterDefinition(readTypeSignature()))
+
+    def readConstantSignature(`type`: ElementType) = readPrimitiveValue(`type`)
+
+    def readCustomAttributeConstructorArguments(attribute: CustomAttribute, parameters: ArrayBuffer[ParameterDefinition]): Unit =
+        val count = parameters.length
+        if (count == 0)
+            return ()
+        
+        attribute._arguments = ArrayBuffer[CustomAttributeArgument]()
+
+        for i <- 0 until count do
+            val parameterType = GenericParameterResolver.resolveParameterTypeIfNeeded(
+                attribute.constructor, parameters(i)
+            )
+            attribute._arguments.addOne(readCustomAttributeFixedArgument(parameterType))
+
+    private def readCustomAttributeFixedArgument(`type`: TypeReference) =
+        if (`type`.isArray)
+            readCustomAttributeFixedArrayArgument(`type`.as[ArrayType])
+        else
+            readCustomAttributeElement(`type`)
+    
+    def readCustomArgumentAttributeNamedArguments(count: Char) : (ArrayBuffer[CustomAttributeNamedArgument], ArrayBuffer[CustomAttributeNamedArgument]) =
+        var fields: ArrayBuffer[CustomAttributeNamedArgument] = null
+        var properties: ArrayBuffer[CustomAttributeNamedArgument] = null
+
+        for i <- 0 until count do
+            if (canReadMore())
+                val (f, p) = readCustomAttributeNamedArgument(fields, properties)
+                fields = f
+                properties = p
+        (fields, properties)
+    
+    def readCustomAttributeNamedArgument(fields: ArrayBuffer[CustomAttributeNamedArgument], properties: ArrayBuffer[CustomAttributeNamedArgument]): (ArrayBuffer[CustomAttributeNamedArgument], ArrayBuffer[CustomAttributeNamedArgument]) =
+        var localFields = fields
+        var localProps = properties
+        val kind = readByte()
+        val `type` = readCustomAttributeFieldOrPropType()
+        val name = readUTF8String()
+
+        val container = kind match
+            case 0x53 =>
+                val ct = getCustomAttributeNamedArgumentCollection(localFields)
+                localFields = ct
+                ct
+            case 0x54 =>
+                val ct = getCustomAttributeNamedArgumentCollection(localProps)
+                localProps = ct
+                ct
+            case _ => throw OperationNotSupportedException()
+        container.addOne(CustomAttributeNamedArgument(name, readCustomAttributeFixedArgument(`type`)))
+        (localFields, localProps)
+    
+    private def getCustomAttributeNamedArgumentCollection(coll: ArrayBuffer[CustomAttributeNamedArgument]) =
+        if coll != null then coll else ArrayBuffer[CustomAttributeNamedArgument]()
+
+    private def readCustomAttributeFixedArrayArgument(`type`: ArrayType): CustomAttributeArgument =
+        val length = readUInt32()
+        length match
+            case 0xffffffff => CustomAttributeArgument(`type`, null)
+            case 0 => CustomAttributeArgument(`type`, Array[CustomAttributeArgument]())
+            case _ =>
+                val arguments = Array.ofDim[CustomAttributeArgument](length)
+                val element_type = `type`.elementType
+
+                for i <- 0 until length do
+                    arguments(i) = readCustomAttributeElement(element_type)
+                CustomAttributeArgument(`type`, arguments)
+    
+    private def readCustomAttributeElement(`type`: TypeReference): CustomAttributeArgument =
+        if (`type`.isArray)
+            readCustomAttributeFixedArrayArgument(`type`.asInstanceOf[ArrayType])
+        else
+            CustomAttributeArgument(`type`,
+                if `type`.etype == ElementType.`object` then readCustomAttributeElement(readCustomAttributeFieldOrPropType())
+                else readCustomAttributeElementValue(`type`)
+            )
+
+    private def readCustomAttributeElementValue(`type`: TypeReference): Any =
+        var thisType = `type`
+        var etype = `type`.etype
+        if (etype == ElementType.genericInst)
+            thisType = `type`.getElementType()
+            etype = thisType.etype
+        
+        etype match
+            case ElementType.string =>
+                readUTF8String()
+            case ElementType.none =>
+                if (thisType.isTypeOf("System", "Type"))
+                    readTypeReference()
+                else
+                    readCustomAttributeEnum(thisType)
+            case _ =>
+                readPrimitiveValue(etype)
+
+    private def readPrimitiveValue(`type`: ElementType): Any =
+        `type` match
+            case ElementType.boolean => readByte() == 1
+            case ElementType.i1 | ElementType.u1 => readByte()
+            case ElementType.u2 | ElementType.char => readUInt16()
+            case ElementType.i2 => readInt16()
+            case ElementType.i4 | ElementType.u4 => readInt32()
+            case ElementType.i8 | ElementType.u8 => readInt64()
+            case ElementType.r4 => readSingle()
+            case ElementType.r8 => readDouble()
+            case _ => throw OperationNotSupportedException(`type`.toString())
+    
+    private def getPrimitiveType(etype: ElementType) =
+        etype match
+            case ElementType.boolean => _typeSystem.boolean
+            case ElementType.char => _typeSystem.char
+            case ElementType.i1 => _typeSystem.sByte
+            case ElementType.u1 => _typeSystem.byte
+            case ElementType.i2 => _typeSystem.int16
+            case ElementType.u2 => _typeSystem.uInt16
+            case ElementType.i4 => _typeSystem.int32
+            case ElementType.u4 => _typeSystem.uInt32
+            case ElementType.i8 => _typeSystem.int64
+            case ElementType.u8 => _typeSystem.uInt64
+            case ElementType.r4 => _typeSystem.single
+            case ElementType.r8 => _typeSystem.double
+            case ElementType.string => _typeSystem.string
+            case _ => throw OperationNotSupportedException(etype.toString())
+
+    private def readCustomAttributeFieldOrPropType():TypeReference =
+        var etype = ElementType.fromOrdinalValue(readByte())
+        etype match
+            case ElementType.boxed => _typeSystem.`object`
+            case ElementType.szArray => ArrayType(readCustomAttributeFieldOrPropType())
+            case ElementType.`enum` => readTypeReference()
+            case ElementType.`type` => _typeSystem.lookupType("System", "Type")
+            case _ => getPrimitiveType(etype)
+    
+    def readTypeReference() =
+        TypeParser.parseType(_reader.module, readUTF8String())
+
+    private def readCustomAttributeEnum(enum_type: TypeReference): Any =
+        var `type` = enum_type.checkedResolve()
+        if (!`type`.isEnum)
+            throw IllegalArgumentException()
+        readCustomAttributeElementValue(`type`.getEnumUnderlyingType())
+
+    // TODO
+    // def readSecurityAttribute(): SecurityAttribute = null
+
+    // TODO
+    // def readMarshalInfo(): MarshalInfo = null
+
+    private def readNativeType() =
+        NativeType.fromOrdinalValue(readByte())
+    
+    private def readVariantType() =
+        VariantType.fromOrdinalValue(readByte())
+
+    private def readUTF8String(): String =
+        if (buffer(position) == 0xff.toByte)
+            position += 1
+            return null
+        
+        val length = readCompressedUInt32()
+        if (length == 0)
+            return ""
+        
+        if (position + length > buffer.length)
+            return ""
+        
+        val string = new String(buffer, position, length, StandardCharsets.UTF_8)
+        position += length
+        string
+
+    def canReadMore() =
+        (position - _start) < _sig_length
+}
+
+object SignatureReader {
+    private def checkGenericContext(owner: GenericParameterProvider, index: Int) =
+        var owner_parameters = owner.genericParameters
+        for i <- owner_parameters.length to index do // yes, to is intentional
+            owner_parameters.addOne(GenericParameter(owner))
 }

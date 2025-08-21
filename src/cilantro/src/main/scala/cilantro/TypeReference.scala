@@ -15,6 +15,7 @@ package io.spicelabs.cilantro
 import io.spicelabs.cilantro.metadata.ElementType
 import scala.collection.mutable.ArrayBuffer
 import javax.naming.OperationNotSupportedException
+import io.spicelabs.cilantro.AnyExtension.as
 
 
 enum MetadataType(val value: Byte) {
@@ -90,12 +91,14 @@ class TypeReference(private var _namespace: String, _name: String) extends Membe
     def isValueType_=(value: Boolean) = value_type = value
 
     override def module =
-        if (module != null) module
-
-        val declaring_type = declaringType
-        if (declaring_type != null)
-            declaring_type.module
-        null
+        if (_module != null)
+            _module
+        else
+            val declaring_type = declaringType
+            if (declaring_type != null)
+                declaring_type.module
+            else
+                null
 
     def windowsRuntimeProjection = projection.asInstanceOf[TypeReferenceProjection]
     def windowsRuntimeProjection_=(value: TypeReferenceProjection) = projection = value
@@ -216,7 +219,15 @@ class TypeReference(private var _namespace: String, _name: String) extends Membe
                 ElementType.sentinel |
                 ElementType.`var` => true
             case _ => false
-        
+    
+    def knownValueType() =
+        if (!isDefinition)
+            isValueType = true
 
+    def checkedResolve() =
+        var `type` = this.resolve()
+        if (`type` == null)
+            throw new OperationNotSupportedException(s"unable to resolve $this")
+        `type`.as[TypeDefinition]
 }
 

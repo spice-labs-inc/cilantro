@@ -4,16 +4,16 @@ import scala.collection.mutable.ArrayBuffer
 import javax.naming.OperationNotSupportedException
 import io.spicelabs.cilantro.AnyExtension.as
 
-class MethodReference extends MemberReference with MethodSignature with GenericParameterProvider with GenericContext { // TODO
-    private var _module: ModuleDefinition = null;
-
+class MethodReference(name: String, _returnType: TypeReference, _declaring_type: TypeReference = null) extends MemberReference(name) with MethodSignature with GenericParameterProvider with GenericContext { // TODO
     var _parameters: ParameterDefinitionCollection = null
 
-    private var _return_type:MethodReturnType = null
+    private var _return_type:MethodReturnType = MethodReturnType(this)
+    _return_type.returnType = _returnType
+    this.token = MetadataToken(TokenType.memberRef)
+    this.declaringType = _declaring_type
 
-    override def hasImage = false
-
-    override def module = _module
+    def this() =
+        this(null, null)
 
     private var _has_this = false
     private var _explicit_this = false
@@ -35,7 +35,7 @@ class MethodReference extends MemberReference with MethodSignature with GenericP
 
     def parameters =
         if (_parameters == null)
-            _parameters = ParameterDefinitionCollection(/* this */) // TODO
+            _parameters = ParameterDefinitionCollection(this)
         _parameters
     
 

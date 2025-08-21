@@ -58,6 +58,15 @@ enum ElementType (val value: Byte) {
 
   def asMetadataType: MetadataType =
     MetadataType.fromOrdinalValue(value)
+  
+  def isPrimitive =
+    this match
+      case ElementType.boolean | ElementType.char | ElementType.i | ElementType.u
+      | ElementType.i1 | ElementType.u1 | ElementType.i2 | ElementType.u2
+      | ElementType.i4 | ElementType.u4 | ElementType.i8 | ElementType.u8
+      | ElementType.r4 | ElementType.r8 => true
+      case _ => false
+    
 }
 
 object ElementType {

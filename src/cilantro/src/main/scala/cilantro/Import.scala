@@ -254,7 +254,7 @@ class DefaultMetadataImport(protected val module: ModuleDefinition) extends Meta
                 if (!method.hasParameters)
                     reference
                 else
-                    reference._parameters = ParameterDefinitionCollection()
+                    reference._parameters = ParameterDefinitionCollection(reference)
                     reference._parameters.addAll(method.parameters.map((p) => ParameterDefinition(importType(p.parameterType, context))))
                     reference
             finally

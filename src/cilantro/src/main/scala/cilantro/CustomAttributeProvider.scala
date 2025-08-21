@@ -24,5 +24,6 @@ trait CustomAttributeProvider extends MetadataTokenProvider {
     def getCustomAttributes(variable: ArrayBuffer[CustomAttribute], module: ModuleDefinition) =
         if (module.hasImage)
             module.read(variable, this, (provider, reader) => reader.readCustomAttributes(provider))
-        ArrayBuffer.empty[CustomAttribute]
+        else
+            ArrayBuffer.empty[CustomAttribute]
 }

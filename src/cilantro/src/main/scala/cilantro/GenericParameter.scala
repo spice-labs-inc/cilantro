@@ -166,7 +166,7 @@ sealed class GenericParameterCollection(private val owner: GenericParameterProvi
         super.insert(index, elem)
         updateGenericParameter(elem, index)
         for i <- index + 1 until length do
-            this(i)._position = i + 1
+            this(i)._position = i
     
     override def update(index: Int, elem: GenericParameter): Unit =
         super.update(index, elem)
@@ -184,7 +184,7 @@ sealed class GenericParameterCollection(private val owner: GenericParameterProvi
         elem._type = GenericParameterType.`type`
 
         for i <- index until length do
-            this(i)._position = i - 1
+            this(i)._position = i
 
         elem
 }

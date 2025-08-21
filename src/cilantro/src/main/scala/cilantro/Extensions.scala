@@ -8,8 +8,9 @@
 
 package io.spicelabs.cilantro
 
+
 object AnyExtension {
     extension (a: Any) {
-        def as[T >: Null]: T = if a.isInstanceOf[T] then a.asInstanceOf[T] else null
+        inline def as[T >: Null]: T = if a.isInstanceOf[T] then a.asInstanceOf[T] else null.asInstanceOf[T]
     }
 }
