@@ -111,7 +111,7 @@ sealed class MetadataSystem {
             _typeReferences(rid - 1)
     
     def addTypeReference(`type`: TypeReference) =
-        _typeReferences(`type`.token.RID) = `type`
+        _typeReferences(`type`.token.RID - 1) = `type`
 
     def getFieldDefinition(rid: Int) = 
         if (rid < 1 || rid > _fields.length)
@@ -120,7 +120,7 @@ sealed class MetadataSystem {
             _fields(rid - 1)
 
     def addFieldDefinition(field: FieldDefinition) =
-        _fields(field.token.RID) = field
+        _fields(field.token.RID - 1) = field
 
 
     def getMethodDefinition(rid: Int) = 
@@ -130,7 +130,7 @@ sealed class MetadataSystem {
             _methods(rid - 1)
 
     def addMethodDefinition(method: MethodDefinition) =
-        _methods(method.token.RID) = method
+        _methods(method.token.RID - 1) = method
 
 
     def getMemberReference(rid: Int) =
@@ -140,7 +140,7 @@ sealed class MetadataSystem {
             _memberReferences(rid - 1)
     
     def addMemberReference(member: MemberReference) =
-        _memberReferences(member.token.RID) = member
+        _memberReferences(member.token.RID - 1) = member
 
     def tryGetNestedTypeMapping(`type`: TypeDefinition) =
         _nestedTypes.get(`type`.token.RID)

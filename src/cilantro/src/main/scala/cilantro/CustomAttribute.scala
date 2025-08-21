@@ -56,7 +56,7 @@ sealed class CustomAttribute(var _signature: Int, private var _constructor: Meth
     def constructor = _constructor
     def constructor_(value: MethodReference) = _constructor = value
 
-    def attributeType = null // TODO constructor.declaringType
+    def attributeType = constructor.declaringType
 
     def isResolved = _resolved
 

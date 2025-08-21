@@ -78,6 +78,23 @@ class SmokeTests extends munit.FunSuite {
         assertNotEquals(value, null)
         assertEquals(value, "Smoke")
     }
+
+    test("complete-assembly-info") {
+        val strPath = smokePathStr()
+        val assem = AssemblyDefinition.readAssembly(strPath)
+        assertEquals(assem.customAttributes.length, 10)
+        val names = assem.customAttributes.map((attr) => attr.attributeType.name).toArray
+        val expected = Array("CompilationRelaxationsAttribute", "RuntimeCompatibilityAttribute",
+            "DebuggableAttribute", "TargetFrameworkAttribute",
+            "AssemblyCompanyAttribute", "AssemblyConfigurationAttribute",
+            "AssemblyFileVersionAttribute", "AssemblyInformationalVersionAttribute",
+            "AssemblyProductAttribute", "AssemblyTitleAttribute")
+        if (!names.sameElements(expected))
+            val differing = (names zip expected).indexWhere((x, y) => x != y)
+            val ex = expected(differing)
+            val act = names(differing)
+            assert(false, s"Lists differ at index $differing\nExpected $ex but got $act")
+    }
 }
 
 object SmokeTests {
