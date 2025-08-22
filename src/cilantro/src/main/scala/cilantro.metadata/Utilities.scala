@@ -43,6 +43,19 @@ extension (data: Array[Byte])
             i |= data(position + 3).asIntNoSign
             (i, position + 4)
         }
+    def readCompressedUInt32(position: Int) =
+        val dataAtPos = data(position)
+        if ((dataAtPos & 0x80) == 0)
+            (dataAtPos.asIntNoSign, position + 1)
+        else if ((dataAtPos & 0x40) == 0)
+            (((dataAtPos.asIntNoSign & ~0x80) << 8) | data(position + 1).asIntNoSign, position + 2)
+        else
+            var i = (dataAtPos.asIntNoSign & 0xc0) << 24
+            i |= data(position + 1).asIntNoSign << 16
+            i |= data(position + 2).asIntNoSign << 8
+            i |= data(position + 3)
+            (i, position + 4)
+            
 
 extension (self: CodedIndex)
     def getMetadataToken(data: Int) =
