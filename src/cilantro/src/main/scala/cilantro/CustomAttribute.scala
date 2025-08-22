@@ -50,8 +50,8 @@ trait CustomAttributeTrait {
 sealed class CustomAttribute(var _signature: Int, private var _constructor: MethodReference, var _blob:Array[Byte], private var _resolved: Boolean) extends CustomAttributeTrait {
     
     var _arguments: ArrayBuffer[CustomAttributeArgument] = null
-    private var _fields: ArrayBuffer[CustomAttributeNamedArgument] = null
-    private var _properties: ArrayBuffer[CustomAttributeNamedArgument] = null
+    var _fields: ArrayBuffer[CustomAttributeNamedArgument] = null
+    var _properties: ArrayBuffer[CustomAttributeNamedArgument] = null
 
     def constructor = _constructor
     def constructor_(value: MethodReference) = _constructor = value

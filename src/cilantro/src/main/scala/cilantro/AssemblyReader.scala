@@ -1308,8 +1308,16 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
             return ()
         
         val (fields, props) = reader.readCustomArgumentAttributeNamedArguments(named)
-        attribute.fields.addAll(fields)
-        attribute.properties.addAll(props)
+        if (fields != null)
+            if (attribute._fields == null)
+                attribute._fields = fields
+            else
+                attribute._fields.addAll(fields)
+        if (props != null)
+            if (attribute._properties == null)
+                attribute._properties = props
+            else
+                attribute._properties.addAll(props)
 
     private def initializeMarshalInfos() = { } // TODO
 

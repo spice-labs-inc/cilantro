@@ -95,6 +95,13 @@ class SmokeTests extends munit.FunSuite {
             val act = names(differing)
             assert(false, s"Lists differ at index $differing\nExpected $ex but got $act")
     }
+
+    test("has-properties") {
+        val strPath = smokePathStr()
+        val assem = AssemblyDefinition.readAssembly(strPath)
+        val allWithProps = assem.customAttributes.map((attr) => if attr.hasProperties then 1 else 0).sum
+        assertEquals(allWithProps , 2, "should have properties")
+    }
 }
 
 object SmokeTests {
