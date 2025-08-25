@@ -13,6 +13,7 @@
 package io.spicelabs.cilantro.metadata
 
 import io.spicelabs.cilantro.readCompressedInt32
+import io.spicelabs.cilantro.readCompressedUInt32
 
 class BlobHeap(data: Array[Byte]) extends Heap(data) {
 
@@ -20,7 +21,7 @@ class BlobHeap(data: Array[Byte]) extends Heap(data) {
         if (index == 0 || index > data.length)
             return Array.emptyByteArray
         var position = index
-        val (length, newPosition) = data.readCompressedInt32(position)
+        val (length, newPosition) = data.readCompressedUInt32(position)
 
         if (length > data.length - newPosition)
             return Array.emptyByteArray
@@ -33,6 +34,6 @@ class BlobHeap(data: Array[Byte]) extends Heap(data) {
     def getView(signature: Int) : (b: Array[Byte], idx: Int, len: Int) =
         if (signature == 0 || signature > data.length)
             return (Array.emptyByteArray, 0, 0)
-        val (length, index) = data.readCompressedInt32(signature)
+        val (length, index) = data.readCompressedUInt32(signature)
         return (data, index, length)
 }
