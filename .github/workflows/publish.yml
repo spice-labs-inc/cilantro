@@ -49,6 +49,7 @@ jobs:
           echo "version=$raw_version" >> "$GITHUB_OUTPUT"
 
       - name: Publish standard and fat JARs to GitHub Packages
+        working-directory: src/cilantro
         run: |
           SBT_OPTS="-Xmx8G -Duser.timezone=GMT" sbt \
             "set ThisBuild / version := \"${{ env.projectVersion }}\"" \
