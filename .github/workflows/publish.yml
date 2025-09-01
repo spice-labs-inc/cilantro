@@ -1,8 +1,9 @@
 name: Publish package to Maven Central, Github Packages
 
 on:
-  release:
-    types: [published]
+  push:
+    tags: [ 'v*.*.*' ]   # semantic tags only
+  workflow_dispatch: {}   # manual runs
 
 env:
   IMAGE_NAME: ${{ github.repository }}
@@ -48,14 +49,30 @@ jobs:
           echo "projectVersion=$raw_version" >> "$GITHUB_ENV"
           echo "version=$raw_version" >> "$GITHUB_OUTPUT"
 
+      # kept as-is (command unchanged); multiline block added for valid YAML
       - name: Publish standard and fat JARs to GitHub Packages
-        run: 
+        run: |
           cd src/cilantro && SBT_OPTS="-Xmx8G -Duser.timezone=GMT" sbt "set ThisBuild / version := \"${{ env.projectVersion }}\"" +publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PUBLISH_TARGET: github
 
-      
+      # collect build outputs for scanning
+      - name: Collect build artifacts
+        shell: bash
+        run: |
+          mkdir -p artifacts/jvm
+          shopt -s nullglob
+          cp -v src/cilantro/target/scala-*/**/*.jar artifacts/jvm/ || true
+          cp -v src/cilantro/**/pom.xml artifacts/jvm/ || true
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cilantro-build-${{ github.run_id }}
+          path: artifacts/**
+          if-no-files-found: warn
+          retention-days: 7
 
   publish-to-central:
     name: Re-publish cilantro to Maven Central
@@ -64,6 +81,7 @@ jobs:
     permissions:
       contents: read
       packages: read
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -93,7 +111,6 @@ jobs:
       - name: Import GPG key
         run: |
           echo "${{ secrets.MAVEN_CENTRAL_GPG_PRIVATE_KEY }}" | gpg --batch --import
-
 
       - name: Set project version from tag
         run: |
@@ -133,10 +150,37 @@ jobs:
             {print}
           ' "$FAKE_POM" > "${FAKE_POM}.tmp" && mv "${FAKE_POM}.tmp" "$FAKE_POM"
 
-
       - name: Publish to Maven Central (staging only)
         run: |
           cd maven
           mvn --batch-mode deploy
         env:
           GPG_PASSPHRASE: ${{ secrets.MAVEN_CENTRAL_GPG_PASSPHRASE }}
+
+  scan-and-upload:
+    name: Scan all workflow artifacts and upload results
+    runs-on: ubuntu-24.04
+    needs: [publish-jars, publish-to-central]
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download artifacts from previous jobs
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Run Spice-Labs CLI scan across ALL artifacts
+        uses: spice-labs-inc/action-spice-labs-cli-scan@v3
+        with:
+          spice_pass: ${{ secrets.SPICE_PASS }}
+          file_path: artifacts
+
+      - name: Upload scan outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spice-scan-${{ github.run_id }}
+          path: artifacts/**/*.adg.json
+          if-no-files-found: ignore
+          retention-days: 7
