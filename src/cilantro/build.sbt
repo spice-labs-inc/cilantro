@@ -47,7 +47,7 @@ publish / packagedArtifacts += (Artifact (
   projectName,
   "jar",
   "jar"
-))
+) -> (Compile / packageBin).value)
 
 lazy val root = project
   .in(file("."))
