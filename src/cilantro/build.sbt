@@ -18,9 +18,9 @@ ThisBuild / scmInfo := Some(
 
 ThisBuild / developers := List(
   Developer(
-    id = "spicelabs"
-    name = "Spice Labs"
-    email = "engineering@spicelabs.io"
+    id = "spicelabs",
+    name = "Spice Labs",
+    email = "engineering@spicelabs.io",
     url = url("https://github.com/spice-labs-inc")
   )
 )
