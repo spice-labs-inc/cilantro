@@ -5,7 +5,7 @@ ThisBuild / organization := "io.spicelabs"
 ThisBuild / version := "0.0.1-SNAPSHOT" // overridden by GitHub Actions
 
 ThisBuild / licenses := Seq(
-  "MIT License" -> "https://mit-license.org/" 
+  "MIT License" -> url("https://mit-license.org/") 
 )
 
 ThisBuild / homepage := Some(url("https://github.com/spice-labs-inc/cilantro"))
