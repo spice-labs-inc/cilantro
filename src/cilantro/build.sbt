@@ -10,8 +10,10 @@ ThisBuild / licenses := Seq(
 
 ThisBuild / homepage := Some(url("https://github.com/spice-labs-inc/cilantro"))
 ThisBuild / scmInfo := Some(
-  ScmInfo(url("https://github.com/spice-labs-inc/cilantro")),
-  "scm:git@github.com:spice-labs-inc/cilantro.git"
+  ScmInfo(
+    url("https://github.com/spice-labs-inc/cilantro"),
+    "scm:git@github.com:spice-labs-inc/cilantro.git"
+  )
 )
 
 ThisBuild / developers := List(
