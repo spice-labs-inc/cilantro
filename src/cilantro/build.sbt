@@ -45,7 +45,7 @@ val theJar = taskKey[File]("Assembles the jar for publishing")
 
 theJar := {
   val jar = (Compile / assmebly).value
-  val targetPath = targe.value / s"${projectName}-${version.value}.jar"
+  val targetPath = target.value / s"${projectName}-${version.value}.jar"
   IO.copyFile(jar, targetPath)
   targetPath
 }
