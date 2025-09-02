@@ -37,8 +37,8 @@ credentials += Credentials(
   sys.env.getOrElse("GITHUB_TOKEN", "")
 )
 
-ThisBuild / pgpPassPhrase := sys.env.get("PGP_PASSPHRASE").map(_.toCharArray)
-Global / excludeLintKeys += pgpPassPhrase
+ThisBuild / pgpPassphrase := sys.env.get("PGP_PASSPHRASE").map(_.toCharArray)
+Global / excludeLintKeys += pgpPassphrase
 
 Compile / packageBin := (Compile /  packageBin).value
 val theJar = taskKey[File]("Assembles the jar for publishing")
