@@ -44,7 +44,7 @@ Compile / packageBin := (Compile /  packageBin).value
 val theJar = taskKey[File]("Assembles the jar for publishing")
 
 theJar := {
-  val jar = (Compile / assmebly).value
+  val jar = (Compile / assembly).value
   val targetPath = target.value / s"${projectName}-${version.value}.jar"
   IO.copyFile(jar, targetPath)
   targetPath
