@@ -41,14 +41,6 @@ ThisBuild / pgpPassphrase := sys.env.get("PGP_PASSPHRASE").map(_.toCharArray)
 Global / excludeLintKeys += pgpPassphrase
 
 Compile / packageBin := (Compile /  packageBin).value
-val theJar = taskKey[File]("Assembles the jar for publishing")
-
-theJar := {
-  val jar = (Compile / assembly).value
-  val targetPath = target.value / s"${projectName}-${version.value}.jar"
-  IO.copyFile(jar, targetPath)
-  targetPath
-}
 
 publishMavenStyle := true
 publish / packagedArtifacts += (Artifact (
