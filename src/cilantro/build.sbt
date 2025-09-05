@@ -25,6 +25,7 @@ ThisBuild / developers := List(
   )
 )
 
+// git publish
 ThisBuild / publishTo := {
   val repo = "https://maven.pkg/github.com/spice-labs-inc/cilantro"
   Some("GitHub Package Registry" at repo)
