@@ -27,13 +27,13 @@ ThisBuild / developers := List(
 
 // git publish
 ThisBuild / publishTo := {
-  val repo = "https://maven.pkg/github.com/spice-labs-inc/cilantro"
+  val repo = "https://maven.pkg.github.com/spice-labs-inc/cilantro"
   Some("GitHub Package Registry" at repo)
 }
 
 credentials += Credentials(
   "GitHub Pacakge Registry",
-  "maven.pkg/github.com",
+  "maven.pkg.github.com",
   "x-access-token",
   sys.env.getOrElse("GITHUB_TOKEN", "")
 )
