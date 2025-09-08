@@ -32,7 +32,7 @@ ThisBuild / publishTo := {
 }
 
 credentials += Credentials(
-  "GitHub Pacakge Registry",
+  "GitHub Package Registry",
   "maven.pkg.github.com",
   "x-access-token",
   sys.env.getOrElse("GITHUB_TOKEN", "")
@@ -57,7 +57,7 @@ lazy val root = project
 
     organization := "io.spicelabs",
 
-    version := "0.1.0-SNAPSHOT",
+    version := version.value,
 
     scalaVersion := scala3Version,
 
