@@ -32,7 +32,7 @@ ThisBuild / publishTo := {
 }
 
 credentials += Credentials(
-  "GitHub Pacakge Registry",
+  "GitHub Package Registry",
   "maven.pkg.github.com",
   "x-access-token",
   sys.env.getOrElse("GITHUB_TOKEN", "")
