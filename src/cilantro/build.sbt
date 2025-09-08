@@ -57,7 +57,7 @@ lazy val root = project
 
     organization := "io.spicelabs",
 
-    version := version,
+    version := version.value,
 
     scalaVersion := scala3Version,
 
