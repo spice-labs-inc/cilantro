@@ -44,11 +44,6 @@ Global / excludeLintKeys += pgpPassphrase
 Compile / packageBin := (Compile /  packageBin).value
 
 publishMavenStyle := true
-publish / packagedArtifacts += (Artifact (
-  projectName,
-  "jar",
-  "jar"
-) -> (Compile / packageBin).value)
 
 lazy val root = project
   .in(file("."))
