@@ -25,11 +25,17 @@ ThisBuild / developers := List(
   )
 )
 
-// git publish
-ThisBuild / publishTo := {
-  val repo = "https://maven.pkg.github.com/spice-labs-inc/cilantro"
-  Some("GitHub Package Registry" at repo)
-}
+publishResolvers := Seq(
+  Resolver.url("GitHub Package Registry", url("https://maven.pkg.github.com/spice-labs-inc/cilantro"))
+)
+
+publish := publishAll.value
+
+// // git publish
+// ThisBuild / publishTo := {
+//   val repo = "https://maven.pkg.github.com/spice-labs-inc/cilantro"
+//   Some("GitHub Package Registry" at repo)
+// }
 
 credentials += Credentials(
   "GitHub Package Registry",
