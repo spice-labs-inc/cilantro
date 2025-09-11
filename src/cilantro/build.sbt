@@ -32,7 +32,7 @@ ThisBuild / developers := List(
 
 publishResolvers := Seq(
   Resolver.url("GitHub Package Registry", url("https://maven.pkg.github.com/spice-labs-inc/cilantro")),
-  localStaging.value
+  localStaging.value.get
 )
 
 publish := publishAll.value
