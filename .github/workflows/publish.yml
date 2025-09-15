@@ -50,7 +50,7 @@ jobs:
 
       - name: Publish standard and fat JARs to GitHub Packages
         run: 
-          cd src/cilantro && SBT_OPTS="-Xmx8G -Duser.timezone=GMT" sbt "set ThisBuild / version := \"${{ env.projectVersion }}\"" +publish
+          cd src/cilantro && SBT_OPTS="-Xmx8G -Duser.timezone=GMT" sbt "set ThisBuild / version := \"${{ env.projectVersion }}\"" "+publish ; sonaRelease"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PUBLISH_TARGET: github
