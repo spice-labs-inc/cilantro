@@ -1,14 +1,19 @@
 val projectName = "cilantro"
 val scala3Version = "3.7.1"
 
-ThisBuild / organization := "io.spicelabs"
-ThisBuild / version := "0.0.1-SNAPSHOT" // overridden by GitHub Actions
 
+val _homepage = Some(url("https://github.com/spice-labs-inc/cilantro"))
+
+ThisBuild / organization := "io.spicelabs"
+ThisBuild / organizationName := "Spice Labs"
+ThisBuild / organizationHomepage := _homepage
+ThisBuild / version := "0.0.1-SNAPSHOT" // overridden by GitHub Actions
+ThisBuild / description := "A scala library for manipulating Microsoft .NET PE files"
 ThisBuild / licenses := Seq(
   "MIT License" -> url("https://mit-license.org/") 
 )
 
-ThisBuild / homepage := Some(url("https://github.com/spice-labs-inc/cilantro"))
+ThisBuild / homepage := _homepage
 ThisBuild / scmInfo := Some(
   ScmInfo(
     url("https://github.com/spice-labs-inc/cilantro"),
@@ -26,16 +31,11 @@ ThisBuild / developers := List(
 )
 
 publishResolvers := Seq(
-  Resolver.url("GitHub Package Registry", url("https://maven.pkg.github.com/spice-labs-inc/cilantro"))
+  Resolver.url("GitHub Package Registry", url("https://maven.pkg.github.com/spice-labs-inc/cilantro")),
+  localStaging.value.get
 )
 
 publish := publishAll.value
-
-// // git publish
-// ThisBuild / publishTo := {
-//   val repo = "https://maven.pkg.github.com/spice-labs-inc/cilantro"
-//   Some("GitHub Package Registry" at repo)
-// }
 
 credentials += Credentials(
   "GitHub Package Registry",

@@ -54,89 +54,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PUBLISH_TARGET: github
+          SONATYPE_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          PGP_SECRET: ${{ MAVEN_CENTRAL_GPG_PRIVATE_KEY }}
+          PGP_PASSPHRASE: ${{ secrets.MAVEN_CENTRAL_GPG_PASSPHRASE }}
+         
 
-      
-
-  publish-to-central:
-    name: Re-publish cilantro to Maven Central
-    runs-on: ubuntu-24.04
-    needs: publish-jars
-    permissions:
-      contents: read
-      packages: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: 'maven'
-      
-      - name: Write settings.xml for Central
-        run: |
-          mkdir -p ~/.m2
-          cat > ~/.m2/settings.xml <<EOF
-          <settings>
-            <servers>
-              <server>
-                <id>central</id>
-                <username>${{ secrets.MAVEN_CENTRAL_USERNAME }}</username>
-                <password>${{ secrets.MAVEN_CENTRAL_PASSWORD }}</password>
-              </server>
-            </servers>
-          </settings>
-          EOF
-
-      - name: Import GPG key
-        run: |
-          echo "${{ secrets.MAVEN_CENTRAL_GPG_PRIVATE_KEY }}" | gpg --batch --import
-
-
-      - name: Set project version from tag
-        run: |
-          mvn -B --file maven/pom.xml \
-              clean versions:set -DnewVersion="${{ needs.publish-jars.outputs.version }}" -DgenerateBackupPoms=false
-
-      - name: Create target dir
-        run: mkdir -p maven/target/external
-
-      - name: Download artifacts from GitHub Maven
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ needs.publish-jars.outputs.version }}
-        run: |
-          ARTIFACTS=(
-            "cilantro-${VERSION}.jar"
-            "cilantro-${VERSION}.pom"
-          )
-          for file in "${ARTIFACTS[@]}"; do
-            echo "Downloading $file"
-            curl -fL -o "maven/target/external/$file" \
-              -H "Authorization: Bearer $GITHUB_TOKEN" \
-              -H "Accept: application/octet-stream" \
-              "https://maven.pkg.github.com/spice-labs-inc/cilantro/io/spicelabs/cilantro/${VERSION}/${file}"
-          done
-
-      - name: Inject real dependencies block into fake pom.xml
-        run: |
-          set -e
-
-          VERSION="${{ needs.publish-jars.outputs.version }}"
-          REAL_POM="maven/target/external/cilantro-${VERSION}.pom"
-          FAKE_POM="maven/pom.xml"
-          real_deps=$(awk '/<dependencies>/,/<\/dependencies>/' "$REAL_POM")
-          awk -v repl="$real_deps" '
-            /<!-- @REAL_DEPENDENCIES@ -->/ {print repl; next}
-            {print}
-          ' "$FAKE_POM" > "${FAKE_POM}.tmp" && mv "${FAKE_POM}.tmp" "$FAKE_POM"
-
-
-      - name: Publish to Maven Central (staging only)
-        run: |
-          cd maven
-          mvn --batch-mode deploy
-        env:
-          GPG_PASSPHRASE: ${{ secrets.MAVEN_CENTRAL_GPG_PASSPHRASE }}
