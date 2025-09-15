@@ -1,5 +1,3 @@
-import sbt.internal.librarymanagement
-
 val projectName = "cilantro"
 val scala3Version = "3.7.1"
 
