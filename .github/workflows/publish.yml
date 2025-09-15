@@ -49,7 +49,7 @@ jobs:
           echo "version=$raw_version" >> "$GITHUB_OUTPUT"
 
       - name: Import PGP Key
-        run |
+        run: |
           echo "${{ secrets.MAVEN_CENTRAL_GPG_PRIVATE_KEY }}" | gpg --batch --import
       - name: Publish standard and fat JARs to GitHub Packages
         run: 
