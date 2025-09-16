@@ -51,15 +51,29 @@ jobs:
       - name: Import PGP Key
         run: |
           echo "${{ secrets.MAVEN_CENTRAL_GPG_PRIVATE_KEY }}" | gpg --batch --import
-      - name: Publish standard and fat JARs to GitHub Packages
-        run: 
-          cd src/cilantro && SBT_OPTS="-Xmx8G -Duser.timezone=GMT" sbt "set ThisBuild / version := \"${{ env.projectVersion }}\"" "+publishSigned ; sonaRelease"
+
+      - name: Publish JARs to GitHub Packages
+        run:
+          # src/cilantro has the build.sbt files, hence the cd to get there
+          cd src/cilantro && SBT_OPTS="-Xmx8G -Duser.timezone=GMT" sbt "set ThisBuild / version := \"${{ env.projectVersion }}\"" +publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PUBLISH_TARGET: github
+          PGP_SECRET: ${{ secrets.MAVEN_CENTRAL_GPG_PRIVATE_KEY }}
+          PGP_PASSPHRASE: ${{ secrets.MAVEN_CENTRAL_GPG_PASSPHRASE }}
+
+       - name: Publish signed Jars to Maven Central
+         # src/cilantro has the build.sbt files
+         # rename build.sbt to build.sbt.ghc
+         # rename build.sbt.maven to build.sbt
+         # run a compound command:
+         #    publishSigned should build the project to local staging and sign it
+         #    soneRelease should upload to to maven central and auto-release it
+         run:
+           cd src/cilantro && mv build.sbt build.sbt.ghc && mv build.sbt.maven build.sbt && SBT_OPTS="-Xmx8G -Duser.timezone=GMT" sbt "set ThisBuild / version := \"${{ env.projectVersion }}\"" "+publishSigned ; sonaRelease"
+        env:
           SONATYPE_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           SONATYPE_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           PGP_SECRET: ${{ secrets.MAVEN_CENTRAL_GPG_PRIVATE_KEY }}
           PGP_PASSPHRASE: ${{ secrets.MAVEN_CENTRAL_GPG_PASSPHRASE }}
          
-
