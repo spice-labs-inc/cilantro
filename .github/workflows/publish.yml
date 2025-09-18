@@ -76,4 +76,10 @@ jobs:
           SONATYPE_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           PGP_SECRET: ${{ secrets.MAVEN_CENTRAL_GPG_PRIVATE_KEY }}
           PGP_PASSPHRASE: ${{ secrets.MAVEN_CENTRAL_GPG_PASSPHRASE }}
-         
+      
+      - name: Index and upload ADG
+        uses: spice-labs-inc/action-spice-labs-cli-scan@v3
+        with:
+          token: ${{ secrets.SPICE_PASS }}
+          input: src/cilantro/target
+          tag: ${{ github.event.repository.name }}
