@@ -1,7 +1,3 @@
-// VERY IMPORTANT
-// If you are making substantive changes to this file, you must also make
-// parallel changes in build.sbt.maven
-
 val projectName = "cilantro"
 val scala3Version = "3.7.1"
 
