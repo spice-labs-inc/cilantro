@@ -37,19 +37,30 @@ ThisBuild / developers := List(
   )
 )
 
-// This will publish to github
-ThisBuild / publishTo := {
-  val repo = "https://maven.pkg.github.com/spice-labs-inc/cilantro"
-  Some("GitHub Package Registry" at repo)
-}
+val _mavenCentral = "maven-central"
+val _isMavenCentralPublish = sys.env.getOrElse("PUBLISHING_DESTINATION", _mavenCentral) == _mavenCentral
 
-// Credentials for publishing to github
-credentials += Credentials(
-  "GitHub Package Registry",
-  "maven.pkg.github.com",
-  "x-access-token",
-  sys.env.getOrElse("GITHUB_TOKEN", "")
-)
+if (_isMavenCentralPublish) {
+  // This will publish to local staging, which can then be used to publish
+  // to maven central
+  ThisBuild / publishTo := {
+      localStaging.value
+  }
+} else {
+  // This will publish to github
+  ThisBuild / publishTo := {
+    val repo = "https://maven.pkg.github.com/spice-labs-inc/cilantro"
+    Some("GitHub Package Registry" at repo)
+  }
+
+  // Credentials for publishing to github
+  credentials += Credentials(
+    "GitHub Package Registry",
+    "maven.pkg.github.com",
+    "x-access-token",
+    sys.env.getOrElse("GITHUB_TOKEN", "")
+  )
+}
 
 // make the PGP_PASSPHRASE available
 ThisBuild / pgpPassphrase := sys.env.get("PGP_PASSPHRASE").map(_.toCharArray)
