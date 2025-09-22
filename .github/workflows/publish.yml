@@ -80,3 +80,9 @@ jobs:
           PGP_PASSPHRASE: ${{ secrets.MAVEN_CENTRAL_GPG_PASSPHRASE }}
           # this will publish to maven central
           PUBLISHING_DESTINATION: "maven-central"
+      - name: Index and upload ADG
+        uses: spice-labs-inc/action-spice-labs-cli-scan@v3
+        with:
+          spice_pass: "${{ secrets.SPICE_PASS }}"
+          file_path: "${{ github.workspace }}"
+          tag: "${{ github.event.repository.name }}"
