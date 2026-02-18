@@ -152,7 +152,7 @@ sealed class ModuleDefinition() extends ModuleReference(null, MetadataToken(Toke
     var runtime_version: String = null
     var kind: ModuleKind = ModuleKind.dll
 
-    // var _projections: WindowsRuntimeProjections // TODO
+    var _projections: WindowsRuntimeProjections = null
     private var _metadata_kind: MetadataKind = MetadataKind.ecma335
     private var _runtime: TargetRuntime = TargetRuntime.net_4_0
     private var _architecture: TargetArchitecture = TargetArchitecture.i386
@@ -167,7 +167,7 @@ sealed class ModuleDefinition() extends ModuleReference(null, MetadataToken(Toke
     var timestamp: Int = 0
 
     var _assembly: AssemblyDefinition = null
-    // var entry_point: MethodDefinition // TODO
+    var entry_point: MethodDefinition = null
     private var _entry_point_set = false
 
     var reflection_importer: ReflectionImporter = null
@@ -176,7 +176,7 @@ sealed class ModuleDefinition() extends ModuleReference(null, MetadataToken(Toke
     private var _custom_attributes: ArrayBuffer[CustomAttribute] = null
     private var _references: ArrayBuffer[AssemblyNameReference] = null
     private var _modules: ArrayBuffer[ModuleReference] = null
-    // private var _resources: ArrayBuffer[Resource] = null // TODO
+    private var _resources: ArrayBuffer[Resource] = null
     private var _exported_types: ArrayBuffer[ExportedType] = null
     private var _types: TypeDefinitionCollection = null // TODO
 
@@ -193,9 +193,8 @@ sealed class ModuleDefinition() extends ModuleReference(null, MetadataToken(Toke
     def metadataKind = _metadata_kind
     def metadataKind_(value: MetadataKind) = _metadata_kind = value
 
-    // TODO
-    // def projections = _projections
-    // def projections_(value: WindowsRuntimeProjections) = _projections = value
+    def projections = _projections
+    def projections_(value: WindowsRuntimeProjections) = _projections = value
 
     def runtime = _runtime
     def runtime_=(value: TargetRuntime) =
@@ -297,27 +296,26 @@ sealed class ModuleDefinition() extends ModuleReference(null, MetadataToken(Toke
             _modules
         }
 
-    // TODO
-    // def hasResources =
-    //     if (_resources !- null)
-    //         _resources.length > 0
-    //     else {
-    //         if (hasImage)
-    //             image.hasTable(Table.manifestResource) || read(this, (_, reader) => reader.hasFileResource())
-    //         else
-    //             false
-    //     }
+    def hasResources =
+        if (_resources != null)
+            _resources.length > 0
+        else {
+            if (hasImage)
+                image.hasTable(Table.manifestResource) || read(this, (_, reader) => reader.hasFileResource())
+            else
+                false
+        }
 
-    // def resources =
-    //     if (_resources != null)
-    //         _resources
-    //     else {
-    //         if (hasImage)
-    //             _resources = read(this, (_, reader) => reader.readResources())
-    //         else 
-    //             _resources = ArrayBuffer.empty[Resource]
-    //         _resources
-    //     }
+    def resources =
+        if (_resources != null)
+            _resources
+        else {
+            if (hasImage)
+                _resources = read(this, (_, reader) => reader.readResources())
+            else 
+                _resources = ArrayBuffer.empty[Resource]
+            _resources
+        }
 
     def hasCustomAttributes =
         if (_custom_attributes != null)
@@ -365,20 +363,25 @@ sealed class ModuleDefinition() extends ModuleReference(null, MetadataToken(Toke
                 _exported_types = ArrayBuffer.empty[ExportedType]
             _exported_types
         }
+    
+    def entryPoint:MethodDefinition = {
+        if (_entry_point_set)
+            entry_point
+        else {
+            if (hasImage) {
+                entry_point = read(this, (_, reader) => reader.readEntryPoint())
+            } else {
+                entry_point = null
+            }
+            _entry_point_set = true
+            entry_point
+        }
+    }
 
-    // def entryPoint =
-    //     if (_entry_point_set)
-    //         _entry_point
-    //     else {
-    //         if (hasImage)
-    //             _entry_point = read(this, (_, reader) => reader.readEntryPoint())
-    //         else
-    //             _entry_point = null
-    //         _entry_point_set = true
-    //         _entry_point
-    // def entryPoint_(value: MethodDefinition) =
-    //     _entry_point = value
-    //     _entry_point_set = true
+    def entryPoint_(value: MethodDefinition) = {
+        entry_point = value
+        _entry_point_set = true
+    }
 
     def hasCustomDebugInformations =
         custom_infos != null && custom_infos.length > 0
@@ -667,6 +670,8 @@ sealed class ModuleDefinition() extends ModuleReference(null, MetadataToken(Toke
         if (hasImage && read(this, (m, reader) => reader.image.getTableLength(Table.assemblyRef) > 0))
             return false
         true
+    
+    def isWindowsMetadata = this.metadataKind != MetadataKind.ecma335
 }
 
 object ModuleDefinition {

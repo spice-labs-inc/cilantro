@@ -49,6 +49,7 @@ trait CustomAttributeTrait {
 
 sealed class CustomAttribute(var _signature: Int, private var _constructor: MethodReference, var _blob:Array[Byte], private var _resolved: Boolean) extends CustomAttributeTrait {
     
+    var _projection: CustomAttributeValueProjection = null
     var _arguments: ArrayBuffer[CustomAttributeArgument] = null
     var _fields: ArrayBuffer[CustomAttributeNamedArgument] = null
     var _properties: ArrayBuffer[CustomAttributeNamedArgument] = null

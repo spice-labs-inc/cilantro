@@ -15,12 +15,11 @@ package io.spicelabs.cilantro
 import scala.collection.mutable.ArrayBuffer
 import java.io.FileInputStream
 
-class AssemblyDefinition(private var _assemblyName: AssemblyNameDefinition, parameters: ModuleParameters) extends CustomAttributeProvider with AutoCloseable {
+class AssemblyDefinition(private var _assemblyName: AssemblyNameDefinition, parameters: ModuleParameters) extends CustomAttributeProvider with SecurityDeclarationProvider with AutoCloseable {
     private var _main_module:ModuleDefinition = null
     private var _modules: ArrayBuffer[ModuleDefinition] = null
     private var _custom_attributes: ArrayBuffer[CustomAttribute] = null
-    // TODO
-    // private var _security_declarations: ArrayBuffer[SecurityDeclaration] = null
+    private var _security_declarations: ArrayBuffer[SecurityDeclaration] = null
 
     def name = _assemblyName
     def name_(value: AssemblyNameDefinition) = _assemblyName = value
@@ -42,9 +41,8 @@ class AssemblyDefinition(private var _assemblyName: AssemblyNameDefinition, para
     def mainModule = _main_module
     def mainModule_=(value: ModuleDefinition) = _main_module = value
 
-    // TODO
-    // def entryPoint = _main_module.entryPoint
-    // def entryPoint_(value: MethodDefinition) = _main_module.entryPoint_(value)
+    def entryPoint = _main_module.entryPoint
+    def entryPoint_(value: MethodDefinition) = _main_module.entryPoint_(value)
 
     def hasCustomAttributes =
     if (_custom_attributes != null)
@@ -57,6 +55,23 @@ class AssemblyDefinition(private var _assemblyName: AssemblyNameDefinition, para
         else
             _custom_attributes = getCustomAttributes(_custom_attributes, _main_module)
             _custom_attributes
+
+
+    def hasSecurityDeclarations =
+        if (_security_declarations != null)
+            _security_declarations.length > 0
+        else
+            this.getHasSecurityDeclarations(_main_module)
+    
+    def securityDeclarations = {
+        if (_security_declarations != null) {
+            _security_declarations
+        } else {
+            _security_declarations = this.getSecurityDeclarations(ArrayBuffer[SecurityDeclaration](), _main_module)
+            _security_declarations
+        }
+    }
+
     def this() =
         this(null, null)
 

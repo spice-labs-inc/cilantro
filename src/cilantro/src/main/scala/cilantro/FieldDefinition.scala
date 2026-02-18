@@ -60,9 +60,8 @@ class FieldDefinition(name: String, private var _attributes: Char, fieldType: Ty
                 if _offset >= 0 then _offset else -1
         def offset_=(value: Int) = _offset = value
 
-        // TODO
-        // def windowsRuntimeProjection = projection.asInstanceOf[FieldDefinitionProjection]
-        // def windowsRuntimeProjection_=(value: FieldDefinitionProject) = projection = value
+        def windowsRuntimeProjection = projection.asInstanceOf[FieldDefinitionProjection]
+        def windowsRuntimeProjection_=(value: FieldDefinitionProjection) = projection = value
 
         private def resolveRVA(): Unit =
             if (_rva != MetadataConsts.notResolvedMarker)

@@ -142,7 +142,7 @@ sealed class GenericParameter(_name:String, var _owner: GenericParameterProvider
             this.etype = GenericParameter.convertGenericParameterType(`type`)
             this._module = module
 
-        override def resolve(): MemberDefinition = null
+        override def resolve(): TypeDefinition = null
 }
 
 object GenericParameter {

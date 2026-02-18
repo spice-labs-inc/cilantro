@@ -116,3 +116,18 @@ sealed class SecurityDeclaration(private var _action: SecurityAction, private va
             module.read(this, (declaration, reader) => reader.readSecurityDeclarationSignature(declaration))
         }
 }
+
+extension(sdp: SecurityDeclarationProvider) {
+    def getHasSecurityDeclarations(module: ModuleDefinition): Boolean = {
+        module.hasImage && module.read(sdp, (provider, reader) => reader.hasSecurityDeclarations(provider))
+    }
+
+    def getSecurityDeclarations(variable: ArrayBuffer[SecurityDeclaration], module: ModuleDefinition): ArrayBuffer[SecurityDeclaration] = {
+        if (module.hasImage) {
+            
+            module.read(variable, sdp, (provider, reader) => reader.readSecurityDeclarations(provider))
+        } else {
+            variable
+        }
+    }
+}

@@ -90,9 +90,8 @@ object ModuleReader {
 
         reader.readSymbols(module)
 
-        // TODO
-        // if (parameters.readingMode == ReadingMode.immediate)
-        //     module.metadata_system.clear()
+        if (parameters.readingMode == ReadingMode.immediate)
+             module.metadataSystem.clear()
         module
 
     private def readSymbols(module: ModuleDefinition, parameters: ReaderParameters) =
@@ -152,17 +151,16 @@ sealed class ImmediateModuleReader(image: Image) extends ModuleReader(image, Rea
     def readModule(module: ModuleDefinition, resolve_attributes: Boolean): Unit =
         this.resolve_attributes = resolve_attributes
 
-        // TODO
-        // if (module.hasAssemblyReferences)
-        //     read(module.assemblyReferences)
-        // if (module.hasResources)
-        //     read(module.resources)
-        // if (module.hasModuleReferences)
-        //     read(module.moduleReferences)
+        if (module.hasAssemblyReferences)
+             mixinRead(module.assemblyReferences)
+        if (module.hasResources)
+            mixinRead(module.resources)
+        if (module.hasModuleReferences)
+            mixinRead(module.moduleReferences)
         // if (module.hasTypes)
         //     readTypes(module._types)
-        // if (module.hasExportedTypes)
-        //     read(module.exportedTypes)
+        if (module.hasExportedTypes)
+            mixinRead(module.exportedTypes)
         
         readCustomAttributes(module)
 
@@ -548,12 +546,53 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
 
         references
     
-    def hasFileResource(): Boolean =
+    def hasFileResource(): Boolean = {
+        val length = moveTo(Table.file)
+        if (length == 0)
+            return false
+        
+        for i <- 1 to length do {
+            if (readFileRecord(i).col1 == FileAttributes.containsNoMetadata)
+                return true
+        }
         false
-        // TODO
+    }
     
-    // TODO
-    def readResources(): ArrayBuffer[Any] = null
+    def readResources(): ArrayBuffer[Resource] = {
+        val length = moveTo(Table.manifestResource)
+        val resources = ArrayBuffer[Resource]()
+
+        for i <- 1 to length do {
+            val offset = readUInt32()
+            val flags = readUInt32()
+            val name = readString()
+            val implementation = readMetadataToken(CodedIndex.implementation)
+
+            val resource:Option[Resource] = if (implementation.RID == 0) {
+                val r = EmbeddedResource(name, flags, offset, this)
+                Some(r.asInstanceOf[Resource])
+
+            } else if (implementation.tokenType == TokenType.assemblyRef) {
+                val r = AssemblyLinkedResource(name, flags)
+                r.assembly = getTypeReferenceScope(implementation).asInstanceOf[AssemblyNameReference]
+                Some(r.asInstanceOf[Resource])
+            } else if (implementation.tokenType == TokenType.file) {
+                val file_record = readFileRecord(implementation.RID)
+                val r = LinkedResource(name, flags)
+                r.file = file_record.col2
+                r._hash = readBlob(file_record.col3)
+                Some(r.asInstanceOf[Resource])
+            } else {
+                None
+            }
+            
+            resource match {
+                case Some(resource) => resources.addOne(resource)
+                case None => 
+            }            
+        }
+        resources
+    }
 
     def readFileRecord(rid: Int) =
         val position = this.position
@@ -565,12 +604,14 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         this.position = position
         record
     
-    def getManagedResource(offset: Int) =
+    def getManagedResource(offset: Int): Array[Byte] =
         val bytes = image.getReaderAt(image.resources.virtualAddress, offset, (o, reader) => {
             reader.advance(o)
             reader.readBytes(reader.readInt32())
         })
-        if bytes != null then bytes else Array.emptyByteArray
+        bytes match
+            case Some(value) => value
+            case None => Array.emptyByteArray
     
     private def populateVersionAndFlags(name: AssemblyNameReference) =
         val maj = readUInt16().toInt
@@ -753,14 +794,14 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         initializeTypeDefinitions()
 
         // TODO
-        var `type`:TypeDefinition = null // = metadata.getTypeDefinition(rid)
-        // if (`type` != null)
-        //     `type`
-        // else
-        //     `type` = readTypeDefinition(rid)
-        //     if (module.isWindowsMetadata())
-        //         windowsRuntimeProjections.project(`type`)
-        //     `type`
+        var `type`:TypeDefinition = metadata.getTypeDefinition(rid)
+        if (`type` != null)
+            `type`
+        else
+            `type` = readTypeDefinition(rid)
+            if (module.isWindowsMetadata)
+                WindowsRuntimeProjections.project(`type`)
+            `type`
         `type`
 
     private def readTypeDefinition(rid: Int): TypeDefinition =
@@ -779,7 +820,7 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
     def getTypeReference(scope: String, full_name: String): TypeReference =
         initializeTypeReferences()
 
-        val length = 0 // TODO metadata.typeReferences.length
+        val length = metadata._typeReferences.length
 
         var `type`: TypeReference = null
         boundary:

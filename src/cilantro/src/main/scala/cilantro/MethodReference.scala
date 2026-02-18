@@ -84,9 +84,106 @@ class MethodReference(name: String, _returnType: TypeReference, _declaring_type:
     override def resolveDefinition() =
         this.resolve()
 
-    override def resolve() =
+    override def resolve(): MethodDefinition =
         var module = this.module
         if (module == null)
             throw OperationNotSupportedException()
         module.resolve(this)
+    
+    override def hashCode(): Int = {
+        val hashCodeMultiplier = 486187739
+
+        val genericInstanceMethod = this.as[GenericInstanceMethod]
+        if (genericInstanceMethod != null) {
+            val hashCode = genericInstanceMethod.genericArguments.foldLeft(genericInstanceMethod.elementMethod.hashCode())((hc, arg) => {
+                hc * hashCodeMultiplier + arg.hashCode()
+            })
+            return hashCode
+        }
+        return declaringType.hashCode() * hashCodeMultiplier + name.hashCode()
+    }
+
+    override def equals(that: Any): Boolean = {
+        that match {
+            case other: MemberReference => equals(this, other)
+            case _ => false
+        }
+    }
+}
+
+object MethodReference {
+    var xComparisonStack: ArrayBuffer[MethodReference] = null
+    var yComparisonStack: ArrayBuffer[MethodReference] = null
+
+    def areEqual(x: MethodReference, y: MethodReference): Boolean = {
+        if (x eq y)
+            return true
+
+        if (x.hasThis != y.hasThis)
+            return false
+        
+        if (x.hasParameters != y.hasParameters)
+            return false
+        
+        if (x.hasGenericParameters != y.hasGenericParameters)
+            return false
+        
+        if (x.parameters.length != y.parameters.length)
+            return false
+
+        if (x.name != y.name)
+            return false
+        
+        if (!x.declaringType.equals(y.declaringType))
+            return false
+        
+        val xGeneric = x.as[GenericInstanceMethod]
+        val yGeneric = y.as[GenericInstanceMethod]
+
+        if (xGeneric != null || yGeneric != null) {
+            if (xGeneric == null || yGeneric == null)
+                return false
+            
+            if (xGeneric.genericArguments.length != yGeneric.genericArguments.length)
+                return false
+            
+            val both = xGeneric.genericArguments.zip(yGeneric.genericArguments)
+            return both.exists((x, y) => !x.equals(y))
+        }
+
+        var xResolved = x.resolve()
+        var yResolved = y.resolve()
+
+        if (xResolved ne yResolved)
+            return false
+        
+        if (xResolved == null) {
+            if (xComparisonStack == null)
+                xComparisonStack = ArrayBuffer[MethodReference]()
+            if (yComparisonStack == null)
+                yComparisonStack = ArrayBuffer[MethodReference]()
+            
+            val both = xComparisonStack.zip(yComparisonStack)
+            if (both.exists((x1, y1) => (x1 eq x) && (y1 eq y )))
+                return true
+            
+            xComparisonStack.addOne(x)
+
+            try {
+                yComparisonStack.addOne(y)
+                try {
+                    for i <- 0 until x.parameters.length do {
+                        if (!x.parameters(i).parameterType.equals(y.parameters(i).parameterType))
+                            return false
+                    }
+                } finally {
+                    yComparisonStack.remove(yComparisonStack.length - 1)
+                }
+            } finally {
+                xComparisonStack.remove(xComparisonStack.length - 1)
+            }
+        }
+
+        return true
+    }
 }
