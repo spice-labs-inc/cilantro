@@ -31,7 +31,7 @@ abstract class MemberReference(var _name : String) extends MetadataTokenProvider
 
     def fullName: String
 
-    def declaringType = declaring_type
+    def declaringType:TypeReference = declaring_type
     def declaringType_=(value: TypeReference) = declaring_type = value
 
     def metadataToken = token

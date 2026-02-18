@@ -78,9 +78,8 @@ class MethodDefinition(_name: String, private var _attributes: Char, returnType:
             _sem_attrs
     
 
-    // TODO
-    // def windowsRuntimeProjection: MethodDefinitionProjection = ...
-    // def windowsRuntimeProjection_=(value: MethodDefinitionProjection) = ...
+    def windowsRuntimeProjection: MethodDefinitionProjection = projection.asInstanceOf[MethodDefinitionProjection]
+    def windowsRuntimeProjection_=(value: MethodDefinitionProjection) = projection = value
 
     def readSemantics(): Unit = { }
 
@@ -239,6 +238,9 @@ class MethodDefinition(_name: String, private var _attributes: Char, returnType:
 
     def isFire = false
     def isFire_=(value: Boolean) = { }
+
+    def declaringTypeTD: TypeDefinition = super.declaringType.asInstanceOf[TypeDefinition]
+    def declaringTypeTD_=(value: TypeDefinition): Unit = super.declaringType = value
 
     def isConstructor =
         isRuntimeSpecialName && isSpecialName &&

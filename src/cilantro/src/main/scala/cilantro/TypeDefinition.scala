@@ -387,12 +387,21 @@ class TypeDefinition(namespace: String, name: String, private var _attributes: I
         MetadataSystem.tryGetPrimitiveElementType(this) match
             case Some(primitive_type) => primitive_type.asMetadataType
             case None => super.metadataType
+
+    override def isDefinition: Boolean = true
+
+    def declaringTypeTD:TypeDefinition = super.declaringType.asInstanceOf[TypeDefinition]
+    def declaringTypeTD_=(value: TypeDefinition): Unit = super.declaringType = value
+
+    def windowsRuntimeProjectionTD: TypeDefinitionProjection = projection.asInstanceOf[TypeDefinitionProjection]
+    def windowsRuntimeProjectionTD_=(value: TypeDefinitionProjection): Unit = projection = value
     
     def getEnumUnderlyingType() =
         var fields = _fields
         fields.find((f) => f.isStatic) match
             case Some(field) => field.fieldType
             case None => throw IllegalArgumentException()
+
         
     def getNestedType(fullname: String) =
         if (!hasNestedTypes)
@@ -401,6 +410,8 @@ class TypeDefinition(namespace: String, name: String, private var _attributes: I
             nestedTypes.find((nt) => nt.typeFullName() == fullname) match
                 case Some(nt) => nt
                 case None => null
+
+    override def resolve(): TypeDefinition = this
 }
 
 

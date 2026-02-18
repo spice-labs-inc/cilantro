@@ -12,7 +12,7 @@
 
 package io.spicelabs.cilantro
 
-enum TypeDefinitionTreatment(value: Int) {
+enum TypeDefinitionTreatment(val value: Int) {
   case none extends TypeDefinitionTreatment(0)
   case kindMask extends TypeDefinitionTreatment(0xf)
   case normalType extends TypeDefinitionTreatment(0x1)
@@ -26,14 +26,14 @@ enum TypeDefinitionTreatment(value: Int) {
   case internal extends TypeDefinitionTreatment(0x20)
 }
 
-enum TypeReferenceTreatment(value: Int) {
+enum TypeReferenceTreatment(val value: Int) {
   case none extends TypeReferenceTreatment(0)
   case systemDelegate extends TypeReferenceTreatment(0x1)
   case systemAttribute extends TypeReferenceTreatment(0x2)
   case userProjectionInfo extends TypeReferenceTreatment(0x3)
 }
 
-enum MethodDefinitionTreatment(value: Int) {
+enum MethodDefinitionTreatment(val value: Int) {
   case none extends MethodDefinitionTreatment(0)
   case `abstract` extends MethodDefinitionTreatment(0x2)
   case `private` extends MethodDefinitionTreatment(0x4)
@@ -42,12 +42,12 @@ enum MethodDefinitionTreatment(value: Int) {
   case internalCall extends MethodDefinitionTreatment(0x20)
 }
 
-enum FieldDefinitionTreatment(value: Int) {
+enum FieldDefinitionTreatment(val value: Int) {
   case none extends FieldDefinitionTreatment(0)
   case `public` extends FieldDefinitionTreatment(1)
 }
 
-enum CustomAttributeValueTreatment(value: Int) {
+enum CustomAttributeValueTreatment(val value: Int) {
   case none extends CustomAttributeValueTreatment(0)
   case allowSingle extends CustomAttributeValueTreatment(1)
   case allowMultiple extends CustomAttributeValueTreatment(2)
