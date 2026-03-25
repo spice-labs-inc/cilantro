@@ -19,8 +19,17 @@ import io.spicelabs.cilantro.cil.ImageDebugHeader
 
 type ModuleCharacteristics = Int
 
+/**
+ * Image represents a parsed PE/CLI image.
+ *
+ * SECURITY INVARIANTS:
+ * - ResourceHandle manages underlying data source
+ * - getReaderAt creates position-independent readers
+ * - RVA validation: non-negative only
+ */
 sealed class Image extends AutoCloseable {
-    var stream: Disposable[FileInputStream] = null
+    /** ResourceHandle for creating position-independent readers */
+    var resourceHandle: Option[ResourceHandle] = None
     var fileName: String = null
     var kind: ModuleKind = ModuleKind.dll
     var characteristics: Int = 0
@@ -51,13 +60,13 @@ sealed class Image extends AutoCloseable {
 
     def hasTable (table: Table) =
         getTableLength(table) > 0
-    
+
     def getTableLength(table: Table) =
         tableHeap(table).length
 
     def getTableIndexSize(table: Table) =
         if getTableLength(table) < 65536 then 2 else 4
-    
+
     def getCodedIndexSize(coded_index: CodedIndex) =
         val index = coded_index.ordinal
         var size = coded_index_sizes(index)
@@ -67,7 +76,7 @@ sealed class Image extends AutoCloseable {
             size = coded_index.getSize(counter)
             coded_index_sizes(index) = size
             size
-    
+
     def resolveVirtualAddress(rva: Int) =
         val section = getSectionAtVirtualAddress(rva)
         section match
@@ -83,25 +92,44 @@ sealed class Image extends AutoCloseable {
     def getSectionAtVirtualAddress(rva: Int) =
         sections.find((section) =>
             rva >= section.virtualAddress && rva < section.virtualAddress + section.sizeOfRawData)
-    
-    def getReaderAt(rva: Int): BinaryStreamReader =
+
+    /**
+     * SECURITY INVARIANT: RVA validation
+     * Creates a new BinaryStreamReader at the specified RVA.
+     * RVA must be non-negative.
+     *
+     * NOT THREAD-SAFE: Callers must synchronize concurrent access.
+     */
+    def getReaderAt(rva: Int): BinaryStreamReader = {
+        if (rva < 0) throw new IllegalArgumentException("RVA cannot be negative")
+
         val section = getSectionAtVirtualAddress(rva)
         section match
             case Some(section) => {
-                val reader = BinaryStreamReader(stream.value)
-                reader.moveTo(resolveVirtualAddressInSection(rva, section))
-                reader
+                // Create new reader from resource handle
+                resourceHandle match {
+                    case Some(handle) =>
+                        val reader = handle.createReader()
+                        reader.moveTo(resolveVirtualAddressInSection(rva, section))
+                        reader
+                    case None =>
+                        throw new IllegalStateException("No resource handle available")
+                }
             }
             case _ => null
+    }
 
-    def getReaderAt[TItem, TRet](rva: Int, item: TItem, read: (TItem, BinaryStreamReader) => TRet): Option[TRet] =
-        var position = stream.value.getChannel().position
+    def getReaderAt[TItem, TRet](rva: Int, item: TItem, read: (TItem, BinaryStreamReader) => TRet): Option[TRet] = {
+        // Create new reader for this operation
+        val reader = getReaderAt(rva)
+        if (reader == null) return None
+
         try
-            val reader:BinaryStreamReader = getReaderAt(rva)
-            if (reader != null) then Some(read(item, reader)) else None
-            
+            Some(read(item, reader))
         finally
-            stream.value.getChannel().position(position)
+            // Nothing to clean up - ResourceHandle manages resources
+            ()
+    }
 
     def hasDebugTables() =
         hasTable(Table.document)
@@ -112,5 +140,5 @@ sealed class Image extends AutoCloseable {
         || hasTable(Table.stateMachineMethod)
         || hasTable(Table.customDebugInformation)
 
-    override def close(): Unit = stream.dispose()
+    override def close(): Unit = resourceHandle.foreach(_.close())
 }

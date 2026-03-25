@@ -14,6 +14,7 @@ package io.spicelabs.cilantro
 
 import scala.collection.mutable.ArrayBuffer
 import java.io.FileInputStream
+import java.nio.{ByteBuffer => NioByteBuffer}
 
 class AssemblyDefinition(private var _assemblyName: AssemblyNameDefinition, parameters: ModuleParameters) extends CustomAttributeProvider with SecurityDeclarationProvider with AutoCloseable {
     private var _main_module:ModuleDefinition = null
@@ -116,7 +117,32 @@ object AssemblyDefinition {
     
     def readAssembly(stream: FileInputStream, parameters: ReaderParameters): AssemblyDefinition =
         readAssembly(ModuleDefinition.readModule(stream, parameters))
-    
+
+    // ============================================================================
+    // Task 5: ByteBuffer entry points for in-memory processing
+    // ============================================================================
+
+    /**
+     * Reads an assembly from a ByteBuffer (in-memory).
+     *
+     * @param buffer the ByteBuffer containing the PE image data
+     * @return the loaded AssemblyDefinition
+     * @throws IllegalArgumentException if buffer is null or invalid
+     */
+    def readAssembly(buffer: NioByteBuffer): AssemblyDefinition =
+        readAssembly(ModuleDefinition.readModule(buffer))
+
+    /**
+     * Reads an assembly from a ByteBuffer with custom parameters.
+     *
+     * @param buffer the ByteBuffer containing the PE image data
+     * @param parameters reader parameters (reading mode, symbol options, etc.)
+     * @return the loaded AssemblyDefinition
+     * @throws IllegalArgumentException if buffer is null or invalid
+     */
+    def readAssembly(buffer: NioByteBuffer, parameters: ReaderParameters): AssemblyDefinition =
+        readAssembly(ModuleDefinition.readModule(buffer, parameters))
+
     def readAssembly(module: ModuleDefinition): AssemblyDefinition =
         val assembly = module.assembly
         if (assembly == null)

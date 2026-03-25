@@ -17,6 +17,7 @@ import io.spicelabs.cilantro.cil.CustomDebugInformationProvider
 import io.spicelabs.cilantro.cil.CustomDebugInformation
 import java.io.FileInputStream
 import java.lang.annotation.Target
+import java.nio.{ByteBuffer => NioByteBuffer}
 import io.spicelabs.cilantro.PE.Image
 import io.spicelabs.cilantro.MetadataToken.zero
 import java.util.UUID
@@ -49,6 +50,7 @@ sealed class ReaderParameters(private var _readingMode: ReadingMode) {
     private var _metadata_importer_provider: MetadataImporterProvider = null
     private var _reflection_importer_provider: ReflectionImporterProvider = null
     private var _symbol_stream: FileInputStream = null
+    private var _symbol_buffer: NioByteBuffer = null
     private var _symbol_reader_provider: SymbolReaderProvider = null
     private var _read_symbols = false
     private var _throw_symbols_mismatch = false
@@ -76,6 +78,9 @@ sealed class ReaderParameters(private var _readingMode: ReadingMode) {
 
     def symbolStream = _symbol_stream
     def symbolStream_=(value: FileInputStream) = _symbol_stream = value
+
+    def symbolBuffer = _symbol_buffer
+    def symbolBuffer_=(value: NioByteBuffer) = _symbol_buffer = value
 
     def symbolReaderProvider = _symbol_reader_provider
     def symbolReaderProvider_=(value: SymbolReaderProvider) = _symbol_reader_provider = value
@@ -711,17 +716,35 @@ object ModuleDefinition {
 
     def readModule(fileName: String, parameters: ReaderParameters): ModuleDefinition =
         val stream = getFileStream(fileName)
-        if (parameters.inMemory)
-            throw OperationNotSupportedException("in memory reading not supported")
-        
-        try
-            readModule(Disposable.owned(stream), fileName, parameters)
-        catch
-            case err: Exception => {
+
+        if (parameters.inMemory) {
+            // Read entire file into memory as ByteBuffer
+            try
+                val channel = stream.getChannel()
+                val size = channel.size()
+                if (size > Int.MaxValue) {
+                    throw new IllegalArgumentException(s"File too large for in-memory reading: $size bytes")
+                }
+                val buffer = NioByteBuffer.allocate(size.toInt)
+                channel.read(buffer)
+                buffer.flip()
                 stream.close()
-                throw err
-            }
-        finally { }
+                readModule(buffer, fileName, parameters)
+            catch
+                case err: Exception => {
+                    stream.close()
+                    throw err
+                }
+        } else {
+            try
+                readModule(Disposable.owned(stream), fileName, parameters)
+            catch
+                case err: Exception => {
+                    stream.close()
+                    throw err
+                }
+            finally { }
+        }
     
     def readModule(stream: FileInputStream): ModuleDefinition =
         val rp = ReaderParameters()
@@ -737,6 +760,47 @@ object ModuleDefinition {
         checkParameters(parameters)
         ModuleReader.createModule(ImageReader.readImage(stream, fileName), parameters)
 
+    // ============================================================================
+    // Task 3: ByteBuffer entry points for in-memory processing
+    // ============================================================================
+
+    /**
+     * Reads a module from a ByteBuffer (in-memory).
+     *
+     * @param buffer the ByteBuffer containing the PE image data
+     * @return the loaded ModuleDefinition
+     * @throws IllegalArgumentException if buffer is null or invalid
+     */
+    def readModule(buffer: NioByteBuffer): ModuleDefinition =
+        readModule(buffer, ReaderParameters(ReadingMode.deferred))
+
+    /**
+     * Reads a module from a ByteBuffer with custom parameters.
+     *
+     * @param buffer the ByteBuffer containing the PE image data
+     * @param parameters reader parameters (reading mode, symbol options, etc.)
+     * @return the loaded ModuleDefinition
+     * @throws IllegalArgumentException if buffer is null or invalid
+     */
+    def readModule(buffer: NioByteBuffer, parameters: ReaderParameters): ModuleDefinition =
+        readModule(buffer, "no file name", parameters)
+
+    /**
+     * Reads a module from a ByteBuffer with custom parameters and file name.
+     *
+     * @param buffer the ByteBuffer containing the PE image data
+     * @param fileName the file name for error reporting and symbol lookup
+     * @param parameters reader parameters (reading mode, symbol options, etc.)
+     * @return the loaded ModuleDefinition
+     * @throws IllegalArgumentException if buffer is null or invalid
+     */
+    def readModule(buffer: NioByteBuffer, fileName: String, parameters: ReaderParameters): ModuleDefinition = {
+        checkParameters(parameters)
+        if (buffer == null) {
+            throw new IllegalArgumentException("buffer")
+        }
+        ModuleReader.createModule(ImageReader.readImage(buffer, fileName), parameters)
+    }
 
     def getFileStream(fileName: String) =        
         FileInputStream(checkFileName(fileName))

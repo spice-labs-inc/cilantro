@@ -17,6 +17,7 @@ import java.io.FileInputStream
 import scala.collection.mutable.ArrayBuffer
 import scala.util.boundary, boundary.break
 import io.spicelabs.cilantro.PE.BinaryStreamReader
+import java.nio.{ByteBuffer => NioByteBuffer}
 
 sealed class ImageDebugDirectory {
     var characteristics: Int = 0
@@ -62,7 +63,8 @@ sealed class ImageDebugHeader(private val _entries: Array[ImageDebugHeaderEntry]
 }
 
 sealed class ImageDebugHeaderEntry(private val _directory: ImageDebugDirectory, private val _data: Array[Byte]) {
-
+    def directory: ImageDebugDirectory = _directory
+    def data: Array[Byte] = _data
 }
 
 
@@ -76,6 +78,16 @@ trait SymbolReader extends AutoCloseable { // TODO
 trait SymbolReaderProvider {
     def getSymbolReader(module: ModuleDefinition, fileName: String) : SymbolReader
     def getSymbolReader(module: ModuleDefinition, symbolStream: FileInputStream) : SymbolReader
+
+    /**
+     * Creates a symbol reader from a ByteBuffer containing Portable PDB data.
+     *
+     * @param module the module to associate with the symbol reader
+     * @param symbolBuffer the ByteBuffer containing PDB data
+     * @return a SymbolReader for accessing debug information
+     * @throws IllegalArgumentException if module or symbolBuffer is null
+     */
+    def getSymbolReader(module: ModuleDefinition, symbolBuffer: NioByteBuffer) : SymbolReader
 }
 
 class DefaultSymbolReaderProvider(private val throwIfNoSymbol: Boolean) extends SymbolReaderProvider {
@@ -169,9 +181,37 @@ class DefaultSymbolReaderProvider(private val throwIfNoSymbol: Boolean) extends 
         
         if (throwIfNoSymbol)
             throw IllegalArgumentException("No symbol found in stream")
-        
-        null        
 
+        null
+
+    override def getSymbolReader(module: ModuleDefinition, symbolBuffer: NioByteBuffer): SymbolReader = {
+        checkModule(module)
+        if (symbolBuffer == null)
+            throw IllegalArgumentException("symbolBuffer")
+
+        if (module.image.hasDebugTables())
+            return null
+
+        // Check for Portable PDB header (0x424a5342 = "BSJB")
+        val position = symbolBuffer.position()
+        try
+            val header = symbolBuffer.getInt()
+            symbolBuffer.position(position)
+
+            if (header == 0x424a5342)
+                return PortablePdbReaderProvider().getSymbolReader(module, symbolBuffer)
+
+            if (throwIfNoSymbol)
+                throw IllegalArgumentException("No symbol reader available for buffer format")
+
+            null
+        catch
+            case e: Exception =>
+                symbolBuffer.position(position)
+                if (throwIfNoSymbol)
+                    throw IllegalArgumentException("Failed to read symbol buffer: " + e.getMessage)
+                null
+    }
 
 }
 
