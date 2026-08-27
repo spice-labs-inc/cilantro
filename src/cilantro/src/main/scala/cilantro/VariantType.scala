@@ -38,10 +38,13 @@ enum VariantType(val value: Int) {
 }
 
 object VariantType {
-  def fromOrdinalValue(value: Int): VariantType =
-    VariantType.values.find(x => {x.value == value}) match
+  def fromOrdinalValue(value: Int): VariantType = {
+    VariantType.values.find(x => {x.value == value}) match {
       case Some(result) => result
       case None => throw IllegalArgumentException(s"value $value not found in VariantType")
-  def fromOrdinalValue(value: Byte): VariantType =
+    }
+  }
+  def fromOrdinalValue(value: Byte): VariantType = {
     fromOrdinalValue(value.toInt & 0xff)
+  }
 }

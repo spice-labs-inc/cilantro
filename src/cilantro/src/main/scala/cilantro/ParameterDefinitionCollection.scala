@@ -14,34 +14,39 @@
 package io.spicelabs.cilantro
 
 import scala.collection.mutable.ArrayBuffer
-import io.spicelabs.cilantro.metadata.Table
 
 class ParameterDefinitionCollection(val _method: MethodSignature, capacity:Int = 0) extends ArrayBuffer[ParameterDefinition]() {
-    override def addOne(elem: ParameterDefinition): this.type =
+    override def addOne(elem: ParameterDefinition): this.type = {
         val retval = super.addOne(elem)
-        elem._method = _method
+        elem._method = Some(_method)
         elem._index = this.length - 1
         this
     
-    override def insert(index: Int, elem: ParameterDefinition): Unit =
+    }
+    override def insert(index: Int, elem: ParameterDefinition): Unit = {
         super.insert(index, elem)
-        elem._method = _method
+        elem._method = Some(_method)
         elem._index = index
-        for i <- index + 1 until length do
+        for i <- index + 1 until length do {
             this(i)._index = i
     
-    override def update(index: Int, elem: ParameterDefinition): Unit =
+        }
+    }
+    override def update(index: Int, elem: ParameterDefinition): Unit = {
         super.update(index, elem)
-        elem._method = _method
+        elem._method = Some(_method)
         elem._index = index
     
-    override def remove(index: Int): ParameterDefinition =
+    }
+    override def remove(index: Int): ParameterDefinition = {
         val elem = super.remove(index)
-        elem._method = null
+        elem._method = None
         elem._index = -1
 
-        for i <- index until length do
+        for i <- index until length do {
             this(i)._index = i
+        }
         elem
 
+    }
 }

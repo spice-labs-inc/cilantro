@@ -31,11 +31,13 @@ enum TargetArchitecture(val value: Int) {
 }
 
 object TargetArchitecture {
-  def fromOrdinalValue(value: Int) =
-    TargetArchitecture.values.find(x => {x.value == value}) match
+  def fromOrdinalValue(value: Int) = {
+    TargetArchitecture.values.find(x => {x.value == value}) match {
       case Some(result) => result
       case None => throw IllegalArgumentException(s"value $value not found in TargetArchitecture")
     
+    }
+  }
 }
 
 enum ModuleAttributesConstants(val value: Int) {

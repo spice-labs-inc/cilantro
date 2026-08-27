@@ -25,40 +25,48 @@ class ArrayDimension(private var _lowerBound: Option[Int] = None, private var _u
 
     def isSized = _lowerBound.isDefined || _upperBound.isDefined
 
-    override def toString(): String =
+    override def toString(): String = {
         if !isSized then "" else s"$_lowerBound ... $_upperBound"
 
+    }
 }
 
 sealed class ArrayType(`type`: TypeReference, _rank: Int = 1) extends TypeSpecification(`type`) {
     this.etype = ElementType.array
 
-    private var _dimensions: ArrayBuffer[ArrayDimension] = null
+    private var _dimensions: Option[ArrayBuffer[ArrayDimension]] = None
 
-    if (_rank > 1)
-        _dimensions = ArrayBuffer[ArrayDimension]()
-        for i <- 0 until rank do
-            _dimensions.addOne(ArrayDimension())
+    if (_rank > 1) {
+        val dims = ArrayBuffer[ArrayDimension]()
+        for i <- 0 until rank do {
+            dims.addOne(ArrayDimension())
 
 
-    def dimensions =
-        if (_dimensions != null)
-            _dimensions
-        else
-            _dimensions = ArrayBuffer[ArrayDimension](ArrayDimension())
-            _dimensions
+        }
+        _dimensions = Some(dims)
+    }
+    def dimensions = {
+        _dimensions match {
+            case Some(d) => d
+            case None =>
+                val d = ArrayBuffer[ArrayDimension](ArrayDimension())
+                _dimensions = Some(d)
+                d
     
-    def rank =
-        if _dimensions == null then 1 else _dimensions.length
+        }
+    }
+    def rank = {
+        _dimensions.map(_.length).getOrElse(1)
     
-    def isVector =
-        if (_dimensions == null)
-            true
-        else if (_dimensions.length > 1)
-            false
-        else
-            _dimensions(0).isSized
+    }
+    def isVector = {
+        _dimensions match {
+            case None => true
+            case Some(d) if d.length > 1 => false
+            case Some(d) => d(0).isSized
     
+        }
+    }
     override def isValueType = false
     override def isValueType_=(value: Boolean) = throw OperationNotSupportedException()
 
@@ -66,19 +74,24 @@ sealed class ArrayType(`type`: TypeReference, _rank: Int = 1) extends TypeSpecif
     
     override def fullName = super.fullName + suffix
 
-    private def suffix =
-        if (isVector)
+    private def suffix = {
+        if (isVector) {
             "[]"
-        else
+        }
+        else {
             var suff = StringBuilder()
             suff.append("[")
-            for i <- 0 until dimensions.length do
-                if (i > 0)
+            for i <- 0 until dimensions.length do {
+                if (i > 0) {
                     suff.append(",")
+                }
                 suff.append(dimensions(i).toString())
+            }
             suff.append("]")
             suff.toString()
 
+        }
+    }
     override def isArray = true
 
 }

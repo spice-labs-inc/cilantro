@@ -23,8 +23,10 @@ enum AssemblyHashAlgorithm(val value: Int) {
 }
 
 object  AssemblyHashAlgorithm {
-  def fromOrdinalValue(value: Int) =
-    AssemblyHashAlgorithm.values.find(x => {x.value == value}) match
+  def fromOrdinalValue(value: Int) = {
+    AssemblyHashAlgorithm.values.find(x => {x.value == value}) match {
       case Some(result) => result
       case None => throw IllegalArgumentException(s"value $value not found in AssemblyHashAlgorithm")  
+    }
+  }
 }

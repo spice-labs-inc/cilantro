@@ -20,54 +20,64 @@ import io.spicelabs.cilantro.MemberDefinition.getAttributes
 import io.spicelabs.cilantro.MemberDefinition.setAttributes
 
 sealed class ParameterDefinition(name: String, var _attributes: Char, parameterType: TypeReference) extends ParameterReference(name, parameterType) with CustomAttributeProvider with ConstantProvider /* TODO with MarshalInfoProvider */ {
-    this._token = MetadataToken(TokenType.param)
+    this._token = Some(MetadataToken(TokenType.param))
 
-    var _method: MethodSignature = null
+    var _method: Option[MethodSignature] = None
 
     private var _constant:Any = notResolved
 
-    private var _custom_attributes: ArrayBuffer[CustomAttribute] = null
+    private var _custom_attributes: Option[ArrayBuffer[CustomAttribute]] = None
 
     def attributes = _attributes
     def attributes_=(value: Char) = _attributes = value
 
     def method = _method
 
-    def sequence =
-        if (method == null)
-            -1
-        else
-            if method.hasImplicitThis() then index + 1 else index
+    def sequence = {
+        _method match {
+            case None => -1
+            case Some(m) => if m.hasImplicitThis() then index + 1 else index
     
-    def hasConstant =
+        }
+    }
+    def hasConstant = {
         _constant = this.resolveConstant(_constant, parameterType.module)
         _constant != noValue
-    def hasConstant_=(value: Boolean):Unit =
-        if (!value)
+    }
+    def hasConstant_=(value: Boolean):Unit = {
+        if (!value) {
             _constant = noValue
     
-    def constant = if hasConstant then _constant else null
+        }
+    }
+    def constant = if hasConstant then _constant else noValue
     def constant_=(value: Any) = _constant = value
 
-    def hasCustomAttributes: Boolean =
-        if (_custom_attributes != null)
-            _custom_attributes.length > 0
-        this.getHasCustomAttributes(parameterType.module)
+    def hasCustomAttributes: Boolean = {
+        _custom_attributes match {
+            case Some(a) => a.length > 0
+            case None => this.getHasCustomAttributes(parameterType.module)
+        }
     
-    def customAttributes =
-        if (_custom_attributes != null)
-            _custom_attributes
-        else
-            _custom_attributes = getCustomAttributes(_custom_attributes, parameterType.module)
-            _custom_attributes
+    }
+    def customAttributes = {
+        _custom_attributes match {
+            case Some(a) => a
+            case None =>
+                val loaded = getCustomAttributes(ArrayBuffer.empty[CustomAttribute], parameterType.module)
+                _custom_attributes = Some(loaded)
+                loaded
 
 
-    def this(parameterType: TypeReference) =
+        }
+    }
+    def this(parameterType: TypeReference) = {
         this("", ParameterAttributes.none.value, parameterType)
     
-    def this(parameterType: TypeReference, method: MethodSignature) =
+    }
+    def this(parameterType: TypeReference, method: MethodSignature) = {
         this("", ParameterAttributes.none.value, parameterType)
-        _method = method
+        _method = Some(method)
 
     // TODO    
     // def hasMarshalInfo = ...
@@ -75,6 +85,7 @@ sealed class ParameterDefinition(name: String, var _attributes: Char, parameterT
     // def marshalInfo = ...
     // def hasMarshalInfo_=(value: MarshalInfo) = ...
 
+    }
     def isIn = getAttributes(_attributes, ParameterAttributes.in.value)
     def isIn_=(value: Boolean) = _attributes = setAttributes(_attributes, ParameterAttributes.in.value, value)
 

@@ -17,10 +17,11 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 class GuidHeap(data: Array[Byte]) extends Heap(data) {
-    def read(index: Int) =
+    def read(index: Int) = {
         val guid_size = 16
-        if (index == 0 || ((index - 1) + guid_size) > data.length)
+        if (index == 0 || ((index - 1) + guid_size) > data.length) {
             UUID.randomUUID()
+        }
         val bytes = Array.ofDim[Byte](guid_size)
         Array.copy(data, index - 1, bytes, 0, guid_size)
         val source = ByteBuffer.wrap(bytes)
@@ -33,4 +34,5 @@ class GuidHeap(data: Array[Byte]) extends Heap(data) {
         dest.rewind()
         val uuid = UUID(dest.getLong(), dest.getLong())
         uuid
+    }
 }

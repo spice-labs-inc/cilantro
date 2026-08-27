@@ -17,30 +17,33 @@ import scala.collection.mutable.ArrayBuffer
 import io.spicelabs.cilantro.metadata.ElementType
 
 class GenericInstanceType(_type: TypeReference, arity: Int = 0) extends TypeSpecification(_type) with GenericInstance with GenericContext {
-    private var _arguments = if arity > 0 then new ArrayBuffer[TypeReference](arity) else null
+    private var _arguments: Option[ArrayBuffer[TypeReference]] = if arity > 0 then Some(ArrayBuffer[TypeReference]()) else None
     this.etype = ElementType.genericInst
 
-    def hasGenericArguments = _arguments != null && _arguments.length > 0
+    def hasGenericArguments = _arguments.exists(_.length > 0)
 
-    def genericArguments =
-        if (_arguments != null)
-            _arguments
-        else
-            _arguments = ArrayBuffer[TypeReference]()
-            _arguments
-    
+    def genericArguments = {
+        _arguments match {
+            case Some(a) => a
+            case None =>
+                val a = ArrayBuffer[TypeReference]()
+                _arguments = Some(a)
+                a
+        }
+    }
     override def declaringType = elementType.declaringType
     override def declaringType_=(value: TypeReference) = throw OperationNotSupportedException()
 
-    override def fullName =
+    override def fullName = {
         val name = StringBuilder()
         name.append(super.fullName)
         this.genericInstanceFullName(name)
         name.toString()
     
+    }
     override def isGenericInstance = true
 
     override def containsGenericParameter: Boolean = this.containsGenericParameterFn() || super.containsGenericParameter
     
-    override def `type`: GenericParameterProvider = elementType
+    override def `type`: Option[GenericParameterProvider] = Some(elementType)
 }

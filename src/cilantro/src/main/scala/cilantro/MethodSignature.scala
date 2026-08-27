@@ -32,15 +32,20 @@ trait MethodSignature extends MetadataTokenProvider {
 
     def hasImplicitThis() = this.hasThis && !this.explicitThis
 
-    def methodSignatureFullName(builder: StringBuilder) =
+    def methodSignatureFullName(builder: StringBuilder) = {
         builder.append("(")
-        if (hasParameters)
-            for i <- 0 until parameters.length do
+        if (hasParameters) {
+            for i <- 0 until parameters.length do {
                 val parameter = parameters(i)
-                if (i > 0)
+                if (i > 0) {
                     builder.append(",")
-                if (parameter.parameterType.isSentinel)
+                }
+                if (parameter.parameterType.isSentinel) {
                     builder.append("...,")
+                }
                 builder.append(parameter.parameterType.fullName)
+            }
+        }
         builder.append(")")
+    }
 }

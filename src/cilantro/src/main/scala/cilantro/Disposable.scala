@@ -14,15 +14,19 @@ package io.spicelabs.cilantro
 
 class Disposable[T <: AutoCloseable](val value: T, private val _owned: Boolean) {
 
-    def dispose() =
-        if (value != null && _owned)
+    def dispose() = {
+        if (_owned) {
             value.close()
+        }
+    }
 }
 
 object Disposable {
-    def owned[T <: AutoCloseable](value: T): Disposable[T] =
+    def owned[T <: AutoCloseable](value: T): Disposable[T] = {
         Disposable(value, true)
     
-    def notOwned[T <: AutoCloseable](value: T): Disposable[T] =
+    }
+    def notOwned[T <: AutoCloseable](value: T): Disposable[T] = {
         Disposable(value, false)
+    }
 }

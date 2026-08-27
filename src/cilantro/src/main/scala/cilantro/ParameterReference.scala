@@ -14,10 +14,10 @@ package io.spicelabs.cilantro
 
 abstract class ParameterReference(var _name: String, protected var _parameter_type: TypeReference) extends MetadataTokenProvider {
     var _index = -1
-    var _token: MetadataToken = null
+    var _token: Option[MetadataToken] = None
 
     def name = _name
-    def name_=(value: String) = _name = name
+    def name_=(value: String) = _name = value
 
     def index = _index
 
@@ -25,7 +25,7 @@ abstract class ParameterReference(var _name: String, protected var _parameter_ty
     def parameterType_=(value: TypeReference) = _parameter_type = value
 
     def metadataToken = _token
-    def metadataToken_=(value: MetadataToken) = _token = value
+    def metadataToken_=(value: MetadataToken) = _token = Some(value)
 
     override def toString() = _name
 

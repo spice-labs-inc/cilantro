@@ -15,29 +15,35 @@ package io.spicelabs.cilantro.metadata
 class Row2[T1, T2] (val col1: T1, val col2: T2) {
     given CanEqual[Row2[T1, T2], Row2[T1, T2]] = CanEqual.derived
 
-    override def equals(that: Any): Boolean =
-        that match
+    override def equals(that: Any): Boolean = {
+        that match {
             case row: Row2[T1, T2] @unchecked =>
                 col1 == row.col1 && col2 == row.col2
             case _ => false;
-    override def hashCode(): Int =
-        val c1= if col1 == null then 0 else col1.hashCode()
-        val c2 = if col2 == null then 0 else col2.hashCode()
+        }
+    }
+    override def hashCode(): Int = {
+        val c1 = Option(col1).map(_.hashCode()).getOrElse(0)
+        val c2 = Option(col2).map(_.hashCode()).getOrElse(0)
         c1 ^ c2
+    }
 }
 class Row3[T1, T2, T3] (val col1: T1, val col2: T2, val col3: T3) {
     given CanEqual[Row3[Int, Int, Int], Row3[Int, Int, Int]] = CanEqual.derived
 
-    override def equals(that: Any): Boolean =
-        that match
+    override def equals(that: Any): Boolean = {
+        that match {
             case row: Row3[T1, T2, T3] @unchecked =>
                 col1 == row.col1 && col2 == row.col2 && col3 == row.col3
             case _ => false
-    override def hashCode(): Int =
-        val c1 = if col1 == null then 0 else col1.hashCode()
-        val c2 = if col2 == null then 0 else col2.hashCode()
-        val c3 = if col3 == null then 0 else col3.hashCode()
-        c1 ^ c2 ^ c3        
+        }
+    }
+    override def hashCode(): Int = {
+        val c1 = Option(col1).map(_.hashCode()).getOrElse(0)
+        val c2 = Option(col2).map(_.hashCode()).getOrElse(0)
+        val c3 = Option(col3).map(_.hashCode()).getOrElse(0)
+        c1 ^ c2 ^ c3
+    }
 }
 
 class Row4[T1, T2, T3, T4] (private val col1: T1, private val col2: T2, private val col3: T3, private val col4: T4)

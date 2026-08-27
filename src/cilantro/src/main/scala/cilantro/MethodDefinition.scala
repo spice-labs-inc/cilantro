@@ -19,94 +19,111 @@ import javax.naming.OperationNotSupportedException
 
 // TODO ctor parameters
 class MethodDefinition(_name: String, private var _attributes: Char, returnType: TypeReference) extends MethodReference(_name, returnType) with MemberDefinition {
-    this.token = MetadataToken(TokenType.method)
+    this.token = Some(MetadataToken(TokenType.method))
     private var _impl_attributes: Char = 0
 
     var _sem_attrs_ready: Boolean = false
 
     var _sem_attrs: Char = 0
 
-    private var _custom_attributes: ArrayBuffer[CustomAttribute] = null
-    private var _security_declarations: ArrayBuffer[SecurityDeclaration] = null
+    private var _custom_attributes: Option[ArrayBuffer[CustomAttribute]] = None
+    private var _security_declarations: Option[ArrayBuffer[SecurityDeclaration]] = None
 
     var _rva: Int = 0
     // TODO
     // var pinvoke: PInvokeInfo = null
 
-    private var _overrides: ArrayBuffer[MethodReference] = null
+    private var _overrides: Option[ArrayBuffer[MethodReference]] = None
 
     // TODO
     // var _body: MethodBody
     // var _debug_info: MethodDebugInformation = null
-    var _custom_infos: ArrayBuffer[CustomDebugInformation] = null
+    var _custom_infos: Option[ArrayBuffer[CustomDebugInformation]] = None
 
-    def this() =
-        this("", 0, null)
+    def this() = {
+        this("", 0, TypeReference("", ""))
 
-    override def name_=(value: String) =
-        if (isWindowsRuntimeProjection && value != name)
+    }
+    override def name_=(value: String) = {
+        if (isWindowsRuntimeProjection && value != name) {
             throw OperationNotSupportedException()
+        }
         super.name = value
     
+    }
     def attributes:Char = _attributes
-    def attributes_=(value: Char) =
-        if (isWindowsRuntimeProjection && value != _attributes)
+    def attributes_=(value: Char) = {
+        if (isWindowsRuntimeProjection && value != _attributes) {
             throw OperationNotSupportedException()
+        }
         _attributes = value
-    def attributes_=(value: MethodAttributes) =
-        if (isWindowsRuntimeProjection && value.value != _attributes)
+    }
+    def attributes_=(value: MethodAttributes) = {
+        if (isWindowsRuntimeProjection && value.value != _attributes) {
             throw OperationNotSupportedException()
+        }
         _attributes = value.value
 
 
+    }
     def implAttributes = _impl_attributes
-    def implAttributes_=(value: Char) =
-        if (isWindowsRuntimeProjection && value != _impl_attributes)
+    def implAttributes_=(value: Char) = {
+        if (isWindowsRuntimeProjection && value != _impl_attributes) {
             throw OperationNotSupportedException()
+        }
         _impl_attributes = value
 
 
-    def semanticAttributes =
-        if (_sem_attrs_ready)
+    }
+    def semanticAttributes = {
+        if (_sem_attrs_ready) {
             _sem_attrs
-        else if (hasImage)
+        }
+        else if (hasImage) {
                 readSemantics()
                 _sem_attrs
-        else
+        }
+        else {
             _sem_attrs = 0
             _sem_attrs_ready = true
             _sem_attrs
     
 
-    def windowsRuntimeProjection: MethodDefinitionProjection = projection.asInstanceOf[MethodDefinitionProjection]
-    def windowsRuntimeProjection_=(value: MethodDefinitionProjection) = projection = value
+        }
+    }
+    def windowsRuntimeProjection: MethodDefinitionProjection = projection.map(_.asInstanceOf[MethodDefinitionProjection]).getOrElse(throw OperationNotSupportedException())
+    def windowsRuntimeProjection_=(value: MethodDefinitionProjection) = projection = Some(value)
 
     def readSemantics(): Unit = { }
 
-    def hasSecurityDeclarations =
-        if (_security_declarations != null)
-            _security_declarations.length > 0
-        false // TODO
+    def hasSecurityDeclarations = {
+        _security_declarations.exists(_.length > 0)
 
-    def securityDeclarations =
-        if (_security_declarations != null)
-            _security_declarations
-        else
-            _security_declarations = null // TODO getSecurityDeclarations(_security_declarations, module)
-            _security_declarations
+    }
+    def securityDeclarations = {
+        _security_declarations match {
+            case Some(d) => d
+            case None =>
+                val loaded = ArrayBuffer.empty[SecurityDeclaration]
+                _security_declarations = Some(loaded)
+                loaded
 
-    def hasCustomAttributes =
-        if (_custom_attributes != null)
-            _custom_attributes.length
-        false // TODO getHasCustomAttributes()
+        }
+    }
+    def hasCustomAttributes = {
+        _custom_attributes.exists(_.length > 0)
 
-    def customAttributes =
-        if (_custom_attributes != null)
-            _custom_attributes
-        else
-            _custom_attributes = getCustomAttributes(_custom_attributes, module)
-            _custom_attributes
+    }
+    def customAttributes = {
+        _custom_attributes match {
+            case Some(a) => a
+            case None =>
+                val loaded = getCustomAttributes(ArrayBuffer.empty[CustomAttribute], module)
+                _custom_attributes = Some(loaded)
+                loaded
     
+        }
+    }
     def RVA = _rva
 
     // TODO
@@ -115,48 +132,59 @@ class MethodDefinition(_name: String, private var _attributes: Char, returnType:
     // TODO
     def hasPInvokeInfo = false
 
-    def hasOverrides =
-        if (_overrides != null)
-            _overrides.length > 0
-        else
-            hasImage && module.read(this, (method, reader) => reader.hasOverrides(method))
-
-    def overrides =
-        if (_overrides != null)
-            _overrides
-        else if (hasImage)
-            _overrides = module.read(_overrides, this, (method, reader) => reader.readOverrides(method))
-            _overrides
-        else
-            _overrides = ArrayBuffer[MethodReference]()
-            _overrides
+    def hasOverrides = {
+        _overrides match {
+            case Some(o) => o.length > 0
+            case None => hasImage && module.exists(m => m.read(this, (method, reader) => reader.hasOverrides(method)))
+        }
+    }
+    def overrides = {
+        _overrides match {
+            case Some(o) => o
+            case None =>
+                val loaded = if (hasImage) module.map(m => m.read(ArrayBuffer.empty[MethodReference], this, (method, reader) => reader.readOverrides(method))).getOrElse(ArrayBuffer.empty[MethodReference])
+                             else ArrayBuffer[MethodReference]()
+                _overrides = Some(loaded)
+                loaded
     
-    override def hasGenericParameters =
-        if (_generic_parameters != null)
-            _generic_parameters.length > 0
-        else
-            getHasGenericParameters(module)
+        }
+    }
+    override def hasGenericParameters = {
+        _generic_parameters match {
+            case Some(gp) => gp.length > 0
+            case None => getHasGenericParameters(module)
     
-    override def genericParameters =
-        if (_generic_parameters != null)
-            _generic_parameters
-        else
-            _generic_parameters = getGenericParameters(_generic_parameters, module)
-            _generic_parameters
+        }
+    }
+    override def genericParameters = {
+        _generic_parameters match {
+            case Some(gp) => gp
+            case None =>
+                val loaded = getGenericParameters(ArrayBuffer.empty[GenericParameter], module)
+                _generic_parameters = Some(loaded)
+                loaded
 
-    def hasCustomDebugInformations =
+        }
+    }
+    def hasCustomDebugInformations = {
         // TODO
         // read(body)
-        _custom_infos != null && _custom_infos.length > 0
+        _custom_infos.exists(_.length > 0)
     
-    def customDebugInformations =
+    }
+    def customDebugInformations = {
         // TODO
         // read(body)
 
-        if (_custom_infos == null)
-            _custom_infos = ArrayBuffer[CustomDebugInformation]()
-        _custom_infos
+        _custom_infos match {
+            case Some(i) => i
+            case None =>
+                val loaded = ArrayBuffer[CustomDebugInformation]()
+                _custom_infos = Some(loaded)
+                loaded
+        }
 
+    }
     def isCompilerControlled = MemberDefinition.getMaskedAttributes(_attributes, MethodAttributes.memberAccessMask.value, MethodAttributes.compilerControlled.value)
     def isCompilerControlled_=(value: Boolean) = _attributes = MemberDefinition.setMaskedAttributes(_attributes, MethodAttributes.memberAccessMask.value, MethodAttributes.compilerControlled.value, value)
 
@@ -242,9 +270,10 @@ class MethodDefinition(_name: String, private var _attributes: Char, returnType:
     def declaringTypeTD: TypeDefinition = super.declaringType.asInstanceOf[TypeDefinition]
     def declaringTypeTD_=(value: TypeDefinition): Unit = super.declaringType = value
 
-    def isConstructor =
+    def isConstructor = {
         isRuntimeSpecialName && isSpecialName &&
         (name == ".cctor" || name == ".ctor")
     
+    }
     override def isDefinition = true
 }

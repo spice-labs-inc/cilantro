@@ -39,22 +39,27 @@ class BinaryStreamReader(protected val fileInputStream: FileInputStream) {
     def readInt32() = byteBuffer.getInt()
     def readInt64() = byteBuffer.getLong()
     def readBoolean() = byteBuffer.get() != 0
-    def readBytes(length: Int) =
+    def readBytes(length: Int) = {
         val bytes = Array.ofDim[Byte](length)
         byteBuffer.get(bytes)
         bytes
 
-    def advance(bytes: Int) =
+    }
+    def advance(bytes: Int) = {
         byteBuffer.position(byteBuffer.position() + bytes)
 
-    def moveTo(position: Int) =
+    }
+    def moveTo(position: Int) = {
         byteBuffer.position(position)
     
-    def align(align: Int) =
+    }
+    def align(align: Int) = {
         val aa = align - 1
         val pos = byteBuffer.position()
         advance(((pos + aa) & ~aa) - pos)
 
-    def readDataDirectory() =
+    }
+    def readDataDirectory() = {
         DataDirectory(readInt32(), readInt32())
+    }
 }

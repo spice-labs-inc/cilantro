@@ -14,6 +14,6 @@ package io.spicelabs.cilantro
 
 trait MetadataTokenProvider {
 
-    def metadataToken: MetadataToken
+    def metadataToken: Option[MetadataToken]
     def metadataToken_=(value: MetadataToken) : Unit
 }

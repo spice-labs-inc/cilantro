@@ -12,7 +12,6 @@
 
 package io.spicelabs.cilantro.metadata
 
-import javax.swing.text.Utilities
 import io.spicelabs.cilantro
 import io.spicelabs.cilantro.MetadataConsts
 
@@ -76,19 +75,22 @@ enum Table(val value: Byte)
 
 object Table {
     def fromOrdinalValue(value: Int) =
-    Table.values.find(x => {x.value == value}) match
+    Table.values.find(x => {x.value == value}) match {
       case Some(result) => result
       case None => throw IllegalArgumentException(s"value $value not found in Table")  
-    def fromOrdinalValueMaybe(value: Int) =
+    }
+    def fromOrdinalValueMaybe(value: Int) = {
         Table.values.find(x => {x.value == value})
+    }
 }
 
 class TableInformation() {
     var offset = 0
     var length = 0
     var rowSize = 0
-    def isLarge =
+    def isLarge = {
         length > Char.MaxValue
+    }
 }
 
 class TableHeap (_data: Array[Byte]) extends Heap(_data) {
@@ -96,14 +98,18 @@ class TableHeap (_data: Array[Byte]) extends Heap(_data) {
     var sorted = 0L
     val tables = Array.fill[TableInformation](MetadataConsts.tableCount){TableInformation()}
 
-    def apply(table:Table) =
+    def apply(table:Table) = {
         tables(table.value)
 
-    def hasTable(table: Table): Boolean =
+    }
+    def hasTable(table: Table): Boolean = {
         (valid & (1L << table.value)) != 0
-    def hasTable(someTable: Option[Table]): Boolean =
-        someTable match
+    }
+    def hasTable(someTable: Option[Table]): Boolean = {
+        someTable match {
             case Some(table) => hasTable(table)
             case None => false
         
+        }
+    }
 }

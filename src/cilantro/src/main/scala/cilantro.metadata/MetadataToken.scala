@@ -21,21 +21,24 @@ class MetadataToken(val token: Int) {
     def this(type_ : TokenType, rid: Int) = this (type_.value | rid)
 
     def RID = token & 0x00_ffffff
-    def tokenType =
+    def tokenType = {
         val ott = TokenType.methodSpec
         val tv = token & 0xff_000000
         val ts = f"0x$tv%x"
         TokenType.fromOrdinalValue(token & 0xff_000000)
 
-    override def equals(that: Any): Boolean = that match
+    }
+    override def equals(that: Any): Boolean = that match {
         case a: MetadataToken => this.token == a.token
         case _ => false
 
+    }
     override def hashCode(): Int = token.##
 
-    override def toString(): String =
+    override def toString(): String = {
         val name = tokenType.toString()
         f"[$name:0x$RID%04x]"
+    }
 }
 
 object MetadataToken {

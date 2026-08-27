@@ -13,7 +13,7 @@
 package io.spicelabs.cilantro.PE
 
 sealed class Section {
-    var name: String = null
+    var name: Option[String] = None
     var virtualAddress: Int = 0
     var virtualSize: Int = 0
     var sizeOfRawData: Int = 0

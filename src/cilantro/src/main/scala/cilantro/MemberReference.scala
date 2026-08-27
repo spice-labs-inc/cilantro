@@ -14,51 +14,55 @@ package io.spicelabs.cilantro
 
 import javax.naming.OperationNotSupportedException
 
-abstract class MemberReference(var _name : String) extends MetadataTokenProvider {
-    def this() = this(null)
+abstract class MemberReference(var _name: String) extends MetadataTokenProvider {
+    def this() = this("")
 
-    private var declaring_type: TypeReference = null
+    private var declaring_type: Option[TypeReference] = None
 
-    var token: MetadataToken = null
-    var projection: Any = null
+    var token: Option[MetadataToken] = None
+    var projection: Option[Any] = None
 
     def name: String = _name
     def name_=(value: String) = {
-        if (isWindowsRuntimeProjection && value != name)
+        if (isWindowsRuntimeProjection && value != name) {
             throw new OperationNotSupportedException()
+        }
         _name = value
     }
 
     def fullName: String
 
-    def declaringType:TypeReference = declaring_type
-    def declaringType_=(value: TypeReference) = declaring_type = value
+    def declaringType: Option[TypeReference] = declaring_type
+    def declaringType_=(value: TypeReference) = declaring_type = Some(value)
+    def declaringType_=(value: Option[TypeReference]) = declaring_type = value
 
     def metadataToken = token
-    def metadataToken_=(value: MetadataToken) = token = value
+    def metadataToken_=(value: MetadataToken) = token = Some(value)
 
-    def isWindowsRuntimeProjection = projection != null
+    def isWindowsRuntimeProjection = projection.isDefined
 
-    def hasImage =
+    def hasImage = {
         val module = this.module
-        module != null && module.hasImage
+        module.exists(_.hasImage)
 
-    def module: ModuleDefinition = if declaring_type != null then declaring_type.module else null
+    }
+    def module: Option[ModuleDefinition] = declaring_type.flatMap(_.module)
 
     def isDefinition = false
 
-    def containsGenericParameter:Boolean = declaring_type != null && declaring_type.containsGenericParameter
+    def containsGenericParameter: Boolean = declaring_type.exists(_.containsGenericParameter)
 
-    def memberFullName() =
-        if (declaring_type == null)
-            _name
-        else
-            declaring_type.fullName + "::" + _name
-
-    def resolve(): MemberDefinition =
+    def memberFullName() = {
+        declaring_type match {
+            case Some(t) => t.fullName + "::" + _name
+            case None => _name
+        }
+    }
+    def resolve(): MemberDefinition = {
         resolveDefinition()
-    
-    def resolveDefinition() : MemberDefinition
+
+    }
+    def resolveDefinition(): MemberDefinition
 
     override def toString(): String = fullName
 }

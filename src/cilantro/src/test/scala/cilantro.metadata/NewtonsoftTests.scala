@@ -18,26 +18,28 @@ class NewtonsoftTests extends munit.FunSuite {
 
     test("reads-20") {
         val path = newtonPathStr(v20)
-        val assem = AssemblyDefinition.readAssembly(path)
-        assertEquals(assem.name.name, "Newtonsoft.Json")
+        val assem = AssemblyDefinition.readAssembly(path).get
+        assertEquals(assem.name.get.name, "Newtonsoft.Json")
     }
 
     test("reads-60") {
         val path = newtonPathStr(v60)
-        val assem = AssemblyDefinition.readAssembly(path)
-        assertEquals(assem.name.name, "Newtonsoft.Json")
+        val assem = AssemblyDefinition.readAssembly(path).get
+        assertEquals(assem.name.get.name, "Newtonsoft.Json")
     }
 }
 
 object NewtonsoftTests {
     def v60 = "net6.0"
     def v20 = "net20"
-    def newtonPath(variant: String) =
+    def newtonPath(variant: String) = {
         val cwd = Paths.get(System.getProperty("user.dir"))
         val smokePath = cwd.resolve(s"../../test-files/Newtonsoft.Json/$variant/Newtonsoft.Json.dll")
         smokePath
-    
-    def newtonPathStr(variant: String) =
+    }
+
+    def newtonPathStr(variant: String) = {
         newtonPath(variant).toString()
+    }
 
 }

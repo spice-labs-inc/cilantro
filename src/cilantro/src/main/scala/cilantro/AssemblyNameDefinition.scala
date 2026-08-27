@@ -16,6 +16,7 @@ class AssemblyNameDefinition(name: String, version: CSVersion) extends AssemblyN
 
     override def hash: Array[Byte] = Array.emptyByteArray
 
-    def this() =
-        this(null, null)
+    def this() = {
+        this("", AssemblyNameReference.zeroVersion)
+    }
 }

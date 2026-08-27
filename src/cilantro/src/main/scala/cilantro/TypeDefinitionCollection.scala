@@ -19,43 +19,53 @@ import scala.collection.mutable.ArrayBuffer
 sealed class TypeDefinitionCollection(val container: ModuleDefinition, capacity: Int = 0) extends ArrayBuffer[TypeDefinition](capacity) {
     val name_cache = HashMap[Row2[String, String], TypeDefinition]()
 
-    override def addOne(elem: TypeDefinition): this.type =
+    override def addOne(elem: TypeDefinition): this.type = {
         super.addOne(elem)
         attach(elem)
         this
     
-    override def update(index: Int, elem: TypeDefinition): Unit =
+    }
+    override def update(index: Int, elem: TypeDefinition): Unit = {
         super.update(index, elem)
         attach(elem)
     
-    override def insert(index: Int, elem: TypeDefinition): Unit =
+    }
+    override def insert(index: Int, elem: TypeDefinition): Unit = {
         super.insert(index, elem)
         attach(elem)
     
-    override def remove(index: Int): TypeDefinition =
+    }
+    override def remove(index: Int): TypeDefinition = {
         val result = super.remove(index)
         detach(result)
         result
     
-    override def clear(): Unit =
+    }
+    override def clear(): Unit = {
         this.foreach(detach)
         super.clear()
     
-    private def attach(`type`: TypeDefinition) =
-        if (`type`.module != null && `type`.module != container)
+    }
+    private def attach(`type`: TypeDefinition) = {
+        if (`type`.module.exists(_ != container)) {
             throw IllegalArgumentException("Type already attached")
-        `type`._module = container
+        }
+        `type`._module = Some(container)
         `type`.scope = container
         name_cache += (Row2(`type`.nameSpace, `type`.name) -> `type`)
     
-    private def detach(`type`: TypeDefinition) =
-        `type`._module = null
-        `type`.scope = null
+    }
+    private def detach(`type`: TypeDefinition) = {
+        `type`._module = None
+        `type`.scope = None
         name_cache -= Row2(`type`.nameSpace,`type`.name)
 
-    def getType(fullName: String): TypeDefinition =
-        null // TODO
+    }
+    def getType(fullName: String): Option[TypeDefinition] = {
+        None // TODO
     
-    def getType(namespace: String, name: String): TypeDefinition =
-        null // TODO
+    }
+    def getType(namespace: String, name: String): Option[TypeDefinition] = {
+        None // TODO
+    }
 }

@@ -15,33 +15,40 @@ package io.spicelabs.cilantro
 import scala.collection.mutable.ArrayBuffer
 
 class GenericInstanceMethod(_method: MethodReference, arity: Int = 0) extends MethodSpecification(_method) with GenericInstance with GenericContext {
-    private var _arguments = if arity > 0 then new ArrayBuffer[TypeReference](arity) else null
+    private var _arguments: Option[ArrayBuffer[TypeReference]] = if arity > 0 then Some(ArrayBuffer[TypeReference]()) else None
 
-    def hasGenericArguments = _arguments != null && _arguments.length > 0
+    def hasGenericArguments = _arguments.exists(_.length > 0)
 
-    def genericArguments =
-        if (_arguments == null)
-            _arguments = ArrayBuffer[TypeReference]()
-        _arguments
+    def genericArguments = {
+        _arguments match {
+            case Some(a) => a
+            case None =>
+                val a = ArrayBuffer[TypeReference]()
+                _arguments = Some(a)
+                a
+        }
     
+    }
     override def isGenericInstance = true
 
-    override def method = elementMethod
+    override def method: Option[GenericParameterProvider] = Some(elementMethod)
 
-    override def `type` = elementMethod.declaringType
+    override def `type`: Option[GenericParameterProvider] = elementMethod.declaringType
 
-    override def containsGenericParameter =
+    override def containsGenericParameter = {
         this.containsGenericParameterFn() || super.containsGenericParameter
     
-    override def fullName =
+    }
+    override def fullName = {
         val signature = StringBuilder()
         val method = elementMethod
         signature.append(method.returnType.fullName)
             .append(" ")
-            .append(method.declaringType.fullName)
+            .append(method.declaringType.map(_.fullName).getOrElse(""))
             .append("::")
             .append(method.name)
         genericInstanceFullName(signature)
         methodSignatureFullName(signature)
         signature.toString()
+    }
 }

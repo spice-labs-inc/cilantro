@@ -3,3 +3,19 @@
 
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
+
+# build outputs (sbt and maven)
+target/
+
+# Corpus cache (see ADR-0003): everything except the seed list
+# (corpus/packages.json) and the integrity manifest (corpus/manifest.json)
+# is regenerable from pinned sources. scripts/ensure_corpus.sh checks the
+# cache against the manifest and re-fetches whatever is missing or wrong.
+corpus/nupkg/
+corpus/bin/
+corpus/golden/
+corpus/fixtures/
+
+# GoldenDumper build outputs (regenerable from the committed sources)
+scripts/GoldenDumper/bin/
+scripts/GoldenDumper/obj/

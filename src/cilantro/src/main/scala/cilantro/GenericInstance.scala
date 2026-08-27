@@ -18,15 +18,19 @@ trait GenericInstance extends MetadataTokenProvider {
     def hasGenericArguments: Boolean
     def genericArguments: ArrayBuffer[TypeReference]
 
-    def containsGenericParameterFn(): Boolean =
+    def containsGenericParameterFn(): Boolean = {
         genericArguments.find((gp) => gp.containsGenericParameter).isDefined
     
-    def genericInstanceFullName(builder: StringBuilder) =
+    }
+    def genericInstanceFullName(builder: StringBuilder) = {
         builder.append("<")
-        for i <- 0 until genericArguments.length do
-            if (i > 0)
+        for i <- 0 until genericArguments.length do {
+            if (i > 0) {
                 builder.append(",")
+            }
             builder.append(genericArguments(i).fullName)
+        }
         builder.append(">")
   
+    }
 }

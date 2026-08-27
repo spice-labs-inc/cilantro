@@ -23,9 +23,11 @@ enum GenericParameterAttributes(val value: Char) {
   case defaultConstructorConstraint extends GenericParameterAttributes(0x0010)
   case allowByRefLikeConstraint extends GenericParameterAttributes(0x0020)
   
-  def fromOrdinalValue(value: Char) =
-    GenericParameterAttributes.values.find(x => {x.value == value}) match
+  def fromOrdinalValue(value: Char) = {
+    GenericParameterAttributes.values.find(x => {x.value == value}) match {
       case Some(result) => result
       case None => throw IllegalArgumentException(s"value $value not found in GenericParameterAttributes")  
 
+    }
+  }
 }

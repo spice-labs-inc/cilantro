@@ -20,6 +20,11 @@
         </license>
     </licenses>
 
+    <properties>
+        <!-- Corpus cache check runs before tests; disable for artifact-only builds. -->
+        <cilantro.skipCorpus>false</cilantro.skipCorpus>
+    </properties>
+
     <scm>
         <url>https://github.com/spice-labs-inc/cilantro</url>
         <connection>scm:git:git://github.com/spice-labs-inc/cilantro.git</connection>
@@ -45,6 +50,29 @@
                 <artifactId>maven-antrun-plugin</artifactId>
                 <version>3.1.0</version>
                 <executions>
+                    <execution>
+                        <id>ensure-corpus</id>
+                        <phase>process-test-resources</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <!--
+                            Check the corpus cache against the committed
+                            manifest and re-fetch anything missing or wrong
+                            (docker, house rule). Warm cache: seconds, no
+                            network. Skip with -Dcilantro.skipCorpus=true
+                            for artifact-only builds (no tests, no docker).
+                            -->
+                            <skip>${cilantro.skipCorpus}</skip>
+                            <target>
+                                <echo message="Checking cilantro corpus cache (skip with -Dcilantro.skipCorpus=true)" />
+                                <exec executable="bash" failonerror="true" dir="${project.basedir}">
+                                    <arg value="scripts/ensure_corpus.sh" />
+                                </exec>
+                            </target>
+                        </configuration>
+                    </execution>
                     <execution>
                         <id>inject-real-jar</id>
                         <phase>package</phase>

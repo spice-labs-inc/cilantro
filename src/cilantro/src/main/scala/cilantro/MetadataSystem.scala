@@ -26,171 +26,209 @@ class Range(var index: Int, var length: Int) {
 }
 
 sealed class MetadataSystem {
-    var _assemblyReferences: Array[AssemblyNameReference] = null
-    var _moduleReferences: Array[ModuleReference] = null
+    var _assemblyReferences: Array[AssemblyNameReference] = Array.empty
+    var _moduleReferences: Array[ModuleReference] = Array.empty
 
-    var _types: Array[TypeDefinition] = null
-    var _typeReferences: Array[TypeReference] = null
+    var _types: Array[TypeDefinition] = Array.empty
+    var _typeReferences: Array[TypeReference] = Array.empty
 
-    var _fields: Array[FieldDefinition] = null
-    var _methods: Array[MethodDefinition] = null
-    var _memberReferences: Array[MemberReference] = null
+    var _fields: Array[FieldDefinition] = Array.empty
+    var _methods: Array[MethodDefinition] = Array.empty
+    var _memberReferences: Array[MemberReference] = Array.empty
 
-    var _nestedTypes: HashMap[Int, ArrayBuffer[Int]] = null
-    var _reverseNestedTypes: HashMap[Int, Int] = null
-    var _interfaces: HashMap[Int, ArrayBuffer[Row2[Int, MetadataToken]]] = null
-    var _classLayouts: HashMap[Int, Row2[Char, Int]] = null
-    var _fieldLayouts: HashMap[Int, Int] = null
-    var _fieldRVAs: HashMap[Int, Int] = null
-    var _fieldMarshals: HashMap[MetadataToken, Int] = null
-    var _constants: HashMap[MetadataToken, Row2[ElementType, Int]] = null
-    var _overrides: HashMap[Int, ArrayBuffer[MetadataToken]] = null
-    var _customAttributes: HashMap[MetadataToken, ArrayBuffer[Range]] = null
-    var _securityDeclarations: HashMap[MetadataToken, ArrayBuffer[Range]] = null
-    var _events: HashMap[Int, Range] = null
-    var _properties: HashMap[Int, Range] = null
+    var _nestedTypes: HashMap[Int, ArrayBuffer[Int]] = HashMap()
+    var _reverseNestedTypes: HashMap[Int, Int] = HashMap()
+    var _interfaces: HashMap[Int, ArrayBuffer[Row2[Int, MetadataToken]]] = HashMap()
+    var _classLayouts: HashMap[Int, Row2[Char, Int]] = HashMap()
+    var _fieldLayouts: HashMap[Int, Int] = HashMap()
+    var _fieldRVAs: HashMap[Int, Int] = HashMap()
+    var _fieldMarshals: HashMap[MetadataToken, Int] = HashMap()
+    var _constants: HashMap[MetadataToken, Row2[ElementType, Int]] = HashMap()
+    var _overrides: HashMap[Int, ArrayBuffer[MetadataToken]] = HashMap()
+    var _customAttributes: HashMap[MetadataToken, ArrayBuffer[Range]] = HashMap()
+    var _securityDeclarations: HashMap[MetadataToken, ArrayBuffer[Range]] = HashMap()
+    var _events: HashMap[Int, Range] = HashMap()
+    var _properties: HashMap[Int, Range] = HashMap()
     // TODO
-    // var _semantics: HashMap[Int, Row2[MethodSemanticsAttributes, MetadataToken]] = null
-    // var _pInvokes: HashMap[Int, Row3[PInvokeAttributes, Int, Int]] = null
-    var _genericParameters: HashMap[MetadataToken, Array[Range]] = null
-    var _genericConstraints: HashMap[Int, ArrayBuffer[Row2[Int, MetadataToken]]] = null
+    // var _semantics: HashMap[Int, Row2[MethodSemanticsAttributes, MetadataToken]] = HashMap()
+    // var _pInvokes: HashMap[Int, Row3[PInvokeAttributes, Int, Int]] = HashMap()
+    var _genericParameters: HashMap[MetadataToken, Array[Range]] = HashMap()
+    var _genericConstraints: HashMap[Int, ArrayBuffer[Row2[Int, MetadataToken]]] = HashMap()
     
     // TODO
-    // var _documents: Array[Document] = null
-    var _localScopes: HashMap[Int, ArrayBuffer[Row6[Int, Range, Range, Int, Int, Int]]] = null
+    // var _documents: Array[Document] = Array.empty
+    var _localScopes: HashMap[Int, ArrayBuffer[Row6[Int, Range, Range, Int, Int, Int]]] = HashMap()
     // TODO
-    // var _importScopes: Array[ImportDebugInformation] = null
-    var _stateMachineMethods: HashMap[Int, Int] = null
-    var _customDebugInformation: HashMap[MetadataToken, Array[Row3[UUID, Int, Int]]] = null
+    // var _importScopes: Array[ImportDebugInformation] = Array.empty
+    var _stateMachineMethods: HashMap[Int, Int] = HashMap()
+    var _customDebugInformation: HashMap[MetadataToken, Array[Row3[UUID, Int, Int]]] = HashMap()
 
 
-    def clear() =
-        if (_nestedTypes != null) _nestedTypes.clear()
-        if (_reverseNestedTypes != null) _reverseNestedTypes.clear()
-        if (_interfaces != null) _interfaces.clear()
-        if (_classLayouts != null) _classLayouts.clear()
-        if (_fieldLayouts != null) _fieldLayouts.clear()
-        if (_fieldRVAs != null) _fieldLayouts.clear()
-        if (_fieldMarshals != null) _fieldMarshals.clear()
-        if (_constants != null) _constants.clear()
-        if (_overrides != null) _overrides.clear()
-        if (_customAttributes != null) _customAttributes.clear()
-        if (_securityDeclarations != null) _securityDeclarations.clear()
-        if (_events != null) _events.clear()
-        if (_properties != null) _properties.clear()
+    def clear() = {
+        _nestedTypes.clear()
+        _reverseNestedTypes.clear()
+        _interfaces.clear()
+        _classLayouts.clear()
+        _fieldLayouts.clear()
+        _fieldLayouts.clear()
+        _fieldMarshals.clear()
+        _constants.clear()
+        _overrides.clear()
+        _customAttributes.clear()
+        _securityDeclarations.clear()
+        _events.clear()
+        _properties.clear()
         // TODO
         // if (_semantics != null) _semantics.clear()
         // if (_pInvokes != null) _pInvokes.clear()
-        if (_genericParameters != null) _genericParameters.clear()
-        if (_genericConstraints != null) _genericConstraints.clear()
+        _genericParameters.clear()
+        _genericConstraints.clear()
 
         // _documents = Array[Document].empty
         // _importScopes = Array[ImportDebugInformation].empty
-        if (_localScopes != null) _localScopes.clear()
-        if (_stateMachineMethods != null) _stateMachineMethods.clear()
+        _localScopes.clear()
+        _stateMachineMethods.clear()
 
-    def getAssemblyNameReference(rid: Int) =
-        if (rid < 1 || rid > _assemblyReferences.length)
-            null
-        else
-            _assemblyReferences(rid - 1)
+    }
+    def getAssemblyNameReference(rid: Int) = {
+        if (rid < 1 || rid > _assemblyReferences.length) {
+            None
+        }
+        else {
+            Option(_assemblyReferences(rid - 1))
     
-    def getTypeDefinition(rid: Int) =
-        if (rid < 1 || rid > _types.length)
-            null
-        else
-            _types(rid - 1)
+        }
+    }
+    def getTypeDefinition(rid: Int) = {
+        if (rid < 1 || rid > _types.length) {
+            None
+        }
+        else {
+            Option(_types(rid - 1))
 
-    def addTypeDefinition(`type`: TypeDefinition) =
-        _types(`type`.token.RID - 1) = `type`
+        }
+    }
+    def addTypeDefinition(`type`: TypeDefinition) = {
+        `type`.token.foreach(tok => _types(tok.RID - 1) = `type`)
     
-    def getTypeReference(rid: Int) =
-        if (rid < 1 || rid > _typeReferences.length)
-            null
-        else
-            _typeReferences(rid - 1)
+    }
+    def getTypeReference(rid: Int) = {
+        if (rid < 1 || rid > _typeReferences.length) {
+            None
+        }
+        else {
+            Option(_typeReferences(rid - 1))
     
-    def addTypeReference(`type`: TypeReference) =
-        _typeReferences(`type`.token.RID - 1) = `type`
+        }
+    }
+    def addTypeReference(`type`: TypeReference) = {
+        `type`.token.foreach(tok => _typeReferences(tok.RID - 1) = `type`)
 
-    def getFieldDefinition(rid: Int) = 
-        if (rid < 1 || rid > _fields.length)
-            null
-        else
-            _fields(rid - 1)
-
-    def addFieldDefinition(field: FieldDefinition) =
-        _fields(field.token.RID - 1) = field
-
-
-    def getMethodDefinition(rid: Int) = 
-        if (rid < 1 || rid > _methods.length)
-            null
-        else
-            _methods(rid - 1)
-
-    def addMethodDefinition(method: MethodDefinition) =
-        _methods(method.token.RID - 1) = method
+    }
+    def getFieldDefinition(rid: Int) = {
+        if (rid < 1 || rid > _fields.length) {
+            None
+        }
+        else {
+            Option(_fields(rid - 1))
+            }
+        }
+    def addFieldDefinition(field: FieldDefinition) = {
+        field.token.foreach(tok => _fields(tok.RID - 1) = field)
 
 
-    def getMemberReference(rid: Int) =
-        if (rid < 1 || rid > _memberReferences.length)
-            null
-        else
-            _memberReferences(rid - 1)
+    }
+    def getMethodDefinition(rid: Int) = {
+        if (rid < 1 || rid > _methods.length) {
+            None
+        }
+        else {
+            Option(_methods(rid - 1))
+            }
+        }
+    def addMethodDefinition(method: MethodDefinition) = {
+        method.token.foreach(tok => _methods(tok.RID - 1) = method)
+
+
+    }
+    def getMemberReference(rid: Int) = {
+        if (rid < 1 || rid > _memberReferences.length) {
+            None
+        }
+        else {
+            Option(_memberReferences(rid - 1))
     
-    def addMemberReference(member: MemberReference) =
-        _memberReferences(member.token.RID - 1) = member
+        }
+    }
+    def addMemberReference(member: MemberReference) = {
+        member.token.foreach(tok => _memberReferences(tok.RID - 1) = member)
 
-    def tryGetNestedTypeMapping(`type`: TypeDefinition) =
-        _nestedTypes.get(`type`.token.RID)
+    }
+    def tryGetNestedTypeMapping(`type`: TypeDefinition) = {
+        `type`.token.flatMap(tok => Option(_nestedTypes.get(tok.RID)))
     
-    def setNestedTypeMapping(type_rid: Int, mapping: ArrayBuffer[Int]) =
+    }
+    def setNestedTypeMapping(type_rid: Int, mapping: ArrayBuffer[Int]) = {
         _nestedTypes.update(type_rid, mapping)
     
-    def tryGetReverseNestedTypeMapping(`type`: TypeDefinition) =
-        _reverseNestedTypes.get(`type`.token.RID)
+    }
+    def tryGetReverseNestedTypeMapping(`type`: TypeDefinition) = {
+        `type`.token.flatMap(tok => Option(_reverseNestedTypes.get(tok.RID)))
     
-    def setReverseNestedTypeMapping(nested: Int, declaring: Int) =
+    }
+    def setReverseNestedTypeMapping(nested: Int, declaring: Int) = {
         _reverseNestedTypes.update(nested, declaring)
 
-    def tryGetInterfaceMapping(`type`: TypeDefinition) =
-        _interfaces.get(`type`.token.RID)
+    }
+    def tryGetInterfaceMapping(`type`: TypeDefinition) = {
+        `type`.token.flatMap(tok => Option(_interfaces.get(tok.RID)))
     
-    def setInterfaceMapping(type_rid: Int, mapping: ArrayBuffer[Row2[Int, MetadataToken]]) =
+    }
+    def setInterfaceMapping(type_rid: Int, mapping: ArrayBuffer[Row2[Int, MetadataToken]]) = {
         _interfaces.update(type_rid, mapping)
     
-    def addPropertiesRange(type_rid: Int, range: Range) =
+    }
+    def addPropertiesRange(type_rid: Int, range: Range) = {
         _properties.update(type_rid, range)
     
-    def tryGetPropertiesRange(`type`: TypeDefinition) =
-        _properties.get(`type`.token.RID)
+    }
+    def tryGetPropertiesRange(`type`: TypeDefinition) = {
+        `type`.token.flatMap(tok => Option(_properties.get(tok.RID)))
 
-    def addEventsRange(type_rid: Int, range: Range) =
+    }
+    def addEventsRange(type_rid: Int, range: Range) = {
         _events.update(type_rid, range)
     
-    def tryGetEventsRange(`type`: TypeDefinition) =
-        _events.get(`type`.token.RID)
+    }
+    def tryGetEventsRange(`type`: TypeDefinition) = {
+        `type`.token.flatMap(tok => Option(_events.get(tok.RID)))
 
-    def tryGetGenericParameterRanges(owner: GenericParameterProvider) =
-        _genericParameters.get(owner.metadataToken)
+    }
+    def tryGetGenericParameterRanges(owner: GenericParameterProvider) = {
+        owner.metadataToken.flatMap(tok => Option(_genericParameters.get(tok)))
 
-    def tryGetCustomAttributeRanges(owner: CustomAttributeProvider) =
-        _customAttributes.get(owner.metadataToken)
+    }
+    def tryGetCustomAttributeRanges(owner: CustomAttributeProvider) = {
+        owner.metadataToken.flatMap(tok => Option(_customAttributes.get(tok)))
 
-    def tryGetSecurityDeclarationRanges(owner: SecurityDeclarationProvider) =
-        _securityDeclarations.get(owner.metadataToken)
+    }
+    def tryGetSecurityDeclarationRanges(owner: SecurityDeclarationProvider) = {
+        owner.metadataToken.flatMap(tok => Option(_securityDeclarations.get(tok)))
     
-    def tryGetGenericConstraintMapping(generic_parameter: GenericParameter) =
-        _genericConstraints.get(generic_parameter.token.RID)
+    }
+    def tryGetGenericConstraintMapping(generic_parameter: GenericParameter) = {
+        generic_parameter.token.flatMap(tok => Option(_genericConstraints.get(tok.RID)))
 
-    def setGenericConstraintMapping(gp_rid: Int, mapping: ArrayBuffer[Row2[Int, MetadataToken]]) =
+    }
+    def setGenericConstraintMapping(gp_rid: Int, mapping: ArrayBuffer[Row2[Int, MetadataToken]]) = {
         _genericConstraints.update(gp_rid, mapping)
 
-    def tryGetOverrideMapping(method: MethodDefinition) =
-        _overrides.get(method.token.RID)
+    }
+    def tryGetOverrideMapping(method: MethodDefinition) = {
+        method.token.flatMap(tok => Option(_overrides.get(tok.RID)))
     
-    def setOverrideMapping(rid: Int, mapping: ArrayBuffer[MetadataToken]) =
+    }
+    def setOverrideMapping(rid: Int, mapping: ArrayBuffer[MetadataToken]) = {
         _overrides.update(rid, mapping)
 
     // TODO
@@ -200,10 +238,12 @@ sealed class MetadataSystem {
     //     else
     //         _documents(rid - 1)
 
-    def tryGetLocalScopes(method: MethodDefinition) =
-        _localScopes.get(method.metadataToken.RID)
+    }
+    def tryGetLocalScopes(method: MethodDefinition) = {
+        method.token.flatMap(tok => Option(_localScopes.get(tok.RID)))
     
-    def setLocalScopes(method_rid: Int, records: ArrayBuffer[Row6[Int, Range, Range, Int, Int, Int]]) =
+    }
+    def setLocalScopes(method_rid: Int, records: ArrayBuffer[Row6[Int, Range, Range, Int, Int, Int]]) = {
         _localScopes.update(method_rid, records)
 
     // TODO
@@ -213,22 +253,26 @@ sealed class MetadataSystem {
     //     else
     //         _importScopes(rid - 1)
     
-    def tryGetStateMachineKickOffMethod(method: MethodDefinition) =
-        _stateMachineMethods.get(method.metadataToken.RID)
+    }
+    def tryGetStateMachineKickOffMethod(method: MethodDefinition) = {
+        method.token.flatMap(tok => Option(_stateMachineMethods.get(tok.RID)))
     
+    }
     import MetadataSystem.binaryRangeSearch
 
-    def getFieldDeclaringType(field_rid: Int) =
+    def getFieldDeclaringType(field_rid: Int) = {
         binaryRangeSearch(_types, field_rid, true)
     
-    def getMethodDeclaringType(method_rid: Int) =
+    }
+    def getMethodDeclaringType(method_rid: Int) = {
         binaryRangeSearch(_types, method_rid, false)
 
 
+    }
 }
 
 object MetadataSystem {
-    var _primitive_value_types: HashMap[String, Row2[ElementType, Boolean]] = 
+    var _primitive_value_types: HashMap[String, Row2[ElementType, Boolean]] =  {
         HashMap[String, Row2[ElementType, Boolean]] (
             "Void" -> Row2(ElementType.void, false),
             "Boolean" -> Row2(ElementType.boolean, true),
@@ -250,50 +294,67 @@ object MetadataSystem {
             "Object" -> Row2(ElementType.`object`, true)
         )
 
-    def tryProcessPrimitiveTypeReference(`type`: TypeReference): Unit =
-        if (`type`.nameSpace != "System")
+    }
+    def tryProcessPrimitiveTypeReference(`type`: TypeReference): Unit = {
+        if (`type`.nameSpace != "System") {
             return ()
         
+        }
         val scope = `type`.scope
-        if (scope == null || scope.metadataScopeType != MetadataScopeType.assemblyNameReference)
+        if (scope.isEmpty || !scope.exists(_.metadataScopeType == MetadataScopeType.assemblyNameReference)) {
             return ()
         
-        val primitive_data = tryGetPrimitiveData(`type`) match
+        }
+        val primitive_data = tryGetPrimitiveData(`type`) match {
             case Some(p) => p
             case None => return ()
         
+        }
         `type`.etype = primitive_data.col1
         `type`.isValueType = primitive_data.col2
     
-    def tryGetPrimitiveElementType(`type`: TypeDefinition): Option[ElementType] =
-        if (`type`.nameSpace != "System")
+    }
+    def tryGetPrimitiveElementType(`type`: TypeDefinition): Option[ElementType] = {
+        if (`type`.nameSpace != "System") {
             return None
         
-        tryGetPrimitiveData(`type`) match
+        }
+        tryGetPrimitiveData(`type`) match {
             case Some(p) => Some(p.col1)
             case None => None
     
-    def tryGetPrimitiveData(`type`: TypeReference): Option[Row2[ElementType, Boolean]] =
+        }
+    }
+    def tryGetPrimitiveData(`type`: TypeReference): Option[Row2[ElementType, Boolean]] = {
         _primitive_value_types.get(`type`.name)
 
-    def binaryRangeSearch(types: Array[TypeDefinition], rid: Int, field: Boolean) =
+    }
+    def binaryRangeSearch(types: Array[TypeDefinition], rid: Int, field: Boolean) = {
         binaryRangeSearchRec(types, rid, field, 0, types.length - 1)
     
+    }
     @tailrec
-    def binaryRangeSearchRec(types: Array[TypeDefinition], rid: Int, field: Boolean, min: Int, max: Int): TypeDefinition =
-        if (min > max)
-            null
-        else
+    def binaryRangeSearchRec(types: Array[TypeDefinition], rid: Int, field: Boolean, min: Int, max: Int): Option[TypeDefinition] = {
+        if (min > max) {
+            None
+        }
+        else {
             val mid = min + ((max - min) / 2)
             val `type` = types(mid)
             val range = if field then `type`.fields_range else `type`.methods_range
-            if (rid < range.index)
-                binaryRangeSearchRec(types, rid, field, min, mid - 1)
-            else if (rid >= range.index + range.length)
-                binaryRangeSearchRec(types, rid, field, mid + 1, max)
-            else
-                `type`
-
-
-        
+            range match {
+                case Some(r) =>
+                    if (rid < r.index) {
+                        binaryRangeSearchRec(types, rid, field, min, mid - 1)
+                    }
+                    else if (rid >= r.index + r.length) {
+                        binaryRangeSearchRec(types, rid, field, mid + 1, max)
+                    }
+                    else {
+                        Some(`type`)
+                    }
+                case None => None
+            }
+        }
+    }
 }

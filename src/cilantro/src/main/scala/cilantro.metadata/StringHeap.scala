@@ -20,29 +20,37 @@ class StringHeap(data: Array[Byte]) extends Heap(data)
 {
     val strings = Map[Int, String]()
 
-    def read(index: Int) : String =
-        if (index == 0)
+    def read(index: Int) : String = {
+        if (index == 0) {
             return ""
+        }
         val result = strings.get(index)
-        if (result.isDefined)
+        if (result.isDefined) {
             return result.get
         
+        }
         val str = readStringAt(index)
-        if (str.length() != 0)
+        if (str.length() != 0) {
             strings.addOne((index, str))
+        }
         return str
     
-    protected def readStringAt(index: Int) : String =
+    }
+    protected def readStringAt(index: Int) : String = {
         var length = strLength(index, 0)
 
         return String(data, index, length, StandardCharsets.UTF_8)
     
+    }
     @tailrec
-    private def strLength(index: Int, currLen: Int): Int =
-        if (index >= data.length || data(index) == 0)
+    private def strLength(index: Int, currLen: Int): Int = {
+        if (index >= data.length || data(index) == 0) {
             currLen
-        else
+        }
+        else {
             strLength(index + 1, currLen + 1)
 
+        }
+    }
 }
 

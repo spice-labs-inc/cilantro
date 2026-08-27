@@ -14,14 +14,13 @@ package io.spicelabs.cilantro
 
 import scala.collection.immutable.TreeMap
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.immutable.TreeSet
 import scala.collection.mutable.HashSet
 import io.spicelabs.cilantro.AnyExtension.as
 import javax.naming.OperationNotSupportedException
 import io.spicelabs.cilantro.WindowsRuntimeProjections.getCoreLibrary
 
 sealed class TypeDefinitionProjection(`type`: TypeDefinition, val treatment: Int,
-    val redirectedMethods: ArrayBuffer[MethodDefinition], val redirectedInterfaces: ArrayBuffer[(InterfaceImplementation, InterfaceImplementation)]) {
+    val redirectedMethods: Option[ArrayBuffer[MethodDefinition]], val redirectedInterfaces: Option[ArrayBuffer[(InterfaceImplementation, InterfaceImplementation)]]) {
 
     val attributes = `type`.attributes
     val name = `type`.name
@@ -54,26 +53,27 @@ private case class ProjectionInfo(val winRTNamespace: String, val clrNamespace: 
 
 sealed class WindowsRuntimeProjections(val module: ModuleDefinition) {
     private var corlib_version = CSVersion(255, 255, 255, 255)
-    private var virtualReferences: ArrayBuffer[AssemblyNameReference] = null
+    private var virtualReferences: Option[ArrayBuffer[AssemblyNameReference]] = None
 
     def addVirtualReferences(references: Seq[AssemblyNameReference]): Unit = {
         val corlib = getCoreLibrary(references)
         corlib_version = corlib.version
         corlib.version = WindowsRuntimeProjections.version;
-        if (virtualReferences == null)
-            virtualReferences = ArrayBuffer()
-        virtualReferences.addAll((references))
+        if (virtualReferences.isEmpty) {
+            virtualReferences = Some(ArrayBuffer())
+        }
+        virtualReferences.foreach(_.addAll((references)))
     }
 
     def removeVirtualReferences(references: ArrayBuffer[AssemblyNameReference]): Unit = {
         val corlib = getCoreLibrary(references.toSeq)
         corlib.version = corlib_version
-        virtualReferences.foreach(ref => references.subtractOne(ref))
+        virtualReferences.foreach(_.foreach(ref => references.subtractOne(ref)))
     }
 
     private def getAssemblyReference(name: String): AssemblyNameReference = {
-        if (virtualReferences != null) {
-            return virtualReferences.find(r => r.name == name) match {
+        if (virtualReferences.isDefined) {
+            return virtualReferences.get.find(r => r.name == name) match {
                 case Some(r) => r
                 case None => throw Exception()
             }
@@ -108,7 +108,7 @@ object WindowsRuntimeProjections {
         0x26, 0x1C, 0x8A.byteValue(), 0x12, 0x43, 0x65, 0x18, 0x20, 0x6D, 0xC0.byteValue(), 0x93.byteValue(), 0x34, 0x4D, 0x5A,
         0xD2.byteValue(), 0x93.byteValue())
     
-    lazy val projections =
+    lazy val projections = {
         TreeMap(
             "AttributeTargets" -> ProjectionInfo ("Windows.Foundation.Metadata", "System", "AttributeTargets", "System.Runtime"),
             "AttributeUsageAttribute" -> ProjectionInfo ("Windows.Foundation.Metadata", "System", "AttributeUsageAttribute", "System.Runtime", true),
@@ -162,11 +162,12 @@ object WindowsRuntimeProjections {
             "Vector4" -> ProjectionInfo ("Windows.Foundation.Numerics", "System.Numerics", "Vector4", "System.Numerics.Vectors"),            
         )
 
+    }
     def project(`type`: TypeDefinition): Unit = {
         var treatment:Int = TypeDefinitionTreatment.none.value
-        var metadata_kind = `type`.module.metadataKind
-        var redirectedMethods: ArrayBuffer[MethodDefinition] = null
-        var redirectedInterfaces: ArrayBuffer[(InterfaceImplementation, InterfaceImplementation)] = null
+        var metadata_kind = `type`.module.map(_.metadataKind).getOrElse(MetadataKind.ecma335)
+        var redirectedMethods: Option[ArrayBuffer[MethodDefinition]] = None
+        var redirectedInterfaces: Option[ArrayBuffer[(InterfaceImplementation, InterfaceImplementation)]] = None
 
         if (`type`.isWindowsRuntime) {
             if (metadata_kind == MetadataKind.windowsMetadata) {
@@ -176,33 +177,35 @@ object WindowsRuntimeProjections {
                     return
                 }
 
-                val base_type = `type`.baseType
-                if (base_type != null && isAttribute(base_type)) {
-                    treatment = TypeDefinitionTreatment.normalAttribute.value
-                } else {
-                    val (treat, meths, intfs) = generateRedirectionInformation(`type`)
-                    treatment = treat
-                    redirectedMethods = meths
-                    redirectedInterfaces = intfs
+                `type`.baseType match {
+                    case Some(base_type) if isAttribute(base_type) =>
+                        treatment = TypeDefinitionTreatment.normalAttribute.value
+                    case _ =>
+                        val (treat, meths, intfs) = generateRedirectionInformation(`type`)
+                        treatment = treat
+                        redirectedMethods = meths
+                        redirectedInterfaces = intfs
                 }
             } else if (metadata_kind == MetadataKind.managedWindowsMetadata && needsWindowsRuntimePrefix(`type`)) {
                 treatment = TypeDefinitionTreatment.prefixWindowsRuntimeName.value
             }
 
             if (treatment == TypeDefinitionTreatment.prefixWindowsRuntimeName.value || treatment == TypeDefinitionTreatment.normalType.value) {
-                if (!`type`.isInterface && hasAttribute(`type`.customAttributes.toSeq, "Windows.UI.Xaml", "TreatAbstractComposableClassAttribute"))
+                if (!`type`.isInterface && hasAttribute(`type`.customAttributes.toSeq, "Windows.UI.Xaml", "TreatAbstractComposableClassAttribute")) {
                     treatment = treatment | TypeDefinitionTreatment.`abstract`.value 
+                }
             }
         } else if (metadata_kind == MetadataKind.managedWindowsMetadata && isClrImplementationType(`type`)) {
             treatment = TypeDefinitionTreatment.unmangleWindowsRuntimeName.value
         }
 
-        if (treatment != TypeDefinitionTreatment.none.value)
+        if (treatment != TypeDefinitionTreatment.none.value) {
             applyProjection(`type`, TypeDefinitionProjection(`type`, treatment, redirectedMethods, redirectedInterfaces))
+        }
     }
 
     private def getWellKnownTypeDefinitionTreatment(`type`: TypeDefinition): Int = {
-        projections.get(`type`.name) match
+        projections.get(`type`.name) match {
             case Some(info) => {
                 val treatment = if info.attribute then TypeDefinitionTreatment.redirectToClrAttribute.value else TypeDefinitionTreatment.redirectToClrType.value
                 `type`.nameSpace match {
@@ -212,14 +215,16 @@ object WindowsRuntimeProjections {
                 }
             }
             case None => TypeDefinitionTreatment.none.value        
+        }
     }
 
-    private def generateRedirectionInformation(`type`: TypeDefinition): (Int, ArrayBuffer[MethodDefinition], ArrayBuffer[(InterfaceImplementation, InterfaceImplementation)]) = {
+    private def generateRedirectionInformation(`type`: TypeDefinition): (Int, Option[ArrayBuffer[MethodDefinition]], Option[ArrayBuffer[(InterfaceImplementation, InterfaceImplementation)]]) = {
         val implementsProjectedInterface = `type`.interfaces.exists(intf => isRedirectedType(intf.interfaceType))
 
-        if (!implementsProjectedInterface)
-            return (TypeDefinitionTreatment.normalType.value, null, null)
+        if (!implementsProjectedInterface) {
+            return (TypeDefinitionTreatment.normalType.value, None, None)
 
+        }
         val allImplementedInterfaces: HashSet[TypeReference] = HashSet()
         val redirectedMethods: ArrayBuffer[MethodDefinition] = ArrayBuffer()
         val redirectedInterfaces: ArrayBuffer[(InterfaceImplementation, InterfaceImplementation)] = ArrayBuffer()
@@ -236,19 +241,20 @@ object WindowsRuntimeProjections {
             val interfaceType = implementedInterface.interfaceType
             if (isRedirectedType(implementedInterface.interfaceType)) {
                 val etype = interfaceType.getElementType()
-                var unprojectedType = TypeReference(etype.nameSpace, etype.name, etype.module, etype.scope)
-                unprojectedType.declaringType = etype.declaringType
-                unprojectedType.projection = etype.projection
+                var unprojectedType = TypeReference(etype.nameSpace, etype.name, etype.module.getOrElse(throw OperationNotSupportedException()), etype.scope.getOrElse(throw OperationNotSupportedException()))
+                etype.declaringType.foreach(unprojectedType.declaringType = _)
+                etype.projection.foreach(p => unprojectedType.projection = Some(p))
 
                 removeProjection(unprojectedType)
 
-                val genericInstanceType = interfaceType.as[GenericInstanceType]
-                if (genericInstanceType != null) {
-                    val genericUnprojectedType = GenericInstanceType(unprojectedType)
-                    for genericArgument <- genericInstanceType.genericArguments do {
-                        genericUnprojectedType.genericArguments.addOne(genericArgument)
-                    }
-                    unprojectedType = genericUnprojectedType
+                interfaceType.as[GenericInstanceType] match {
+                    case Some(genericInstanceType) =>
+                        val genericUnprojectedType = GenericInstanceType(unprojectedType)
+                        for genericArgument <- genericInstanceType.genericArguments do {
+                            genericUnprojectedType.genericArguments.addOne(genericArgument)
+                        }
+                        unprojectedType = genericUnprojectedType
+                    case None => ()
                 }
 
                 val unprojectedInterface = InterfaceImplementation(unprojectedType)
@@ -259,7 +265,7 @@ object WindowsRuntimeProjections {
         if (`type`.isInterface) {
             allImplementedInterfaces.foreach(inf => redirectInterfaceMethods(inf, redirectedMethods))
         }
-        return (TypeDefinitionTreatment.redirectImplementedMethods.value, redirectedMethods, redirectedInterfaces)
+        return (TypeDefinitionTreatment.redirectImplementedMethods.value, Some(redirectedMethods), Some(redirectedInterfaces))
     }
 
     private def collectImplementedInterfaces(`type`: TypeReference, results: HashSet[TypeReference]): Unit = {
@@ -290,8 +296,8 @@ object WindowsRuntimeProjections {
     }
 
     private def isRedirectedType(`type`: TypeReference): Boolean = {
-        val typeRefProjection = `type`.getElementType().projection.as[TypeReferenceProjection]
-        typeRefProjection != null && typeRefProjection.treatment == TypeReferenceTreatment.userProjectionInfo.value
+        val typeRefProjection = `type`.getElementType().projection.flatMap(_.as[TypeReferenceProjection])
+        typeRefProjection.exists(_.treatment == TypeReferenceTreatment.userProjectionInfo.value)
     }
 
     private def needsWindowsRuntimePrefix(`type`: TypeDefinition): Boolean = {
@@ -300,17 +306,17 @@ object WindowsRuntimeProjections {
         }
 
         val base_type = `type`.baseType
-        if (base_type == null || base_type.metadataToken.tokenType != TokenType.typeRef) {
-            return false
-        }
-
-        if (base_type.nameSpace == "System") {
-            base_type.name match {
-                case "Attribute" | "MulticastDelegate" | "ValueType" => false
-                case _ => true
-            }
-        } else {
-            true
+        base_type match {
+            case Some(bt) if bt.metadataToken.exists(_.tokenType == TokenType.typeRef) =>
+                if (bt.nameSpace == "System") {
+                    bt.name match {
+                        case "Attribute" | "MulticastDelegate" | "ValueType" => false
+                        case _ => true
+                    }
+                } else {
+                    true
+                }
+            case _ => false
         }
     }
 
@@ -322,9 +328,6 @@ object WindowsRuntimeProjections {
     }
 
     def applyProjection(`type`: TypeDefinition, projection: TypeDefinitionProjection): Unit = {
-        if (projection == null)
-            return
-        
         val treatment = projection.treatment
 
         treatment & TypeDefinitionTreatment.kindMask.value match {
@@ -346,25 +349,27 @@ object WindowsRuntimeProjections {
                 `type`.attributes = `type`.attributes & ~TypeAttributes.public.value
             case TypeDefinitionTreatment.redirectImplementedMethods.value => {
                 `type`.attributes = `type`.attributes | TypeAttributes.windowsRuntime.value | TypeAttributes.`import`.value
-                for redirectedInterfacePair <- projection.redirectedInterfaces do {
-                    `type`.interfaces.addOne(redirectedInterfacePair._2)
+                projection.redirectedInterfaces.foreach { redirectedInterfaces =>
+                    for redirectedInterfacePair <- redirectedInterfaces do {
+                        `type`.interfaces.addOne(redirectedInterfacePair._2)
 
-                    for customAttribute <- redirectedInterfacePair._1.customAttributes do {
-                        redirectedInterfacePair._2.customAttributes.addOne(customAttribute)
-                    }
+                        for customAttribute <- redirectedInterfacePair._1.customAttributes do {
+                            redirectedInterfacePair._2.customAttributes.addOne(customAttribute)
+                        }
 
-                    redirectedInterfacePair._1.customAttributes.clear()
+                        redirectedInterfacePair._1.customAttributes.clear()
 
-                    for method <- `type`.methods do {
-                        for `override` <- method.overrides do {
-                            if (`override`.declaringType.equals(redirectedInterfacePair._1.interfaceType)) {
-                                `override`.declaringType = redirectedInterfacePair._2.interfaceType
+                        for method <- `type`.methods do {
+                            for `override` <- method.overrides do {
+                                if (`override`.declaringType.exists(_.equals(redirectedInterfacePair._1.interfaceType))) {
+                                    `override`.declaringType = redirectedInterfacePair._2.interfaceType
+                                }
                             }
                         }
                     }
                 }
 
-                `type`.methods.addAll(projection.redirectedMethods)
+                projection.redirectedMethods.foreach(ms => `type`.methods.addAll(ms))
             }
             case _ => ()
         }
@@ -380,33 +385,39 @@ object WindowsRuntimeProjections {
         `type`.windowsRuntimeProjectionTD = projection
     }
 
-    def removeProjection(`type`: TypeDefinition): TypeDefinitionProjection = {
+    def removeProjection(`type`: TypeDefinition): Option[TypeDefinitionProjection] = {
         if (!`type`.isWindowsRuntimeProjection) {
-            return null
+            return None
         }
 
         val projection = `type`.windowsRuntimeProjectionTD
-        `type`.windowsRuntimeProjection = null
+        `type`.projection = None
 
         `type`.attributes = projection.attributes
         `type`.name = projection.name
 
         if (projection.treatment == TypeDefinitionTreatment.redirectImplementedMethods.value) {
-            for method <- projection.redirectedMethods do {
-                val index = `type`.methods.indexOf(method)
-                `type`.methods.remove(index)
-            }
-            for redirectedInterfacePair <- projection.redirectedInterfaces do {
-                for method <- projection.redirectedMethods do {
-                    for `override` <- method.overrides do {
-                        if (`override`.declaringType.equals(redirectedInterfacePair._2.interfaceType)) {
-                            `override`.declaringType = redirectedInterfacePair._1.interfaceType
-                        }
-                    }
+            projection.redirectedMethods.foreach { redirectedMethods =>
+                for method <- redirectedMethods do {
+                    val index = `type`.methods.indexOf(method)
+                    `type`.methods.remove(index)
                 }
             }
+            projection.redirectedInterfaces.foreach { redirectedInterfaces =>
+                for redirectedInterfacePair <- redirectedInterfaces do {
+                    projection.redirectedMethods.foreach { redirectedMethods =>
+                        for method <- redirectedMethods do {
+                            for `override` <- method.overrides do {
+                                if (`override`.declaringType.exists(_.equals(redirectedInterfacePair._2.interfaceType))) {
+                                    `override`.declaringType = redirectedInterfacePair._1.interfaceType
+                                }
+                            }
+                        }
+                    }
+            }
         }
-        return projection
+            }
+        return Some(projection)
     }
 
     def project(`type`: TypeReference): Unit = {
@@ -416,59 +427,70 @@ object WindowsRuntimeProjections {
         } else {
             getSpecialTypeReferenceTreatment(`type`)
         }
-        if (treatment != TypeReferenceTreatment.none)
+        if (treatment != TypeReferenceTreatment.none) {
             applyProjection(`type`, TypeReferenceProjection(`type`, treatment.value))
+        }
     }
 
     private def getSpecialTypeReferenceTreatment(`type`: TypeReference): TypeReferenceTreatment = {
         if (`type`.nameSpace == "System") {
-            if (`type`.name == "MulticastDelegate")
+            if (`type`.name == "MulticastDelegate") {
                 return TypeReferenceTreatment.systemDelegate
-            if (`type`.name == "Attribute")
+            }
+            if (`type`.name == "Attribute") {
                 return TypeReferenceTreatment.systemAttribute
+            }
         }
         TypeReferenceTreatment.none
     }
 
     private def isAttribute(`type`: TypeReference): Boolean = {
-        if `type`.metadataToken != TokenType.typeRef then false else `type`.name == "Attribute" && `type`.nameSpace == "System"
+        `type`.metadataToken.exists(_.tokenType == TokenType.typeRef) && `type`.name == "Attribute" && `type`.nameSpace == "System"
     }
 
     private def isEnum(`type`: TypeReference): Boolean = {
-        if `type`.metadataToken != TokenType.typeRef then false else `type`.name == "Enum" && `type`.nameSpace == "System"
+        `type`.metadataToken.exists(_.tokenType == TokenType.typeRef) && `type`.name == "Enum" && `type`.nameSpace == "System"
     }
 
     def applyProjection(`type`: TypeReference, projection: TypeReferenceProjection): Unit = {
-        if (projection == null)
-            return ()
-        projection.treatment match
+        projection.treatment match {
             case TypeReferenceTreatment.systemDelegate.value | TypeReferenceTreatment.systemAttribute.value =>
-                `type`.scope = `type`.module.projections.getAssemblyReference("System.Runtime")
+                `type`.module.foreach { m =>
+                    m.projections.foreach(p => `type`.scope = p.getAssemblyReference("System.Runtime"))
+                }
             case TypeReferenceTreatment.userProjectionInfo.value => {
-                projections.get(`type`.name) match
+                projections.get(`type`.name) match {
                     case Some(info) => {
                         `type`.name = info.clrName
                         `type`.nameSpace = info.clrNamespace
-                        `type`.scope = `type`.module.projections.getAssemblyReference(info.clrAssembly)
+                        `type`.module.foreach { m =>
+                            m.projections.foreach(p => `type`.scope = p.getAssemblyReference(info.clrAssembly))
+                        }
                     }
                     case None => { }
+                }
             }
             case _ => { }
+        }
         `type`.windowsRuntimeProjection = projection
     }
 
-    def removeProjection(`type`: TypeReference): TypeReferenceProjection = {
-        if (!`type`.isWindowsRuntimeProjection)
-            return null
+    def removeProjection(`type`: TypeReference): Option[TypeReferenceProjection] = {
+        if (!`type`.isWindowsRuntimeProjection) {
+            return None
         
-        val projection = `type`.windowsRuntimeProjection
-        `type`.windowsRuntimeProjection = null
+        }
+        `type`.windowsRuntimeProjection match {
+            case None => None
+            case Some(projection) =>
+                `type`.projection = None
 
-        `type`.name = projection.name
-        `type`.nameSpace = projection.namespace
-        `type`.scope = projection.scope
+                `type`.name = projection.name
+                `type`.nameSpace = projection.namespace
+                projection.scope.foreach(s => `type`.scope = s)
 
-        projection
+                Some(projection)
+        }
     }
 
     def project(method: MethodDefinition): Unit = {
@@ -483,23 +505,25 @@ object WindowsRuntimeProjections {
                 treatment = MethodDefinitionTreatment.none.value
             } else if (declaring_type.isInstanceOf) {
                 treatment = MethodDefinitionTreatment.runtime.value | MethodDefinitionTreatment.internalCall.value
-            } else if (declaring_type.module.metadataKind == MetadataKind.managedWindowsMetadata && !method.isPublic) {
+            } else if (declaring_type.module.exists(_.metadataKind == MetadataKind.managedWindowsMetadata) && !method.isPublic) {
                 treatment = MethodDefinitionTreatment.none.value
             } else {
                 other = true
 
-                val base_type = declaring_type.baseType
-                if (base_type != null && base_type.metadataToken == TokenType.typeRef) {
-                    getSpecialTypeReferenceTreatment(base_type) match
-                        case TypeReferenceTreatment.systemDelegate => {
-                            treatment = MethodDefinitionTreatment.runtime.value | MethodDefinitionTreatment.public.value
-                            other = false
+                declaring_type.baseType.foreach { base_type =>
+                    if (base_type.metadataToken.exists(_.tokenType == TokenType.typeRef)) {
+                        getSpecialTypeReferenceTreatment(base_type) match {
+                            case TypeReferenceTreatment.systemDelegate => {
+                                treatment = MethodDefinitionTreatment.runtime.value | MethodDefinitionTreatment.public.value
+                                other = false
+                            }
+                            case TypeReferenceTreatment.systemAttribute => {
+                                treatment = MethodDefinitionTreatment.runtime.value | MethodDefinitionTreatment.internalCall.value
+                                other = false
+                            }
+                            case _ => { }                    
                         }
-                        case TypeReferenceTreatment.systemAttribute => {
-                            treatment = MethodDefinitionTreatment.runtime.value | MethodDefinitionTreatment.internalCall.value
-                            other = false
-                        }
-                        case _ => { }                    
+                    }
                 }
             }
         }
@@ -508,7 +532,7 @@ object WindowsRuntimeProjections {
             var seen_redirected = false
             var seen_non_redirected = false
             for `override` <- method.overrides do {
-                if (`override`.metadataToken.tokenType == TokenType.memberRef && implementsRedirectedInterface(`override`)) {
+                if (`override`.metadataToken.exists(_.tokenType == TokenType.memberRef) && implementsRedirectedInterface(`override`)) {
                     seen_redirected = true
                 } else {
                     seen_non_redirected = true
@@ -524,20 +548,22 @@ object WindowsRuntimeProjections {
                 treatment = treatment | getMethodDefinitionTreatmentFromCustomAttributes(method)
             }
 
-            if (treatment != MethodDefinitionTreatment.none.value)
+            if (treatment != MethodDefinitionTreatment.none.value) {
                 applyProjection(method, MethodDefinitionProjection(method, treatment))
+            }
         }
     }
 
     private def getMethodDefinitionTreatmentFromCustomAttributes(method: MethodDefinition): Int = {
         var treatment = MethodDefinitionTreatment.none.value
         for attribute <- method.customAttributes do {
-            val `type` = attribute.attributeType
-            if (`type`.nameSpace == "Windows.UI.Xaml") {
-                if (`type`.name == "TreatAsPublicMethodAttribute") {
-                    treatment = treatment | MethodDefinitionTreatment.public.value
-                } else if (`type`.name == "TreatAsAbstractMethodAttribute") {
-                    treatment = treatment | MethodDefinitionTreatment.`abstract`.value
+            attribute.attributeType.foreach { `type` =>
+                if (`type`.nameSpace == "Windows.UI.Xaml") {
+                    if (`type`.name == "TreatAsPublicMethodAttribute") {
+                        treatment = treatment | MethodDefinitionTreatment.public.value
+                    } else if (`type`.name == "TreatAsAbstractMethodAttribute") {
+                        treatment = treatment | MethodDefinitionTreatment.`abstract`.value
+                    }
                 }
             }
         }
@@ -545,108 +571,116 @@ object WindowsRuntimeProjections {
     }
 
     def applyProjection(method: MethodDefinition, projection: MethodDefinitionProjection): Unit = {
-        if (projection == null)
-            return
-        
         var treatment = projection.treatment
 
-        if ((treatment & MethodDefinitionTreatment.`abstract`.value) != 0)
+        if ((treatment & MethodDefinitionTreatment.`abstract`.value) != 0) {
             method.attributes = (method.attributes | MethodAttributes.`abstract`.value).toChar
         
-        if ((treatment & MethodDefinitionTreatment.`private`.value) != 0)
+        }
+        if ((treatment & MethodDefinitionTreatment.`private`.value) != 0) {
             method.attributes = ((method.attributes & ~MethodAttributes.memberAccessMask.value) | MethodAttributes.`private`.value).toChar
 
-        if ((treatment & MethodDefinitionTreatment.public.value) != 0)
+        }
+        if ((treatment & MethodDefinitionTreatment.public.value) != 0) {
             method.attributes = ((method.attributes & ~MethodAttributes.memberAccessMask.value) | MethodAttributes.public.value).toChar
 
-        if ((treatment & MethodDefinitionTreatment.runtime.value) != 0)
+        }
+        if ((treatment & MethodDefinitionTreatment.runtime.value) != 0) {
             method.implAttributes = (method.implAttributes | MethodImplAttributes.runtime.value).toChar
         
-        if ((treatment & MethodDefinitionTreatment.internalCall.value) != 0)
+        }
+        if ((treatment & MethodDefinitionTreatment.internalCall.value) != 0) {
             method.implAttributes = (method.implAttributes | MethodImplAttributes.internalCall.value).toChar
         
 
+        }
         method.windowsRuntimeProjection = projection
     }
 
-    def removeProjection(method: MethodDefinition): MethodDefinitionProjection = {
-        if (!method.isWindowsRuntimeProjection)
-            return null
+    def removeProjection(method: MethodDefinition): Option[MethodDefinitionProjection] = {
+        if (!method.isWindowsRuntimeProjection) {
+            return None
 
+        }
         val projection = method.windowsRuntimeProjection
-        method.windowsRuntimeProjection = null
+        method.projection = None
 
         method.attributes = projection.attributes
         method.implAttributes = projection.implAttributes
         method.name = projection.name
-        projection
+        Some(projection)
     }
 
     def project(field: FieldDefinition): Unit = {
         var treatment = FieldDefinitionTreatment.none.value
         val declaring_type = field.declaringType
 
-        if (declaring_type.module.metadataKind == MetadataKind.windowsMetadata && field.isRuntimeSpecialName && field.name == "value__") {
-            val base_type = declaring_type
-            if (base_type != null && isEnum(base_type))
+        if (declaring_type.exists(dt => dt.module.exists(_.metadataKind == MetadataKind.windowsMetadata)) && field.isRuntimeSpecialName && field.name == "value__") {
+            if (declaring_type.exists(isEnum)) {
                 treatment = FieldDefinitionTreatment.public.value
+            }
         }
 
-        if (treatment != FieldDefinitionTreatment.none.value)
+        if (treatment != FieldDefinitionTreatment.none.value) {
             applyProjection(field, FieldDefinitionProjection(field, treatment))
+        }
     }
 
     def applyProjection(field: FieldDefinition, projection: FieldDefinitionProjection): Unit = {
-        if (projection == null)
-            return
-        
-        if (projection.treatment == FieldDefinitionTreatment.public.value)
+        if (projection.treatment == FieldDefinitionTreatment.public.value) {
             field.attributes = ((field.attributes & ~FieldAttributes.fieldAccessMask.value) | FieldAttributes.public.value).toChar
+        }
         field.windowsRuntimeProjection = projection
     }
 
-    def removeProjection(field: FieldDefinition): FieldDefinitionProjection = {
-        if (!field.isWindowsRuntimeProjection)
-            return null
+    def removeProjection(field: FieldDefinition): Option[FieldDefinitionProjection] = {
+        if (!field.isWindowsRuntimeProjection) {
+            return None
 
+        }
         val projection = field.windowsRuntimeProjection
-        field.windowsRuntimeProjection = null
+        field.projection = None
 
-        field.attributes = projection.attributes
-        projection
+        projection match {
+            case None => None
+            case Some(p) =>
+                field.attributes = p.attributes
+                Some(p)
+        }
     }
 
     private def implementsRedirectedInterface(member: MemberReference): Boolean = {
-        val declaring_type = member.declaringType
-        val `type` = declaring_type.metadataToken.tokenType match {
-            case TokenType.typeRef => Some(declaring_type)
-            case TokenType.typeSpec => {
-                if (!declaring_type.isGenericInstance)
-                    None
-                val t = declaring_type.asInstanceOf[TypeSpecification].elementType
-                if (t.metadataType != MetadataType.`class` || t.metadataToken.tokenType != TokenType.typeRef)
-                    None
-                t
+        member.declaringType.flatMap { declaring_type =>
+            val `type` = declaring_type.metadataToken.map(_.tokenType) match {
+                case Some(TokenType.typeRef) => Some(declaring_type)
+                case Some(TokenType.typeSpec) => {
+                    if (!declaring_type.isGenericInstance) {
+                        None
+                    } else {
+                        val t = declaring_type.asInstanceOf[TypeSpecification].elementType
+                        if (t.metadataType != MetadataType.`class` || !t.metadataToken.exists(_.tokenType == TokenType.typeRef)) {
+                            None
+                        } else {
+                            Some(t)
+                        }
+                    }
+                }
+                case _ => None
             }
-            case _ => None
-        }
-        val found = `type` match {
-            case None => false
-            case Some(ty) => {
+            `type`.map { ty =>
                 val projection = removeProjection(ty)
                 projections.get(ty.name) match {
                     case None => {
-                        applyProjection(ty, projection)
+                        projection.foreach(p => applyProjection(ty, p))
                         false
                     }
                     case Some(info) => {
-                        applyProjection(ty, projection)
+                        projection.foreach(p => applyProjection(ty, p))
                         ty.nameSpace == info.winRTNamespace
                     }
                 }
             }
-        }
-        found
+        }.getOrElse(false)
     }
 
     def getAssemblyReferences(corlib: AssemblyNameReference): Array[AssemblyNameReference] = {
@@ -690,17 +724,20 @@ object WindowsRuntimeProjections {
     }
 
     def project(owner: CustomAttributeProvider, owner_attributes: ArrayBuffer[CustomAttribute], attribute: CustomAttribute): Unit = {
-        if (!isWindowsAttributeUsageAttribute(owner, attribute))
+        if (!isWindowsAttributeUsageAttribute(owner, attribute)) {
             return ()
         
+        }
         var treatment = CustomAttributeValueTreatment.none
         val `type` = owner.asInstanceOf[TypeDefinition]
 
         if (`type`.nameSpace == "Windows.Foundation.Metadata") {
-            if (`type`.name == "versionAttribute")
+            if (`type`.name == "versionAttribute") {
                 treatment = CustomAttributeValueTreatment.versionAttribute
-            else if (`type`.name == "DeprecatedAttribute")
+            }
+            else if (`type`.name == "DeprecatedAttribute") {
                 treatment = CustomAttributeValueTreatment.deprecatedAttribute
+            }
         }
 
         if (treatment == CustomAttributeValueTreatment.none) {
@@ -715,30 +752,30 @@ object WindowsRuntimeProjections {
     }
 
     def isWindowsAttributeUsageAttribute(owner: CustomAttributeProvider, attribute: CustomAttribute): Boolean = {
-        if (owner.metadataToken.tokenType != TokenType.typeDef)
+        if (!owner.metadataToken.exists(_.tokenType == TokenType.typeDef)) {
             return false
         
+        }
         val constructor = attribute.constructor
 
-        if (constructor.metadataToken.tokenType != TokenType.memberRef)
+        if (!constructor.metadataToken.exists(_.tokenType == TokenType.memberRef)) {
             return false
         
+        }
         val declaring_type = constructor.declaringType
 
-        if (declaring_type.metadataToken.tokenType != TokenType.typeRef)
+        if (!declaring_type.exists(dt => dt.metadataToken.exists(_.tokenType == TokenType.typeRef))) {
             return false
         
-        declaring_type.name == "AttributeUsageAttribute" && declaring_type.nameSpace == "System"
+        }
+        declaring_type.exists(dt => dt.name == "AttributeUsageAttribute" && dt.nameSpace == "System")
     }
 
     private def hasAttribute(attributes: Seq[CustomAttribute], namespace: String, name: String): Boolean = {
-        attributes.find(at => at.attributeType.name == name && at.attributeType.nameSpace == namespace) != None
+        attributes.find(at => at.attributeType.exists(_.name == name) && at.attributeType.exists(_.nameSpace == namespace)).isDefined
     }
 
     def applyProjection(attribute: CustomAttribute, projection: CustomAttributeValueProjection): Unit = {
-        if (projection == null)
-            return
-        
         val (version_or_deprecated, multiple) = projection.treatment match {
             case CustomAttributeValueTreatment.allowSingle.value => (false, false)
             case CustomAttributeValueTreatment.allowMultiple.value => (false, true)
@@ -747,23 +784,24 @@ object WindowsRuntimeProjections {
         }
 
         var attribute_targets = attribute.constructorArguments(0).value.asInstanceOf[Char]
-        if (version_or_deprecated)
+        if (version_or_deprecated) {
             attribute_targets = (attribute_targets | AttributeTargets.constructor.value | AttributeTargets.property.value).toChar
         
+        }
         attribute.constructorArguments(0) = CustomAttributeArgument(attribute.constructorArguments(0).`type`, attribute_targets)
-        attribute.properties.addOne(CustomAttributeNamedArgument("AllowMultiple", CustomAttributeArgument(attribute.module.typeSystem.boolean, multiple)))
-        attribute._projection = projection
+        attribute.properties.addOne(CustomAttributeNamedArgument("AllowMultiple", CustomAttributeArgument(attribute.module.map(_.typeSystem.boolean).getOrElse(throw OperationNotSupportedException()), multiple)))
+        attribute._projection = Some(projection)
     }
 
-    def removeProjection(attribute: CustomAttribute): CustomAttributeValueProjection = {
-        if (attribute._projection == null)
-            return null
-        
-        val projection = attribute._projection
-        attribute._projection = null;
-        attribute.constructorArguments(0) = CustomAttributeArgument(attribute.constructorArguments(0).`type`, projection.targets)
-        attribute.properties.clear()
+    def removeProjection(attribute: CustomAttribute): Option[CustomAttributeValueProjection] = {
+        attribute._projection match {
+            case None => None
+            case Some(projection) =>
+                attribute._projection = None;
+                attribute.constructorArguments(0) = CustomAttributeArgument(attribute.constructorArguments(0).`type`, projection.targets)
+                attribute.properties.clear()
 
-        projection
+                Some(projection)
+        }
     }
 }

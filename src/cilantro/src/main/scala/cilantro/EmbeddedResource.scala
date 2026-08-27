@@ -17,54 +17,51 @@ import java.io.ByteArrayInputStream
 import javax.naming.OperationNotSupportedException
 
 class EmbeddedResource(name: String, attributes: Int) extends Resource(name, attributes) {
-  private var _stream: InputStream = null
+  private var _stream: Option[InputStream] = None
   private var _offset: Option[Int] = None
-  private var _reader: MetadataReader = null
-  private var _data: Array[Byte] = null
+  private var _reader: Option[MetadataReader] = None
+  private var _data: Option[Array[Byte]] = None
 
   def this(name: String, attributes: Int, data: Array[Byte]) = {
     this(name, attributes)
-    _data = data
+    _data = Some(data)
   }
 
   def this(name:String, attributes: Int, stream: InputStream) = {
     this(name, attributes)
-    _stream = stream
+    _stream = Some(stream)
   }
 
   def this(name: String, attributes: Int, offset: Int, reader: MetadataReader) = {
     this(name, attributes)
     _offset = Some(offset)
-    _reader = reader
+    _reader = Some(reader)
   }
 
   def getResourceStream(): InputStream = {
-    if (_stream != null) {
-        return _stream
-    }
-
-    if (_data != null) {
-        return ByteArrayInputStream(_data)
-    }
-
-    _offset match {
-        case Some(value) => ByteArrayInputStream(_reader.getManagedResource(value))
-        case None => throw OperationNotSupportedException()
+    _stream match {
+        case Some(s) => s
+        case None => _data match {
+            case Some(d) => ByteArrayInputStream(d)
+            case None => (_offset, _reader) match {
+                case (Some(value), Some(r)) => ByteArrayInputStream(r.getManagedResource(value))
+                case _ => throw OperationNotSupportedException()
+            }
+        }
     }
   }
 
   def getResourceData(): Array[Byte] = {
-    if (_stream != null) {
-        return _stream.readAllBytes()
+    _stream match {
+        case Some(s) => s.readAllBytes()
+        case None => _data match {
+            case Some(d) => d
+            case None => (_offset, _reader) match {
+                case (Some(value), Some(r)) => r.getManagedResource(value)
+                case _ => throw OperationNotSupportedException()
+            }
+        }
     }
-
-    if (_data != null) {
-        return _data
-    }
-
-    _offset match
-        case Some(value) => _reader.getManagedResource(value)
-        case None => throw OperationNotSupportedException()    
   }
 
     override def resourceType = ResourceType.embedded

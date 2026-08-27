@@ -1,0 +1,343 @@
+{
+  "comment": "Curated seed list for the cilantro parity corpus. Pinned by exact package id + version. See ADR-0003 for the size budget.",
+  "packages": [
+    {
+      "id": "Newtonsoft.Json",
+      "version": "12.0.3",
+      "tags": [
+        "oldTFM",
+        "net20",
+        "net35",
+        "net40",
+        "net45",
+        "async"
+      ]
+    },
+    {
+      "id": "Newtonsoft.Json",
+      "version": "13.0.3",
+      "tags": [
+        "net45",
+        "netstandard2.0",
+        "net6.0",
+        "async"
+      ]
+    },
+    {
+      "id": "Castle.Core",
+      "version": "4.4.1",
+      "tags": [
+        "net35",
+        "net40",
+        "net45",
+        "netstandard2.0",
+        "ilGen"
+      ]
+    },
+    {
+      "id": "Autofac",
+      "version": "3.5.2",
+      "tags": [
+        "net40",
+        "net45"
+      ]
+    },
+    {
+      "id": "log4net",
+      "version": "2.0.15",
+      "tags": [
+        "net45",
+        "netstandard2.0"
+      ]
+    },
+    {
+      "id": "NLog",
+      "version": "3.2.1",
+      "tags": [
+        "net35",
+        "net40",
+        "net45"
+      ]
+    },
+    {
+      "id": "EntityFramework",
+      "version": "6.4.4",
+      "tags": [
+        "net40",
+        "net45"
+      ]
+    },
+    {
+      "id": "RabbitMQ.Client",
+      "version": "6.8.1",
+      "tags": [
+        "net452",
+        "netstandard2.0"
+      ]
+    },
+    {
+      "id": "Dapper",
+      "version": "2.0.123",
+      "tags": [
+        "net461",
+        "netstandard2.0"
+      ]
+    },
+    {
+      "id": "AutoMapper",
+      "version": "12.0.1",
+      "tags": [
+        "netstandard2.1",
+        "net6.0"
+      ]
+    },
+    {
+      "id": "Polly",
+      "version": "7.2.4",
+      "tags": [
+        "netstandard2.0",
+        "netstandard1.0"
+      ]
+    },
+    {
+      "id": "RestSharp",
+      "version": "106.15.0",
+      "tags": [
+        "net45",
+        "netstandard2.0"
+      ]
+    },
+    {
+      "id": "Serilog",
+      "version": "2.12.0",
+      "tags": [
+        "net45",
+        "net46",
+        "net47",
+        "netstandard2.0"
+      ]
+    },
+    {
+      "id": "FluentAssertions",
+      "version": "6.12.2",
+      "tags": [
+        "net47",
+        "netcoreapp3.1",
+        "net5.0",
+        "net6.0",
+        "netstandard2.0"
+      ]
+    },
+    {
+      "id": "Topshelf",
+      "version": "4.3.0",
+      "tags": [
+        "net452",
+        "netstandard2.0"
+      ]
+    },
+    {
+      "id": "Costura.Fody",
+      "version": "5.7.0",
+      "tags": [
+        "net452",
+        "netstandard2.0"
+      ]
+    },
+    {
+      "id": "Microsoft.Extensions.DependencyInjection",
+      "version": "3.1.32",
+      "tags": [
+        "netcoreapp3.1",
+        "netstandard2.0"
+      ]
+    },
+    {
+      "id": "Microsoft.Extensions.DependencyInjection",
+      "version": "5.0.0",
+      "tags": [
+        "net5.0",
+        "netstandard2.1"
+      ]
+    },
+    {
+      "id": "Microsoft.Extensions.DependencyInjection",
+      "version": "8.0.1",
+      "tags": [
+        "net8.0",
+        "netstandard2.0",
+        "netstandard2.1"
+      ]
+    },
+    {
+      "id": "Microsoft.Extensions.DependencyInjection",
+      "version": "9.0.0",
+      "tags": [
+        "net9.0",
+        "netstandard2.0",
+        "netstandard2.1"
+      ]
+    },
+    {
+      "id": "Microsoft.EntityFrameworkCore",
+      "version": "6.0.36",
+      "tags": [
+        "net6.0"
+      ]
+    },
+    {
+      "id": "Microsoft.Extensions.Logging",
+      "version": "7.0.0",
+      "tags": [
+        "net7.0",
+        "netstandard2.0"
+      ]
+    },
+    {
+      "id": "System.Text.Json",
+      "version": "8.0.5",
+      "tags": [
+        "net8.0",
+        "netstandard2.0"
+      ]
+    },
+    {
+      "id": "System.Numerics.Vectors",
+      "version": "4.5.0",
+      "tags": [
+        "netstandard2.0",
+        "net46",
+        "simd"
+      ]
+    },
+    {
+      "id": "System.Buffers",
+      "version": "4.5.1",
+      "tags": [
+        "netstandard2.0",
+        "span"
+      ]
+    },
+    {
+      "id": "SixLabors.ImageSharp",
+      "version": "3.1.6",
+      "tags": [
+        "net6.0",
+        "netstandard2.0",
+        "unsafe"
+      ]
+    },
+    {
+      "id": "FSharp.Core",
+      "version": "8.0.400",
+      "tags": [
+        "netstandard2.0",
+        "fsharp"
+      ]
+    },
+    {
+      "id": "Microsoft.VisualBasic",
+      "version": "10.3.0",
+      "tags": [
+        "netcoreapp3.1",
+        "netstandard2.0",
+        "vb"
+      ]
+    },
+    {
+      "id": "Stub.System.Data.SQLite.Core.NetFramework",
+      "version": "1.0.119",
+      "tags": [
+        "net46",
+        "mixedMode"
+      ]
+    },
+    {
+      "id": "Microsoft.Bcl.AsyncInterfaces",
+      "version": "8.0.0",
+      "tags": [
+        "net462",
+        "netstandard2.0",
+        "modreq"
+      ]
+    },
+    {
+      "id": "System.CommandLine",
+      "version": "2.0.0-beta4.22272.1",
+      "tags": [
+        "net6.0",
+        "netstandard2.0"
+      ]
+    },
+    {
+      "id": "Antlr4.Runtime.Standard",
+      "version": "4.13.1",
+      "tags": [
+        "netstandard2.0",
+        "generatedCode"
+      ]
+    },
+    {
+      "id": "Moq",
+      "version": "4.20.72",
+      "tags": [
+        "net462",
+        "netstandard2.0",
+        "ilGen"
+      ]
+    },
+    {
+      "id": "LiteDB",
+      "version": "5.0.21",
+      "tags": [
+        "netstandard2.0"
+      ]
+    },
+    {
+      "id": "protobuf-net",
+      "version": "3.2.30",
+      "tags": [
+        "net462",
+        "netstandard2.0"
+      ]
+    },
+    {
+      "id": "Grpc.Core.Api",
+      "version": "2.62.0",
+      "tags": [
+        "netstandard2.0",
+        "netstandard2.1"
+      ]
+    },
+    {
+      "id": "System.Data.Odbc",
+      "version": "8.0.0",
+      "tags": [
+        "netstandard2.0",
+        "net8.0"
+      ]
+    },
+    {
+      "id": "MessagePack",
+      "version": "2.5.187",
+      "tags": [
+        "netstandard2.0",
+        "net6.0",
+        "net8.0",
+        "dynamicCodegen"
+      ]
+    }
+  ],
+  "corruptFixtures": [
+    {
+      "source": "Newtonsoft.Json/12.0.3/net45/Newtonsoft.Json.dll",
+      "name": "truncated-newtonsoft-net45.dll",
+      "lengthBytes": 1024
+    },
+    {
+      "source": "Newtonsoft.Json/12.0.3/net20/Newtonsoft.Json.dll",
+      "name": "truncated-newtonsoft-net20.dll",
+      "lengthBytes": 65536
+    }
+  ]
+}

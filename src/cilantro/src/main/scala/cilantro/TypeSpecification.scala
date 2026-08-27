@@ -14,8 +14,8 @@ package io.spicelabs.cilantro
 
 import javax.naming.OperationNotSupportedException
 
-abstract class TypeSpecification(val _element_type: TypeReference) extends TypeReference(null, null) {
-    this.token = MetadataToken(TokenType.typeSpec)
+abstract class TypeSpecification(val _element_type: TypeReference) extends TypeReference("", "") {
+    this.token = Some(MetadataToken(TokenType.typeSpec))
     
     def elementType = _element_type
 

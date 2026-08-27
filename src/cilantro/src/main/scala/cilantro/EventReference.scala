@@ -21,7 +21,8 @@ abstract class EventReference(name: String, _eventType: TypeReference) extends M
 
     override def fullName = event_type.fullName + " " + memberFullName()
 
-    override def resolveDefinition() =
+    override def resolveDefinition() = {
         resolve()
     
+    }
 }
