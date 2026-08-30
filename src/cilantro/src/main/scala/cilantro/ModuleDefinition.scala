@@ -520,31 +520,25 @@ sealed class ModuleDefinition() extends ModuleReference("", Some(MetadataToken(T
         val position = fullName.indexOf('/')
         if (position > 0) {
             getNestedType(fullName)
-        
-        // TODO
+
         }
-        None
-    
-    // TODO
+        else {
+            types.find(_.fullName == fullName)
+        }
+
     }
     def getTypes(): Iterable[TypeDefinition] = {
         ModuleDefinition.getTypes(types)
     
     }
-    def getNestedType (fullName: String): Option[TypeDefinition] = None
-        // TODO
-        // val names = fullName.split('/')
-        // var `type` = getType(names(0))
-
-        // if (`type` == null)
-        //     return null
-        
-        // for i <- 1 until names.length do
-        //     val nested_type = `type`.getNestedType(names(i))
-        //     if (nested_type == null)
-        //         return null
-        //     `type` = nested_type
-        // `type`
+    def getNestedType(fullName: String): Option[TypeDefinition] = {
+        val names = fullName.split('/')
+        var thetype = getType(names(0))
+        for i <- 1 until names.length do {
+            thetype = thetype.flatMap(_.getNestedType(names(i)))
+        }
+        thetype
+    }
     
     def resolve(field: FieldReference): FieldDefinition = {
         this.metadata_resolver.map(_.resolve(field)).getOrElse(throw OperationNotSupportedException())
@@ -797,14 +791,14 @@ object ModuleDefinition {
             Failure(OperationNotSupportedException("in memory reading not supported"))
         }
         else {
+            // The image owns the stream (Disposable.owned): lazy reads
+            // (types, fields, methods, readBody) map new views over the
+            // file channel after readModule returns, so the stream must
+            // stay open for the module's lifetime. module.close() (or
+            // image.close()) disposes it.
             Try {
                 val stream = getFileStream(fileName)
-                try {
-                    readModule(Disposable.owned(stream), fileName, parameters)
-                }
-                finally {
-                    stream.close()
-                }
+                readModule(Disposable.owned(stream), fileName, parameters)
             }.flatten
         }
     

@@ -24,6 +24,8 @@ class TypeDefinition(namespace: String, name: String, private var _attributes: I
     private var base_type: Option[TypeReference] = None
     var fields_range: Option[Range] = None
     var methods_range: Option[Range] = None
+    var properties_range: Option[Range] = None
+    var events_range: Option[Range] = None
 
     private var packing_size = MetadataConsts.notResolvedMarker
     private var class_size = MetadataConsts.notResolvedMarker
@@ -177,7 +179,8 @@ class TypeDefinition(namespace: String, name: String, private var _attributes: I
             case Some(f) => f
 
             case None =>
-                val loaded = MemberDefinitionCollection[FieldDefinition](this)
+                val loaded = if (hasImage) module.map(m => m.read(MemberDefinitionCollection[FieldDefinition](this), this, (t, reader) => reader.readFields(t).getOrElse(MemberDefinitionCollection[FieldDefinition](this)))).getOrElse(MemberDefinitionCollection[FieldDefinition](this))
+                             else MemberDefinitionCollection[FieldDefinition](this)
                 _fields = Some(loaded)
                 loaded
 
@@ -214,7 +217,8 @@ class TypeDefinition(namespace: String, name: String, private var _attributes: I
             case Some(p) => p
 
             case None =>
-                val loaded = MemberDefinitionCollection[PropertyDefinition](this)
+                val loaded = if (hasImage) module.map(m => m.read(MemberDefinitionCollection[PropertyDefinition](this), this, (t, reader) => reader.readProperties(t).getOrElse(MemberDefinitionCollection[PropertyDefinition](this)))).getOrElse(MemberDefinitionCollection[PropertyDefinition](this))
+                             else MemberDefinitionCollection[PropertyDefinition](this)
                 _properties = Some(loaded)
                 loaded
 
@@ -503,8 +507,8 @@ class TypeDefinition(namespace: String, name: String, private var _attributes: I
     def windowsRuntimeProjectionTD_=(value: TypeDefinitionProjection): Unit = projection = Some(value)
     
     def getEnumUnderlyingType() = {
-        val fields = _fields.getOrElse(throw IllegalArgumentException())
-        fields.find((f) => f.isStatic) match {
+        val fields = this.fields
+        fields.find((f) => !f.isStatic) match {
             case Some(field) => Some(field.fieldType)
             case None => throw IllegalArgumentException()
 

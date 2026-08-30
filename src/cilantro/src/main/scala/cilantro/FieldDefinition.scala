@@ -131,6 +131,7 @@ class FieldDefinition(name: String, private var _attributes: Char, fieldType: Ty
 
         }
         def hasConstant = {
+            _constant = resolveConstant(_constant, module)
             _constant != ConstantProvider.noValue
         }
         def hasConstant_=(value: Boolean) = {

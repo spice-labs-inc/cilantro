@@ -72,6 +72,11 @@ lazy val root = project
     scalacOptions ++= Seq(
       "-no-indent",
       "-Yexplicit-nulls",
+      // json4s' extract[A] API requires a Manifest; Scala 3 deprecates the
+      // compiler-synthesized Manifest. The API shape is the only idiomatic
+      // json4s accessor for the corpus manifests, so this one warning class
+      // is silenced by message (everything else must stay warning-free).
+      "-Wconf:msg=(?s).*synthesis of Manifest.*:s",
       "-deprecation",
       "-unchecked",
       "-Wunused:imports",
@@ -85,7 +90,11 @@ lazy val root = project
     scalaVersion := scala3Version,
 
     libraryDependencies += "org.scalameta" %% "munit" % "1.3.5" % Test,
-    libraryDependencies += "org.json4s" %% "json4s-native" % "4.0.7" % Test
+    libraryDependencies += "org.json4s" %% "json4s-native" % "4.0.7" % Test,
+    Test / testOptions += Tests.Argument("--exclude-tags=Slow"),
+    Test / fork := true,
+    Test / javaOptions += "-Xmx6g",
+    Test / javaOptions += "-Xss16m"
   )
 
 // House style (see workspace/2026_08_26_cilantro/00_style_and_ground_rules.md):
@@ -94,6 +103,11 @@ lazy val root2 = root.settings(
   scalacOptions ++= Seq(
     "-no-indent",
     "-Yexplicit-nulls",
+    // json4s' extract[A] API requires a Manifest; Scala 3 deprecates the
+    // compiler-synthesized Manifest. The API shape is the only idiomatic
+    // json4s accessor for the corpus manifests, so this one warning class
+    // is silenced by message (everything else must stay warning-free).
+    "-Wconf:msg=(?s).*synthesis of Manifest.*:s",
     "-deprecation",
     "-unchecked",
     "-Wunused:imports",

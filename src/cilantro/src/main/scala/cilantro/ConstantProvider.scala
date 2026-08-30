@@ -28,12 +28,11 @@ trait ConstantProvider extends MetadataTokenProvider {
                     if (constant != ConstantProvider.notResolved) {
                         return constant
                     }
-                    return ConstantProvider.noValue
-                    // TODO
-                    // if (module.hasImage)
-                    //     module.read(this, (provider, reader) => reader.readConstant(provider))
-                    // else
-                    //     ConstantProvider.noValue
+                    if (m.hasImage) {
+                        m.read(this, (provider: ConstantProvider, reader: io.spicelabs.cilantro.MetadataReader) => reader.readConstant(provider))
+                    } else {
+                        ConstantProvider.noValue
+                    }
                 }
         }
     }

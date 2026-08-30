@@ -70,7 +70,7 @@ class AssemblyNameReference(private var _name: String, private var _version: CSV
 
             // set public key token to the last 8 bytes of the hash reverse
             for dst <- 0 until 8 do {
-                val src = 15 - dst
+                val src = hash.length - 1 - dst
                 local_public_key_token(dst) = hash(src)
             }
             _public_key_token = Some(local_public_key_token)

@@ -1,9 +1,5 @@
 import io.spicelabs.cilantro.*
-import java.nio.*
 import java.nio.file.*
-import java.io.FileInputStream
-import io.spicelabs.cilantro.PE.BinaryStreamReader
-import io.spicelabs.cilantro.AnyExtension.as
 
 class HalibutTests extends munit.FunSuite {
     import HalibutTests.{halibutPath, halibutPathStr, v80, v48}

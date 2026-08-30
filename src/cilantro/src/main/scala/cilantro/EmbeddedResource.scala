@@ -51,6 +51,11 @@ class EmbeddedResource(name: String, attributes: Int) extends Resource(name, att
     }
   }
 
+  // Plan 13 (C5-02): the Try-shaped accessor Goat Rodeo will consume.
+  def resourceData(): scala.util.Try[Array[Byte]] = scala.util.Try {
+    getResourceData()
+  }
+
   def getResourceData(): Array[Byte] = {
     _stream match {
         case Some(s) => s.readAllBytes()

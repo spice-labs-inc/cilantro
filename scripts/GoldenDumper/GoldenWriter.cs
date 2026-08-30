@@ -49,7 +49,7 @@ public static class GoldenWriter
         public string AssemblyLabel { get; init; }
     }
 
-    private sealed class NullResolver : Mono.Cecil.IAssemblyResolver
+    internal sealed class NullResolver : Mono.Cecil.IAssemblyResolver
     {
         public CecilAssemblyDefinition Resolve(AssemblyNameReference name) => null;
         public CecilAssemblyDefinition Resolve(AssemblyNameReference name, ReaderParameters parameters) => null;

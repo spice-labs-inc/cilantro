@@ -7,7 +7,7 @@ import io.spicelabs.cilantro.AnyExtension.as
 import scala.util.Try
 import scala.util.Success
 
-class MethodReference(name: String, _returnType: TypeReference, _declaring_type: Option[TypeReference] = None) extends MemberReference(name) with MethodSignature with GenericParameterProvider with GenericContext { // TODO
+class MethodReference(initialName: String, _returnType: TypeReference, _declaring_type: Option[TypeReference] = None) extends MemberReference(initialName) with MethodSignature with GenericParameterProvider with GenericContext { // TODO
     var _parameters: Option[ParameterDefinitionCollection] = None
 
     private var _return_type:MethodReturnType = MethodReturnType(this)
@@ -67,7 +67,7 @@ class MethodReference(name: String, _returnType: TypeReference, _declaring_type:
         _generic_parameters match {
             case Some(gp) => gp
             case None =>
-                val gp = ArrayBuffer[GenericParameter]() // FIXME wrong type
+                val gp = GenericParameterCollection(this)
                 _generic_parameters = Some(gp)
                 gp
         }
@@ -83,13 +83,48 @@ class MethodReference(name: String, _returnType: TypeReference, _declaring_type:
     def methodReturnType_=(value: MethodReturnType) = _return_type = value
 
 
-    override def fullName = // FIXME
-        "return type" + " " + memberFullName() + "method signature full name"
+    override def fullName = {
+        val builder = StringBuilder()
+        builder.append(returnType.fullName).append(" ")
+        builder.append(declaringType.map(_.fullName).getOrElse("")).append("::").append(name)
+        methodSignatureFullName(builder)
+        builder.toString()
+    }
+
+    override def methodSignatureFullName(builder: StringBuilder): StringBuilder = {
+        builder.append("(")
+        val params = parameters
+        for i <- params.indices do {
+            if (i > 0) {
+                builder.append(",")
+            }
+            val parameter = params(i)
+            if (parameter.parameterType.isSentinel) {
+                builder.append("...,")
+            }
+            builder.append(parameter.parameterType.fullName)
+        }
+        builder.append(")")
+
+    }
     
 
     def isGenericInstance = false
 
-    override def containsGenericParameter = false // TODO
+    override def containsGenericParameter = {
+        if (_generic_parameters.exists(_.length > 0)) {
+            true
+        }
+        else if (declaringType.exists(_.containsGenericParameter)) {
+            true
+        }
+        else if (_return_type.returnType.containsGenericParameter) {
+            true
+        }
+        else {
+            _parameters.exists(_.exists(_.parameterType.containsGenericParameter))
+        }
+    }
 
     def getElementMethod() : MethodReference = this
 

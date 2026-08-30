@@ -1,0 +1,10 @@
+/work/scripts/fixtures/embedded/bin/Release/net8.0/EmbeddedPdbFixture.deps.json
+/work/scripts/fixtures/embedded/bin/Release/net8.0/EmbeddedPdbFixture.dll
+/work/scripts/fixtures/embedded/obj/Release/net8.0/EmbeddedPdbFixture.GeneratedMSBuildEditorConfig.editorconfig
+/work/scripts/fixtures/embedded/obj/Release/net8.0/EmbeddedPdbFixture.AssemblyInfoInputs.cache
+/work/scripts/fixtures/embedded/obj/Release/net8.0/EmbeddedPdbFixture.AssemblyInfo.cs
+/work/scripts/fixtures/embedded/obj/Release/net8.0/EmbeddedPdbFixture.csproj.CoreCompileInputs.cache
+/work/scripts/fixtures/embedded/obj/Release/net8.0/EmbeddedPdbFixture.sourcelink.json
+/work/scripts/fixtures/embedded/obj/Release/net8.0/EmbeddedPdbFixture.dll
+/work/scripts/fixtures/embedded/obj/Release/net8.0/refint/EmbeddedPdbFixture.dll
+/work/scripts/fixtures/embedded/obj/Release/net8.0/ref/EmbeddedPdbFixture.dll

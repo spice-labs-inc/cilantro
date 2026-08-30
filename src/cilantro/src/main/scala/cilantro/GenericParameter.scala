@@ -17,8 +17,8 @@ import javax.naming.OperationNotSupportedException
 import io.spicelabs.cilantro.metadata.ElementType
 import io.spicelabs.cilantro.AnyExtension.as
 
-sealed class GenericParameter(_name:String, var _owner: Option[GenericParameterProvider])
-    extends TypeReference("", _name) with CustomAttributeProvider {
+sealed class GenericParameter(initialName: String, var _owner: Option[GenericParameterProvider])
+    extends TypeReference("", initialName) with CustomAttributeProvider {
 
         var _position = -1
         var _type:GenericParameterType = _owner.map(_.genericParameterType).getOrElse(GenericParameterType.`type`)
@@ -47,15 +47,15 @@ sealed class GenericParameter(_name:String, var _owner: Option[GenericParameterP
             }
         
         }
-        def constraints: ArrayBuffer[CustomAttribute] = {
+        def constraints: ArrayBuffer[GenericParameterConstraint] = {
             _constraints match {
-                case Some(c) => c.asInstanceOf[ArrayBuffer[CustomAttribute]]
+                case Some(c) => c
 
                 case None =>
                     val loaded = if (hasImage) module.flatMap(m => m.read(this, (generic_parameter, reader) => reader.readGenericConstraints(generic_parameter))).getOrElse(GenericParameterConstraintCollection(this))
                                  else GenericParameterConstraintCollection(this)
                     _constraints = Some(loaded)
-                    loaded.asInstanceOf[ArrayBuffer[CustomAttribute]]
+                    loaded
             }
         }
         def hasCustomAttributes = {
@@ -101,9 +101,9 @@ sealed class GenericParameter(_name:String, var _owner: Option[GenericParameterP
         }
         override def name = {
             if (super.name.length > 0) {
-                super.name
+                return super.name
             }
-            super.name = (if `type` == GenericParameterType.method then "!!" else "!") + _position
+            super.name = (if _type == GenericParameterType.method then "!!" else "!") + _position
             super.name
 
         }

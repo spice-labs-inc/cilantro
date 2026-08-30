@@ -165,10 +165,15 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
         image.win32Resources = Some(readDataDirectory())
 
         // ExceptionTable       8
-        // CertificateTable     8
-        // BaseRelocationTable  8
+        advance(8)
 
-        advance(24)
+        // CertificateTable     8 — the Authenticode WIN_CERTIFICATE table
+        // (plan 13, C5-03): parsed instead of skipped; the table itself
+        // is read lazily through readCertificateEntries.
+        image.securityDirectory = Some(readDataDirectory())
+
+        // BaseRelocationTable  8
+        advance(8)
 
         // Debug
         image.debug = Some(readDataDirectory())
@@ -228,6 +233,10 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
 
     }
     private def readSections(count: Char) = {
+        if (count > ImageReader.MaxSections) {
+            throw DataFormatException()
+        
+        }
         val sections = Array.ofDim[Section](count)
         
         for i <- 0 until count do {
@@ -237,12 +246,18 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
             section.name = Some(readZeroTerminatedString(8))
 
             // VirtualSize      4
-            advance(4)
+            val virtualSize = readInt32()
+            if (virtualSize > ImageReader.MaxSectionSize) {
+                throw DataFormatException()
+            }
 
             // VirtualAddress   4
             section.virtualAddress = readInt32()
             // SizeOfRawData    4
             section.sizeOfRawData = readInt32()
+            if (section.sizeOfRawData > ImageReader.MaxSectionSize) {
+                throw DataFormatException()
+            }
             // PointerToRawData 4
             section.pointerToRawData = readInt32()
 
@@ -371,6 +386,9 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
         val size = readInt32()
 
         val name = readAlignedString(16)
+        if (name != "#~" && name != "#-" && size > ImageReader.MaxHeapSize) {
+            throw DataFormatException()
+        }
         readHeapData(offset, size).foreach { data =>
             name match {
                 case "#~" | "#-" =>
@@ -438,7 +456,11 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
             Table.fromOrdinalValueMaybe(i) match {
                 case Some(table) =>            
                     if (heap.hasTable(table)) {
-                        heap.tables(i).length = readInt32()
+                        val rows = readInt32()
+                        if (rows > ImageReader.MaxTableRows) {
+                            throw DataFormatException()
+                        }
+                        heap.tables(i).length = rows
                     }
                 case None => { }
 
@@ -542,7 +564,14 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
                 tables(i).rowSize = size
                 tables(i).offset = offset
 
-                offset += size * tables(i).length
+                // plan 04: rows x rowSize must be computed in 64-bit and
+                // checked — a hostile row-count combination must not wrap
+                // the offset arithmetic.
+                val tableBytes = size.toLong * tables(i).length
+                if (offset.toLong + tableBytes > Int.MaxValue) {
+                    throw DataFormatException()
+                }
+                offset += tableBytes.toInt
 
             }
         }
@@ -569,6 +598,11 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
 }
 
 object ImageReader {
+    val MaxSections = 96
+    val MaxSectionSize = 512 * 1024 * 1024
+    val MaxTableRows = 10_000_000
+    val MaxHeapSize = 256 * 1024 * 1024
+
     private def makeImage(stream: Disposable[FileInputStream], file_name: String) =  {
         val image = Image()
         image.stream = Some(stream)

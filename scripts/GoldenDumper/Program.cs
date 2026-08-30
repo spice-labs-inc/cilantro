@@ -32,6 +32,9 @@ public static class Program
                 "ilasm-compile" => IlasmCompileCommand(args[1..]),
                 "verify" => VerifyCommand(args[1..]),
                 "make-hostile" => MakeHostileCommand(args[1..]),
+                "probe" => ProbeCommand(args[1..]),
+                "resources" => ResourcesCommand(args[1..]),
+                "debug" => DebugCommand(args[1..]),
                 "make-benign" => MakeBenignCommand(args[1..]),
                 _ => Unknown(args[0]),
             };
@@ -222,9 +225,98 @@ public static class Program
         File.WriteAllText(manifestPath, JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }));
         Console.WriteLine($"wrote {manifestPath}");
 
-        // Fetch command also builds the ilasm fixture so the harness has it.
+        // Fetch command also builds the ilasm fixture, the PE32+ (x64)
+        // fixture, the embedded-PDB fixture and the embedded-resources
+        // fixture so the harness has all of them.
         IlasmCompileCommand(new[] { "--input", "scripts/fixtures/ilasm_fixture.il", "--output", Path.Combine(outDir, "fixtures/ilasm_fixture.dll") });
+        BuildX64Fixture(Path.Combine(outDir, "fixtures", "x64_fixture.dll"));
+        BuildFixtureProject("scripts/fixtures/embedded/EmbeddedPdbFixture.csproj", "EmbeddedPdbFixture.dll", Path.Combine(outDir, "fixtures/embedded_pdb_fixture.dll"));
+        BuildFixtureProject("scripts/fixtures/resources/ResourcesFixture.csproj", "ResourcesFixture.dll", Path.Combine(outDir, "fixtures/resources_fixture.dll"));
+        // The resources/debug goldens for the new fixtures (C5-02/C5-05).
+        var goldenFixturesDir = Path.Combine(outDir, "golden", "fixtures");
+        Directory.CreateDirectory(goldenFixturesDir);
+        var resourcesOut = Path.Combine(goldenFixturesDir, "resources_fixture.resources.json");
+        File.WriteAllText(resourcesOut, CaptureCommand("resources", "--file", Path.Combine(outDir, "fixtures/resources_fixture.dll")));
+        var debugOut = Path.Combine(goldenFixturesDir, "embedded_pdb_fixture.debug.json");
+        File.WriteAllText(debugOut, CaptureCommand("debug", "--file", Path.Combine(outDir, "fixtures/embedded_pdb_fixture.dll")));
         return 0;
+    }
+
+    // Runs a GoldenDumper subcommand in-process and captures stdout.
+    private static string CaptureCommand(params string[] args)
+    {
+        var originalOut = Console.Out;
+        using var buffer = new System.IO.StringWriter();
+        Console.SetOut(buffer);
+        try
+        {
+            var exit = Main(args);
+            if (exit != 0)
+            {
+                throw new InvalidOperationException($"subcommand failed ({exit}): {buffer}");
+            }
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
+        }
+        return buffer.ToString();
+    }
+
+    private static void BuildFixtureProject(string project, string builtName, string outputPath)
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "dotnet",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        psi.ArgumentList.Add("build");
+        psi.ArgumentList.Add(project);
+        psi.ArgumentList.Add("-c");
+        psi.ArgumentList.Add("Release");
+        psi.ArgumentList.Add("-v");
+        psi.ArgumentList.Add("quiet");
+        using var process = System.Diagnostics.Process.Start(psi)!;
+        var stdout = process.StandardOutput.ReadToEnd();
+        var stderr = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"fixture build failed for {project}: {stdout}{stderr}");
+        }
+        var built = Path.Combine(Path.GetDirectoryName(project)!, "bin", "Release", "net8.0", builtName);
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        File.Copy(built, outputPath, overwrite: true);
+        Console.WriteLine($"{project} -> {outputPath}");
+    }
+
+    private static void BuildX64Fixture(string outputPath)
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "dotnet",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        psi.ArgumentList.Add("build");
+        psi.ArgumentList.Add("scripts/fixtures/x64/X64Fixture.csproj");
+        psi.ArgumentList.Add("-c");
+        psi.ArgumentList.Add("Release");
+        psi.ArgumentList.Add("-v");
+        psi.ArgumentList.Add("quiet");
+        using var process = System.Diagnostics.Process.Start(psi)!;
+        var stdout = process.StandardOutput.ReadToEnd();
+        var stderr = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"x64 fixture build failed: {stdout}{stderr}");
+        }
+        var built = Path.Combine("scripts", "fixtures", "x64", "bin", "Release", "net8.0", "X64Fixture.dll");
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        File.Copy(built, outputPath, overwrite: true);
+        Console.WriteLine($"x64 fixture -> {outputPath}");
     }
 
     private static int DumpCommand(string[] args)
@@ -285,6 +377,129 @@ public static class Program
         return 0;
     }
 
+    // resources: dump the module's manifest resources (name, type, size,
+    // sha256) as JSON on stdout. The C5-02 oracle for embedded resources;
+    // never executes assembly code.
+    private static int ResourcesCommand(string[] args)
+    {
+        var file = Opt(args, "--file", null) ?? throw new ArgumentException("--file required");
+        var readerParams = new Mono.Cecil.ReaderParameters
+        {
+            ReadSymbols = false,
+            InMemory = false,
+            AssemblyResolver = new GoldenWriter.NullResolver(),
+        };
+        using var assembly = Mono.Cecil.AssemblyDefinition.ReadAssembly(file, readerParams);
+        using var stream = new System.IO.MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartObject();
+            writer.WritePropertyName("resources");
+            writer.WriteStartArray();
+            foreach (var resource in assembly.MainModule.Resources)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("name", resource.Name);
+                writer.WriteString("resourceType", resource.ResourceType.ToString());
+                var visibility = ((int)resource.Attributes & (int)Mono.Cecil.ManifestResourceAttributes.VisibilityMask) == (int)Mono.Cecil.ManifestResourceAttributes.Public ? "Public" : "Private";
+                writer.WriteString("visibility", visibility);
+                if (resource is Mono.Cecil.EmbeddedResource embedded)
+                {
+                    var data = embedded.GetResourceData();
+                    writer.WriteNumber("size", data.Length);
+                    writer.WriteString("sha256", Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(data)).ToLowerInvariant());
+                }
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+        Console.WriteLine(System.Text.Encoding.UTF8.GetString(stream.ToArray()));
+        return 0;
+    }
+
+    // debug: dump the debug-directory entries (type, size, sha256) and, for
+    // the embedded portable PDB, the embedded source documents (name,
+    // size, sha256) as JSON on stdout. The C5-05 oracle; never executes
+    // assembly code.
+    private static int DebugCommand(string[] args)
+    {
+        var file = Opt(args, "--file", null) ?? throw new ArgumentException("--file required");
+        var readerParams = new Mono.Cecil.ReaderParameters
+        {
+            ReadSymbols = false,
+            InMemory = false,
+            AssemblyResolver = new GoldenWriter.NullResolver(),
+        };
+        using var assembly = Mono.Cecil.AssemblyDefinition.ReadAssembly(file, readerParams);
+        var module = assembly.MainModule;
+        using var stream = new System.IO.MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartObject();
+            writer.WritePropertyName("entries");
+            writer.WriteStartArray();
+            try
+            {
+                var debugHeader = module.GetDebugHeader();
+                foreach (var entry in debugHeader.Entries)
+                {
+                    writer.WriteStartObject();
+                    writer.WriteNumber("type", (int)entry.Directory.Type);
+                    writer.WriteNumber("size", entry.Data?.Length ?? 0);
+                    if (entry.Data != null)
+                    {
+                        writer.WriteString("sha256", Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(entry.Data)).ToLowerInvariant());
+                    }
+                    writer.WriteEndObject();
+                }
+            }
+            catch (Exception)
+            {
+                // No debug directory: entries stay empty.
+            }
+            writer.WriteEndArray();
+            writer.WritePropertyName("sources");
+            writer.WriteStartArray();
+            try
+            {
+                // The default provider reads the embedded portable PDB;
+                // every method's sequence points reference the documents.
+                module.ReadSymbols();
+                var seen = new System.Collections.Generic.HashSet<string>();
+                void Walk(Mono.Cecil.TypeDefinition type)
+                {
+                    foreach (var method in type.Methods)
+                    {
+                        var info = method.DebugInformation;
+                        if (info == null || !info.HasSequencePoints) continue;
+                        foreach (var sp in info.SequencePoints)
+                        {
+                            var document = sp.Document;
+                            if (document == null || document.EmbeddedSource == null) continue;
+                            if (!seen.Add(document.Url)) continue;
+                            writer.WriteStartObject();
+                            writer.WriteString("name", document.Url);
+                            writer.WriteNumber("size", document.EmbeddedSource.Length);
+                            writer.WriteString("sha256", Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(document.EmbeddedSource)).ToLowerInvariant());
+                            writer.WriteEndObject();
+                        }
+                    }
+                    foreach (var nested in type.NestedTypes) Walk(nested);
+                }
+                foreach (var type in module.Types) Walk(type);
+            }
+            catch (Exception)
+            {
+                // No embedded PDB: sources stay empty.
+            }
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+        Console.WriteLine(System.Text.Encoding.UTF8.GetString(stream.ToArray()));
+        return 0;
+    }
+
     private static int MakeHostileCommand(string[] args)
     {
         var output = Opt(args, "--output", null) ?? throw new ArgumentException("--output required");
@@ -292,6 +507,43 @@ public static class Program
         HostileZip.Write(output, vector);
         Console.WriteLine($"wrote hostile nupkg {output} (vector={vector})");
         return 0;
+    }
+
+    // probe: load one assembly with the same reader parameters the golden
+    // dumper uses (NullResolver, metadata-only) and report the verdict on
+    // stdout: "ok <file>" or "fail <file>". Never executes assembly code;
+    // used by C4-07 to compare mutation verdicts against the oracle.
+    private static int ProbeCommand(string[] args)
+    {
+        var file = Opt(args, "--file", null) ?? throw new ArgumentException("--file required");
+        try
+        {
+            var readerParams = new Mono.Cecil.ReaderParameters
+            {
+                ReadSymbols = false,
+                InMemory = false,
+                AssemblyResolver = new GoldenWriter.NullResolver(),
+            };
+            using var assembly = Mono.Cecil.AssemblyDefinition.ReadAssembly(file, readerParams);
+            // Touch the model the way the dumper does: types, members,
+            // and (cheaply) method bodies via RVA presence.
+            var module = assembly.MainModule;
+            foreach (var type in module.Types)
+            {
+                foreach (var field in type.Fields) { }
+                foreach (var method in type.Methods)
+                {
+                    if (method.HasBody) { _ = method.Body.Instructions; }
+                }
+            }
+            Console.WriteLine($"ok {file}");
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"fail {file} ({ex.GetType().Name})");
+            return 0;
+        }
     }
 
     // verify: checks the corpus cache against the manifest and reports

@@ -34,6 +34,8 @@ sealed class MetadataSystem {
 
     var _fields: Array[FieldDefinition] = Array.empty
     var _methods: Array[MethodDefinition] = Array.empty
+    var _property_definitions: Array[PropertyDefinition] = Array.empty
+    var _event_definitions: Array[EventDefinition] = Array.empty
     var _memberReferences: Array[MemberReference] = Array.empty
 
     var _nestedTypes: HashMap[Int, ArrayBuffer[Int]] = HashMap()
@@ -50,7 +52,7 @@ sealed class MetadataSystem {
     var _events: HashMap[Int, Range] = HashMap()
     var _properties: HashMap[Int, Range] = HashMap()
     // TODO
-    // var _semantics: HashMap[Int, Row2[MethodSemanticsAttributes, MetadataToken]] = HashMap()
+    var _semantics: HashMap[Int, (Char, MetadataToken)] = HashMap()
     // var _pInvokes: HashMap[Int, Row3[PInvokeAttributes, Int, Int]] = HashMap()
     var _genericParameters: HashMap[MetadataToken, Array[Range]] = HashMap()
     var _genericConstraints: HashMap[Int, ArrayBuffer[Row2[Int, MetadataToken]]] = HashMap()
@@ -150,6 +152,28 @@ sealed class MetadataSystem {
         method.token.foreach(tok => _methods(tok.RID - 1) = method)
 
 
+    }
+    def getPropertyDefinition(rid: Int) = {
+        if (rid < 1 || rid > _property_definitions.length) {
+            None
+        }
+        else {
+            Option(_property_definitions(rid - 1))
+        }
+    }
+    def addPropertyDefinition(property: PropertyDefinition) = {
+        property.token.foreach(tok => _property_definitions(tok.RID - 1) = property)
+    }
+    def getEventDefinition(rid: Int) = {
+        if (rid < 1 || rid > _event_definitions.length) {
+            None
+        }
+        else {
+            Option(_event_definitions(rid - 1))
+        }
+    }
+    def addEventDefinition(event: EventDefinition) = {
+        event.token.foreach(tok => _event_definitions(tok.RID - 1) = event)
     }
     def getMemberReference(rid: Int) = {
         if (rid < 1 || rid > _memberReferences.length) {
@@ -268,6 +292,24 @@ sealed class MetadataSystem {
         binaryRangeSearch(_types, method_rid, false)
 
 
+    }
+    def getPropertyDeclaringType(property_rid: Int) = {
+        binaryRangeSearchBy(_types, property_rid, t => t.properties_range)
+    }
+    def getEventDeclaringType(event_rid: Int) = {
+        binaryRangeSearchBy(_types, event_rid, t => t.events_range)
+    }
+
+    // Linear scan: empty (0,0) ranges interleave with real ranges, which
+    // breaks the monotonicity a binary search needs.
+    private def binaryRangeSearchBy(
+        types: Array[TypeDefinition],
+        rid: Int,
+        rangeOf: TypeDefinition => Option[io.spicelabs.cilantro.Range]
+    ): Option[TypeDefinition] = {
+        types.iterator.find { `type` =>
+            rangeOf(`type`).exists(r => rid >= r.index && rid < r.index + r.length)
+        }
     }
 }
 

@@ -13,7 +13,10 @@
 package io.spicelabs.cilantro
 
 import scala.collection.mutable.ArrayBuffer
+import scala.util.Try
 import io.spicelabs.cilantro.cil.CustomDebugInformation
+import io.spicelabs.cilantro.cil.MethodBody
+import io.spicelabs.cilantro.cil.MethodBodyReader
 import javax.naming.OperationNotSupportedException
 
 
@@ -30,6 +33,7 @@ class MethodDefinition(_name: String, private var _attributes: Char, returnType:
     private var _security_declarations: Option[ArrayBuffer[SecurityDeclaration]] = None
 
     var _rva: Int = 0
+    var parameter_range: Option[io.spicelabs.cilantro.Range] = None
     // TODO
     // var pinvoke: PInvokeInfo = null
 
@@ -94,7 +98,9 @@ class MethodDefinition(_name: String, private var _attributes: Char, returnType:
     def windowsRuntimeProjection: MethodDefinitionProjection = projection.map(_.asInstanceOf[MethodDefinitionProjection]).getOrElse(throw OperationNotSupportedException())
     def windowsRuntimeProjection_=(value: MethodDefinitionProjection) = projection = Some(value)
 
-    def readSemantics(): Unit = { }
+    def readSemantics(): Unit = {
+        module.foreach(m => m.read(this, (method, reader) => reader.readSemantics(method)))
+    }
 
     def hasSecurityDeclarations = {
         _security_declarations.exists(_.length > 0)
@@ -126,8 +132,19 @@ class MethodDefinition(_name: String, private var _attributes: Char, returnType:
     }
     def RVA = _rva
 
-    // TODO
-    def hasBody = false
+    def hasBody: Boolean = {
+        (attributes & (MethodAttributes.`abstract`.value | MethodAttributes.pInvokeImpl.value)) == 0 &&
+        (implAttributes & (MethodImplAttributes.internalCall.value | MethodImplAttributes.native.value |
+            MethodImplAttributes.unmanaged.value | MethodImplAttributes.runtime.value)) == 0
+    }
+
+    // Reads and decodes the method body (Phase 2 decoder + Phase 3 EH
+    // reader). Success(None) for RVA == 0 (abstract / P/Invoke) or
+    // non-body methods; Failure for malformed bodies. See
+    // MethodBodyReader.
+    def readBody(): Try[Option[MethodBody]] = {
+        MethodBodyReader.readBody(this)
+    }
 
     // TODO
     def hasPInvokeInfo = false

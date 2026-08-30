@@ -64,7 +64,8 @@ sealed class ImageDebugHeader(private val _entries: Array[ImageDebugHeaderEntry]
 }
 
 sealed class ImageDebugHeaderEntry(private val _directory: ImageDebugDirectory, private val _data: Array[Byte]) {
-
+    def directory = _directory
+    def data = _data
 }
 
 

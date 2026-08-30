@@ -26,7 +26,7 @@ class ArrayDimension(private var _lowerBound: Option[Int] = None, private var _u
     def isSized = _lowerBound.isDefined || _upperBound.isDefined
 
     override def toString(): String = {
-        if !isSized then "" else s"$_lowerBound ... $_upperBound"
+        if !isSized then "" else _lowerBound.map(_.toString).getOrElse("") + "..." + _upperBound.map(_.toString).getOrElse("")
 
     }
 }

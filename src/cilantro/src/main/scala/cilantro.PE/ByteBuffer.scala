@@ -14,11 +14,12 @@ package io.spicelabs.cilantro.PE
 
 
 open class ByteBuffer (var buffer: Array[Byte]) {
-    var length = 0
+    var length = buffer.length
     var position = 0
 
     def this(len: Int) = {
         this(Array.ofDim[Byte](len))
+        this.length = 0
     }
     def this() = {
         this(Array.emptyByteArray)
@@ -74,7 +75,7 @@ open class ByteBuffer (var buffer: Array[Byte]) {
     def readInt64() = {
         val l0 = readInt32().toLong
         val l1 = readInt32().toLong
-        l0 | (l1 << 32)
+        (l0 & 0xffffffffL) | (l1 << 32)
 
     }
     def readCompressedUInt32(): Int = {
@@ -106,12 +107,14 @@ open class ByteBuffer (var buffer: Array[Byte]) {
     }
     def readSingle() = {
         val bb = java.nio.ByteBuffer.wrap(buffer, position, length - position)
+        bb.order(java.nio.ByteOrder.LITTLE_ENDIAN)
         position += 4
         bb.getFloat()
 
     }
     def readDouble() = {
         val bb = java.nio.ByteBuffer.wrap(buffer, position, length - position)
+        bb.order(java.nio.ByteOrder.LITTLE_ENDIAN)
         position += 8
         bb.getDouble()
 

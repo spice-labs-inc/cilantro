@@ -37,6 +37,7 @@ sealed class Image extends AutoCloseable {
     var timeStamp: Int = 0
     var attributes: Int = 0
     var win32Resources: Option[DataDirectory] = None
+    var securityDirectory: Option[DataDirectory] = None
     var debug: Option[DataDirectory] = None
     var resources: Option[DataDirectory] = None
     var strongName: Option[DataDirectory] = None

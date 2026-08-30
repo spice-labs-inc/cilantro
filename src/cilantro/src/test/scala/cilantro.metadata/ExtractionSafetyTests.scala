@@ -21,7 +21,6 @@
 
 package io.spicelabs.cilantro.metadata
 
-import java.nio.file.{Files, Paths}
 
 class ExtractionSafetyTests extends munit.FunSuite {
 

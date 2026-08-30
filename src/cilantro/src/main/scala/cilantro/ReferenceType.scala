@@ -20,7 +20,7 @@ sealed class ByReferenceType(`type`: TypeReference) extends TypeSpecification(`t
 
     override def name = super.name + "&"
 
-    override def fullName = super.name + "&"
+    override def fullName = super.fullName + "&"
 
     override def isValueType = false
     override def isValueType_=(value: Boolean) = throw OperationNotSupportedException()

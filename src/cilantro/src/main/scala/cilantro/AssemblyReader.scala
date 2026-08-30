@@ -14,14 +14,17 @@ package io.spicelabs.cilantro
 
 import io.spicelabs.cilantro.PE.ByteBuffer
 import io.spicelabs.cilantro.PE.Image
+import io.spicelabs.cilantro.PE.BinaryStreamReader
 import io.spicelabs.cilantro.metadata.CodedIndex
 import io.spicelabs.cilantro.metadata.Table
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.HashMap
 import io.spicelabs.cilantro.cil.SymbolReader
+import io.spicelabs.cilantro.cil.VariableDefinition
 import io.spicelabs.cilantro.cil.PortablePdbReader
 import io.spicelabs.cilantro.cil.DefaultSymbolReaderProvider
 import javax.naming.OperationNotSupportedException
+import java.util.zip.DataFormatException
 import java.nio.file.Paths
 import io.spicelabs.cilantro.metadata.Row3
 import io.spicelabs.cilantro.metadata.ElementType
@@ -464,6 +467,10 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         readByIndexSize(image.stringHeap.map(_.indexSize).getOrElse(2))
     
     }
+    def readUserString(index: Int) = {
+        image.userStringHeap.map(_.read(index))
+
+    }
     def readGuid() = {
         image.guidHeap.map(heap => heap.read(readByIndexSize(heap.indexSize)))
     }
@@ -682,7 +689,10 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
 
             } else if (implementation.tokenType == TokenType.assemblyRef) {
                 val r = AssemblyLinkedResource(name, flags)
-                r.assembly = getTypeReferenceScope(implementation).asInstanceOf[AssemblyNameReference]
+                getTypeReferenceScope(implementation) match {
+                    case Some(scope: AssemblyNameReference) => r.assembly = scope
+                    case _ => ()
+                }
                 Some(r.asInstanceOf[Resource])
             } else if (implementation.tokenType == TokenType.file) {
                 val file_record = readFileRecord(implementation.RID)
@@ -725,6 +735,643 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
     
             }
         }
+    private val maxCertificateEntries = 1024
+
+    private val maxDebugEntryData = 256 * 1024 * 1024
+
+    // Debug-directory data exposure (plan 13, C5-05): the directory
+    // entries already parse during the header walk; this returns each
+    // entry's pointed-to data blob (CodeView, embedded PDB, ...), raw,
+    // bounds-checked against the file.
+    def readDebugEntryData(): ArrayBuffer[DebugEntryData] = {
+        val entries = ArrayBuffer[DebugEntryData]()
+        image.debugHeader.foreach { header =>
+            header.entties.foreach { entry =>
+                val dir = entry.directory
+                if (dir.sizeOfData > 0 && dir.sizeOfData < maxDebugEntryData) {
+                    image.stream.foreach { disposable =>
+                        val fileSize = disposable.value.getChannel.size()
+                        val raw = if (dir.pointerToRawData > 0) {
+                            dir.pointerToRawData
+                        }
+                        else {
+                            image.resolveVirtualAddress(dir.addressOfRawData).getOrElse(-1)
+                        }
+                        if (raw >= 0 && raw.toLong + dir.sizeOfData.toLong <= fileSize) {
+                            val reader = BinaryStreamReader(disposable.value)
+                            reader.moveTo(raw)
+                            entries.addOne(DebugEntryData(dir.`type`.value, reader.readBytes(dir.sizeOfData)))
+                        }
+                    }
+                }
+            }
+        }
+        entries
+    }
+
+    // Embedded portable PDB walk (plan 13, C5-05): the type-17 debug
+    // entry's blob is a portable PDB (a metadata root); this walks its
+    // Document + CustomDebugInformation tables and extracts the
+    // EmbeddedSource documents (named source files, deflate-expanded).
+    // The deeper symbol machinery (sequence points, scopes) stays cut
+    // (ADR-0008 as amended by ADR-0011). Hostile blobs fail cleanly.
+    def readEmbeddedPortablePdb(): Option[EmbeddedPdb] = {
+        val embeddedSourceKind: Array[Byte] = Array(
+            0x1b.toByte, 0x57.toByte, 0x8a.toByte, 0x0e.toByte, 0x26.toByte, 0x69.toByte, 0x6e.toByte, 0x46.toByte,
+            0xb4.toByte, 0xad.toByte, 0x8a.toByte, 0xb0.toByte, 0x46.toByte, 0x11.toByte, 0xf5.toByte, 0xfe.toByte
+        )
+        image.debugHeader.flatMap { header =>
+            header.entties.find(_.directory.`type` == io.spicelabs.cilantro.cil.ImageDebugType.embeddedPortablePdb).flatMap { entry =>
+                // The embedded-PDB blob is "MPDB" + u32 uncompressed size +
+                // a raw (no zlib header) deflate stream of the BSJB
+                // metadata root.
+                val data = entry.data
+                if (data.length < 12 || (data(0) & 0xff) != 'M' || (data(1) & 0xff) != 'P' || (data(2) & 0xff) != 'D' || (data(3) & 0xff) != 'B') {
+                    None
+                }
+                else {
+                    val uncompressed = u32le(data, 4)
+                    if (uncompressed <= 0 || uncompressed > maxDebugEntryData) {
+                        None
+                    }
+                    else {
+                        val payload = java.util.Arrays.copyOfRange(data, 8, data.length)
+                        rawInflate(payload).flatMap { root =>
+                            if (root.length != uncompressed) {
+                                None
+                            }
+                            else {
+                                parseEmbeddedPdb(root, embeddedSourceKind)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private def rawInflate(bytes: Array[Byte]): Option[Array[Byte]] = {
+        val inflater = java.util.zip.Inflater(true)
+        try {
+            inflater.setInput(bytes)
+            val out = java.io.ByteArrayOutputStream()
+            val buffer = Array.ofDim[Byte](8192)
+            while (!inflater.finished()) {
+                val n = inflater.inflate(buffer)
+                if (n <= 0) {
+                    if (inflater.needsInput() || inflater.needsDictionary()) {
+                        return None
+                    }
+                }
+                else {
+                    out.write(buffer, 0, n)
+                }
+            }
+            Some(out.toByteArray)
+        }
+        finally {
+            inflater.end()
+        }
+    }
+
+    private def parseEmbeddedPdb(blob: Array[Byte], embeddedSourceKind: Array[Byte]): Option[EmbeddedPdb] = {
+        if (blob.length < 32) {
+            return None
+        }
+        def fail(): None.type = None
+        // Metadata root: BSJB + version + stream headers.
+        if ((blob(0) & 0xff) != 'B' || (blob(1) & 0xff) != 'S' || (blob(2) & 0xff) != 'J' || (blob(3) & 0xff) != 'B') {
+            return None
+        }
+        val versionLength = u32le(blob, 12)
+        var pos = 16 + versionLength
+        pos = (pos + 3) & ~3
+        if (pos + 4 > blob.length) {
+            return None
+        }
+        val streamCount = u16le(blob, pos + 2)
+        pos += 4
+        var tables: Option[(Array[Byte], Long, Int)] = None
+        var strings: Option[Array[Byte]] = None
+        var guids: Option[Array[Byte]] = None
+        var blobs: Option[Array[Byte]] = None
+        var i = 0
+        while (i < streamCount) {
+            if (pos + 8 > blob.length) {
+                return None
+            }
+            val offset = u32le(blob, pos)
+            val size = u32le(blob, pos + 4)
+            var namePos = pos + 8
+            val nameStart = namePos
+            while (namePos < blob.length && blob(namePos) != 0) {
+                namePos += 1
+            }
+            val name = new String(blob, nameStart, namePos - nameStart, "UTF-8")
+            namePos += 1
+            pos = (namePos + 3) & ~3
+            val streamData = if (offset.toLong + size.toLong <= blob.length) {
+                java.util.Arrays.copyOfRange(blob, offset, offset + size)
+            }
+            else {
+                return None
+            }
+            name match {
+                case "#~" | "#-" => tables = Some((streamData, 0L, 0))
+                case "#Strings" => strings = Some(streamData)
+                case "#GUID" => guids = Some(streamData)
+                case "#Blob" => blobs = Some(streamData)
+                case _ => ()
+            }
+            i += 1
+        }
+        (tables, strings, guids, blobs) match {
+            case (Some((tablesData, _, _)), Some(stringsData), Some(guidsData), Some(blobsData)) =>
+                parseEmbeddedPdbTables(tablesData, stringsData, guidsData, blobsData, embeddedSourceKind)
+            case _ => None
+        }
+    }
+
+    private def u16le(bytes: Array[Byte], offset: Int): Int = {
+        (bytes(offset) & 0xff) | ((bytes(offset + 1) & 0xff) << 8)
+    }
+
+    private def u32le(bytes: Array[Byte], offset: Int): Int = {
+        (bytes(offset) & 0xff) | ((bytes(offset + 1) & 0xff) << 8) |
+          ((bytes(offset + 2) & 0xff) << 16) | ((bytes(offset + 3) & 0xff) << 24)
+    }
+
+    private def parseEmbeddedPdbTables(
+        tablesData: Array[Byte],
+        stringsData: Array[Byte],
+        guidsData: Array[Byte],
+        blobsData: Array[Byte],
+        embeddedSourceKind: Array[Byte]
+    ): Option[EmbeddedPdb] = {
+        if (tablesData.length < 24) {
+            return None
+        }
+        val heapSizes = tablesData(6) & 0xff
+        val strIdxSize = if ((heapSizes & 0x1) != 0) 4 else 2
+        val guidIdxSize = if ((heapSizes & 0x2) != 0) 4 else 2
+        val blobIdxSize = if ((heapSizes & 0x4) != 0) 4 else 2
+        val valid = u64le(tablesData, 8)
+        val documentTable = 0x30
+        val customDebugTable = 0x37
+        if ((valid & (1L << documentTable)) == 0 || (valid & (1L << customDebugTable)) == 0) {
+            return None
+        }
+        // Row counts follow the 24-byte header, in table-id order for the
+        // valid tables; the PDB table ids run 0x30..0x37.
+        val counts = HashMap[Int, Int]()
+        var pos = 24
+        var tableId = 0
+        while (tableId < 64) {
+            if ((valid & (1L << tableId)) != 0) {
+                if (pos + 4 > tablesData.length) {
+                    return None
+                }
+                val count = u32le(tablesData, pos)
+                if (count < 0 || count > maxWin32EntriesPerDirectory) {
+                    return None
+                }
+                counts.put(tableId, count)
+                pos += 4
+            }
+            tableId += 1
+        }
+        // Row offsets, in table-id order.
+        var documentOffset = -1
+        var documentCount = 0
+        var customOffset = -1
+        var customCount = 0
+        var tableId2 = 0
+        while (tableId2 < 64) {
+            counts.get(tableId2).foreach { count =>
+                if (tableId2 == documentTable) {
+                    documentOffset = pos
+                    documentCount = count
+                }
+                else if (tableId2 == customDebugTable) {
+                    customOffset = pos
+                    customCount = count
+                }
+                // Portable-PDB table row sizes (2-byte indexes; the 4-byte
+                // variants only appear for huge tables, which the row-count
+                // cap rules out).
+                val rowSize = tableId2 match {
+                    case 0x30 => blobIdxSize + guidIdxSize + blobIdxSize + guidIdxSize // Document
+                    case 0x31 => 2 + blobIdxSize // MethodDebugInformation: Document + SequencePoints
+                    case 0x32 => 2 + 2 + 2 + 2 + 4 + 4 // LocalScope
+                    case 0x33 => 2 + 2 + strIdxSize // LocalVariable
+                    case 0x34 => strIdxSize + blobIdxSize // LocalConstant
+                    case 0x35 => 2 + blobIdxSize // ImportScope
+                    case 0x36 => 2 + 2 // StateMachineMethod
+                    case 0x37 => 2 + guidIdxSize + blobIdxSize // CustomDebugInformation (2-byte coded parent)
+                    case _ => 4
+                }
+                pos += rowSize * count
+            }
+            tableId2 += 1
+        }
+        if (documentOffset < 0 || customOffset < 0) {
+            return None
+        }
+        def readIndex(size: Int, at: Int): Int = {
+            if (size == 4) u32le(tablesData, at) else u16le(tablesData, at)
+        }
+        def readBlobBytesAt(index: Int, maxLen: Int): Option[Array[Byte]] = {
+            if (index <= 0 || index.toLong >= blobsData.length) {
+                return None
+            }
+            val first = blobsData(index) & 0xff
+            if (first < 0x80) {
+                if (first > maxLen || index + 1 + first > blobsData.length) {
+                    return None
+                }
+                Some(java.util.Arrays.copyOfRange(blobsData, index + 1, index + 1 + first))
+            }
+            else {
+                if (index + 1 >= blobsData.length) {
+                    return None
+                }
+                val length = ((first & 0x7f) << 8) | (blobsData(index + 1) & 0xff)
+                if (length > maxLen || index + 2 + length > blobsData.length) {
+                    return None
+                }
+                Some(java.util.Arrays.copyOfRange(blobsData, index + 2, index + 2 + length))
+            }
+        }
+        // Cecil's ReadDocumentName: the name blob is [separator byte]
+        // [compressed-uint parts], each part a blob-heap index whose
+        // entry is a compressed-length-prefixed UTF8 string; a zero part
+        // is an empty path segment (and still advances the separator
+        // logic).
+        // The portable PDB stores guid-heap indexes as 1-based entry
+        // ordinals (16 bytes per entry), unlike the assembly tables'
+        // byte-offset convention.
+        def guidAt(index: Int): Boolean = {
+            val base = (index - 1) * 16
+            if (index <= 0 || base.toLong + 16 > guidsData.length) {
+                return false
+            }
+            var i = 0
+            while (i < 16) {
+                if (guidsData(base + i) != embeddedSourceKind(i)) {
+                    return false
+                }
+                i += 1
+            }
+            true
+        }
+        def readDocumentName(nameIndex: Int): Option[String] = {
+            readBlobBytesAt(nameIndex, 1 << 20).flatMap { nameBlob =>
+                if (nameBlob.length < 1) {
+                    None
+                }
+                else {
+                    var keepGoing = true
+                    var failed = false
+                    val separator = (nameBlob(0) & 0xff).toChar
+                    val builder = StringBuilder()
+                    var p = 1
+                    var partIndex = 0
+                    while (p < nameBlob.length && keepGoing && !failed) {
+                        val first = nameBlob(p) & 0xff
+                        var value = 0
+                        if (first < 0x80) {
+                            value = first
+                            p += 1
+                        }
+                        else {
+                            if (p + 1 >= nameBlob.length) {
+                                failed = true
+                                value = 0
+                            }
+                            else {
+                                value = ((first & 0x7f) << 8) | (nameBlob(p + 1) & 0xff)
+                                p += 2
+                            }
+                        }
+                        if (partIndex > 0 && separator != 0) {
+                            builder.append(separator)
+                        }
+                        if (value != 0) {
+                            readBlobBytesAt(value, 1 << 20) match {
+                                case Some(partBytes) => builder.append(new String(partBytes, "UTF-8"))
+                                case None => failed = true
+                            }
+                        }
+                        partIndex += 1
+                    }
+                    if (failed) None else Some(builder.toString)
+                }
+            }
+        }
+        val unusedMarkerAfterDocumentName = 0
+        def documentName(documentRow: Int): Option[String] = {
+            val nameIndex = readIndex(blobIdxSize, documentRow)
+            readDocumentName(nameIndex)
+        }
+        val sources = ArrayBuffer[EmbeddedSourceFile]()
+        val customRowSize = 2 + guidIdxSize + blobIdxSize
+        var row = 0
+        while (row < customCount) {
+            val rowAt = customOffset + row * customRowSize
+            if (rowAt + customRowSize > tablesData.length) {
+                return None
+            }
+            val parentCoded = readIndex(2, rowAt)
+            val kindIndex = readIndex(guidIdxSize, rowAt + 2)
+            val valueIndex = readIndex(blobIdxSize, rowAt + 2 + guidIdxSize)
+            if (guidAt(kindIndex)) {
+                val parentTag = parentCoded & 0x1f
+                val parentRid = parentCoded >>> 5
+                if (parentTag == 22 && parentRid >= 1 && parentRid <= documentCount) {
+                    val documentRow = documentOffset + (parentRid - 1) * (blobIdxSize + guidIdxSize + blobIdxSize + guidIdxSize)
+                    documentName(documentRow).foreach { name =>
+                        // The value blob: [compressed length][payload], the
+                        // payload [format u32][uncompressed u32][raw deflate
+                        // or raw bytes].
+                        readBlobBytesAt(valueIndex, 1 << 24) match {
+                            case Some(payload) if payload.length >= 8 =>
+                                // Cecil's ReadEmbeddedSourceDebugInformation:
+                                // [i32 format][the payload]; the payload is
+                                // sig_length - 4 bytes, and the format (when
+                                // positive) is the DECOMPRESSED length, not
+                                // a separate field.
+                                val format = u32le(payload, 0)
+                                val rest = java.util.Arrays.copyOfRange(payload, 4, payload.length)
+                                val bytes = if (format == 0) {
+                                    Some(rest)
+                                }
+                                else {
+                                    rawInflate(rest)
+                                }
+                                bytes.foreach { b =>
+                                    sources.addOne(EmbeddedSourceFile(name, b))
+                                }
+                            case _ => ()
+                        }
+                    }
+                }
+            }
+            row += 1
+        }
+        Some(EmbeddedPdb(sources))
+    }
+
+    private def u64le(bytes: Array[Byte], offset: Int): Long = {
+        var result = 0L
+        var i = 7
+        while (i >= 0) {
+            result = (result << 8) | (bytes(offset + i) & 0xff).toLong
+            i -= 1
+        }
+        result
+    }
+
+    private val maxWin32EntriesPerDirectory = 65536
+    private val maxWin32ResourceBlob = 512 * 1024 * 1024
+
+    private val win32ResourceTypeNames: Map[Int, String] = Map(
+        1 -> "RT_CURSOR", 2 -> "RT_BITMAP", 3 -> "RT_ICON", 4 -> "RT_MENU",
+        5 -> "RT_DIALOG", 6 -> "RT_STRING", 7 -> "RT_FONTDIR", 8 -> "RT_FONT",
+        9 -> "RT_ACCELERATOR", 10 -> "RT_RCDATA", 11 -> "RT_MESSAGETABLE",
+        12 -> "RT_GROUP_CURSOR", 14 -> "RT_GROUP_ICON", 16 -> "RT_VERSION",
+        17 -> "RT_DLGINCLUDE", 19 -> "RT_PLUGPLAY", 20 -> "RT_VXD",
+        21 -> "RT_ANICURSOR", 22 -> "RT_ANIICON", 23 -> "RT_HTML", 24 -> "RT_MANIFEST"
+    )
+
+    // Win32 resource tree walk (plan 13, C5-04). The tree lives at the
+    // Resource data directory: three directory levels (type / name /
+    // language) then data entries. Every tree offset is an RVA resolved
+    // through the section map and bounds-checked against the file; a
+    // hostile tree (entry counts, bad offsets, oversize data) fails
+    // cleanly with DataFormatException. Blobs are raw — cilantro never
+    // interprets ICON / VERSION / MANIFEST contents.
+    def readWin32Resources(): ArrayBuffer[Win32Resource] = {
+        val resources = ArrayBuffer[Win32Resource]()
+        image.win32Resources match {
+            case None => resources
+            case Some(dir) if dir.size <= 0 || dir.virtualAddress == 0 => resources
+            case Some(dir) =>
+                image.stream match {
+                    case None => resources
+                    case Some(disposable) =>
+                        val fileSize = disposable.value.getChannel.size()
+                        val reader = BinaryStreamReader(disposable.value)
+                        // The .rsrc section quirk: the tree lives at the
+                        // section's raw start; directory-entry targets are
+                        // offsets relative to the tree's raw position, and
+                        // data-entry/name offsets are relative to the
+                        // header's resource directory RVA. Both mappings
+                        // are bounds-checked against the file.
+                        val section = image.sections.find(s => s.virtualAddress.toLong <= dir.virtualAddress.toLong && dir.virtualAddress.toLong < s.virtualAddress.toLong + s.sizeOfRawData.toLong)
+                        val treeBaseRaw = section.map { s =>
+                            val inSection = dir.virtualAddress - s.virtualAddress
+                            if (inSection.toLong <= s.sizeOfRawData.toLong) {
+                                s.pointerToRawData + inSection
+                            }
+                            else {
+                                s.pointerToRawData
+                            }
+                        }.getOrElse(throw DataFormatException())
+                        def dataOffsetRaw(offset: Int): Int = {
+                            val raw = treeBaseRaw.toLong + (offset.toLong - dir.virtualAddress.toLong)
+                            if (raw < 0 || raw >= fileSize) {
+                                throw DataFormatException()
+                            }
+                            raw.toInt
+                        }
+                        def treeOffsetRaw(offset: Int): Int = {
+                            val raw = treeBaseRaw.toLong + offset.toLong
+                            if (raw < 0 || raw >= fileSize) {
+                                throw DataFormatException()
+                            }
+                            raw.toInt
+                        }
+                        def readDirectoryHeader(raw: Int): (Int, Int) = {
+                            if (raw < 0 || raw.toLong + 16 > fileSize) {
+                                throw DataFormatException()
+                            }
+                            reader.moveTo(raw)
+                            reader.readInt32() // Characteristics
+                            reader.readInt32() // TimeDateStamp
+                            reader.readUInt16() // MajorVersion
+                            reader.readUInt16() // MinorVersion
+                            val named = reader.readUInt16().toInt
+                            val ids = reader.readUInt16().toInt
+                            if (named.toLong + ids.toLong > maxWin32EntriesPerDirectory) {
+                                throw DataFormatException()
+                            }
+                            (named, ids)
+                        }
+                        def readNameValue(nameValue: Int): (Int, Option[String]) = {
+                            if ((nameValue & 0x80000000) != 0) {
+                                val raw = dataOffsetRaw(nameValue & 0x7fffffff)
+                                if (raw.toLong + 2 > fileSize) {
+                                    throw DataFormatException()
+                                }
+                                reader.moveTo(raw)
+                                val length = reader.readUInt16().toInt
+                                if (length > 0x10000 || raw.toLong + 2 + length.toLong * 2 > fileSize) {
+                                    throw DataFormatException()
+                                }
+                                val chars = Array.ofDim[Char](length)
+                                var i = 0
+                                while (i < length) {
+                                    chars(i) = reader.readUInt16()
+                                    i += 1
+                                }
+                                (-1, Some(String(chars)))
+                            }
+                            else {
+                                (nameValue, None)
+                            }
+                        }
+                        def readDataBlob(target: Int, typeId: Int, typeName: Option[String], nameId: Int, name: Option[String], language: Int): Unit = {
+                            if ((target & 0x80000000) != 0) {
+                                throw DataFormatException()
+                            }
+                            val dataRaw = treeOffsetRaw(target)
+                            if (dataRaw.toLong + 16 > fileSize) {
+                                throw DataFormatException()
+                            }
+                            reader.moveTo(dataRaw)
+                            val offset = reader.readInt32()
+                            val size = reader.readInt32()
+                            if (size < 0 || size > maxWin32ResourceBlob) {
+                                throw DataFormatException()
+                            }
+                            val blobRaw = dataOffsetRaw(offset)
+                            if (blobRaw.toLong + size.toLong > fileSize) {
+                                throw DataFormatException()
+                            }
+                            reader.moveTo(blobRaw)
+                            resources.addOne(Win32Resource(typeId, typeName, nameId, name, language, reader.readBytes(size)))
+                        }
+                        val rootRaw = treeBaseRaw
+                        val (rootNamed, rootIds) = readDirectoryHeader(rootRaw)
+                        var t = 0L
+                        val typeTotal = rootNamed.toLong + rootIds.toLong
+                        while (t < typeTotal) {
+                            val typeEntryRaw = rootRaw + 16 + (t * 8).toInt
+                            if (typeEntryRaw.toLong + 8 > fileSize) {
+                                throw DataFormatException()
+                            }
+                            reader.moveTo(typeEntryRaw)
+                            val nameValue = reader.readInt32()
+                            val typeTarget = reader.readInt32()
+                            val (typeId, typeName) = readNameValue(nameValue)
+                            val fullTypeName = typeName.orElse(win32ResourceTypeNames.get(typeId))
+                            if ((typeTarget & 0x80000000) != 0) {
+                                val nameRaw = treeOffsetRaw(typeTarget & 0x7fffffff)
+                                val (nameNamed, nameIds) = readDirectoryHeader(nameRaw)
+                                var n = 0L
+                                val nameTotal = nameNamed.toLong + nameIds.toLong
+                                while (n < nameTotal) {
+                                    val nameEntryRaw = nameRaw + 16 + (n * 8).toInt
+                                    if (nameEntryRaw.toLong + 8 > fileSize) {
+                                        throw DataFormatException()
+                                    }
+                                    reader.moveTo(nameEntryRaw)
+                                    val nameNameValue = reader.readInt32()
+                                    val nameTarget = reader.readInt32()
+                                    val (nameId, name) = readNameValue(nameNameValue)
+                                    if ((nameTarget & 0x80000000) != 0) {
+                                        val langRaw = treeOffsetRaw(nameTarget & 0x7fffffff)
+                                        val (langNamed, langIds) = readDirectoryHeader(langRaw)
+                                        var l = 0L
+                                        val langTotal = langNamed.toLong + langIds.toLong
+                                        while (l < langTotal) {
+                                            val langEntryRaw = langRaw + 16 + (l * 8).toInt
+                                            if (langEntryRaw.toLong + 8 > fileSize) {
+                                                throw DataFormatException()
+                                            }
+                                            reader.moveTo(langEntryRaw)
+                                            val langName = reader.readInt32()
+                                            val langTarget = reader.readInt32()
+                                            readDataBlob(langTarget, typeId, fullTypeName, nameId, name, langName)
+                                            l += 1
+                                        }
+                                    }
+                                    else {
+                                        readDataBlob(nameTarget, typeId, fullTypeName, nameId, name, 0)
+                                    }
+                                    n += 1
+                                }
+                            }
+                            else {
+                                readDataBlob(typeTarget, typeId, fullTypeName, -1, None, 0)
+                            }
+                            t += 1
+                        }
+                        resources
+                }
+        }
+    }
+
+    // WIN_CERTIFICATE table reader (plan 13, C5-03). Entries are 8-byte
+    // aligned relative to the table start; each is dwLength(4),
+    // wRevision(2), wCertificateType(2) + dwLength-8 blob bytes. The
+    // table may live beyond the sections (the Authenticode overlay case),
+    // where the directory's virtual address is the raw file offset.
+    // Caps: entry count, dwLength >= 8, every read bounded by both the
+    // directory size and the file size — a hostile file fails cleanly
+    // with DataFormatException, never OOM, never a past-EOF read.
+    def readCertificateEntries(): ArrayBuffer[CertificateEntry] = {
+        val entries = ArrayBuffer[CertificateEntry]()
+        image.securityDirectory match {
+            case None => entries
+            case Some(dir) if dir.size <= 0 || dir.virtualAddress == 0 => entries
+            case Some(dir) =>
+                image.stream match {
+                    case None => entries
+                    case Some(disposable) =>
+                        val fileSize = disposable.value.getChannel.size()
+                        // The Authenticode convention: the Security
+                        // directory's virtual address is the raw FILE
+                        // offset of the certificate table (the table is
+                        // appended after the sections). Interpret it as a
+                        // file offset first; only fall back to the
+                        // section map for the exotic in-section layout.
+                        val asFileOffset = dir.virtualAddress.toLong
+                        val base = if (asFileOffset >= 0 && asFileOffset + dir.size.toLong <= fileSize) {
+                            dir.virtualAddress
+                        }
+                        else {
+                            image.resolveVirtualAddress(dir.virtualAddress)
+                                .getOrElse(throw DataFormatException())
+                        }
+                        if (base.toLong < 0 || base.toLong + dir.size.toLong > fileSize) {
+                            throw DataFormatException()
+                        }
+                        val reader = BinaryStreamReader(disposable.value)
+                        reader.moveTo(base)
+                        var remaining = dir.size.toLong
+                        var count = 0
+                        while (remaining >= 8) {
+                            count += 1
+                            if (count > maxCertificateEntries) {
+                                throw DataFormatException()
+                            }
+                            val dwLength = reader.readInt32()
+                            if (dwLength < 8 || dwLength.toLong > remaining) {
+                                throw DataFormatException()
+                            }
+                            val revision = reader.readUInt16().toInt
+                            val certificateType = reader.readUInt16().toInt
+                            val blob = reader.readBytes(dwLength - 8)
+                            entries.addOne(CertificateEntry(revision, certificateType, blob))
+                            val consumed = (dwLength.toLong + 7L) & ~7L
+                            remaining -= consumed
+                            reader.moveTo(base + (dir.size.toLong - remaining).toInt)
+                        }
+                        entries
+                }
+        }
+    }
     private def populateVersionAndFlags(name: AssemblyNameReference) = {
         val maj = readUInt16().toInt
         val min = readUInt16().toInt
@@ -753,13 +1400,16 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
     private def completeTypes() = ()
 
     private def initializeTypeDefinitions() = {
+        if (metadata._types.length == 0) {
+            val count = moveTo(Table.typeDef)
+            metadata._types = Array.ofDim[TypeDefinition](count)
+            for rid <- 1 to count do {
+                readTypeDefinition(rid).foreach(t => metadata._types(rid - 1) = t)
+            }
+        }
+        // Nested-type declaring-type resolution (initializeNestedTypes /
+        // getNestedTypeDeclaringType) lands with the Phase 4 parity work.
         ()
-        // if (metadata.types != null)
-        //     ()
-        // else
-        //     initializeNestedTypes()
-        //     initializeFields()
-        //     initializeMethods()
             // TODO
 
     }
@@ -769,27 +1419,31 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         //     case Some(mapping) => mapping.length > 0
         //     case _ => false
     
-    def readNestedTypes(`type`: TypeDefinition): Option[MemberDefinitionCollection[TypeDefinition]] = None
-        // initializeNestedTypes()
-        // tryGetNestedTypeMapping(`type`) match
-        //     case Some(mapping) =>
-        //         val nested_types = MemberDefinitionCollection[TypeDefinition](`type`, mapping.length)
-        //         for i <- 0 until mapping.length do
-        //             val nested_type = getTypeDefinition(mapping(i))
-        //             if (nested_type != null)
-        //                 nested_types.addOne(nested_type)
+    def readNestedTypes(`type`: TypeDefinition): Option[MemberDefinitionCollection[TypeDefinition]] = {
+        initializeNestedTypes()
+        `type`.token.flatMap(tok => metadata._nestedTypes.get(tok.RID)).map { mapping =>
+            val nested_types = MemberDefinitionCollection[TypeDefinition](`type`, mapping.length)
+            for i <- 0 until mapping.length do {
+                getTypeDefinition(mapping(i)).foreach(nested_type => nested_types.addOne(nested_type))
+            }
+            nested_types
+        }
+    }
         //         nested_types
         //     case _ => MemberDefinitionCollection[TypeDefinition](`type`)
     
     private def initializeNestedTypes() = {
-        () // TODO
-
+        if (metadata._nestedTypes.isEmpty) {
+            val count = moveTo(Table.nestedClass)
+            for rid <- 1 to count do {
+                moveTo(Table.nestedClass, rid)
+                val nested = readTableIndex(Table.typeDef)
+                val enclosing = readTableIndex(Table.typeDef)
+                metadata._nestedTypes.getOrElseUpdate(enclosing, ArrayBuffer[Int]()).addOne(nested)
+            }
+        }
     }
-    private def addNestedMapping(declaring: Int, nested: Int) = {
-        () // TODO
-
-
-    }
+    private def addNestedMapping(declaring: Int, nested: Int) = { }
     private def initializeCustomAttributes(): Unit = {
         if (metadata._customAttributes.nonEmpty) {
             return ()
@@ -868,7 +1522,7 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
             `type`.scope = module
             `type`._module = Some(module)
 
-            // metadata.addTypeDefinition(`type`)
+            metadata.addTypeDefinition(`type`)
 
             this._context = Some(`type`)
 
@@ -879,6 +1533,11 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
 
             `type`.fields_range = Some(readListRange(rid, Table.typeDef, Table.field))
             `type`.methods_range = Some(readListRange(rid, Table.typeDef, Table.method))
+            // PropertyMap/EventMap rows carry a Parent (TypeDef) index
+            // before the list index; skip it before reading the range.
+            // Tables with no rows for this type yield an empty range.
+            `type`.properties_range = Some(readPropertiesRange(rid))
+            `type`.events_range = Some(readEventsRange(rid))
 
             if (MetadataReader.isNested(attributes)) {
                 getNestedTypeDeclaringType(`type`).foreach(t => `type`.declaringType = t)
@@ -888,10 +1547,42 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
 
         }
     }
+
+    // PropertyMap/EventMap rows carry a Parent (TypeDef) index before
+    // the list index; the row index is unrelated to the type RID, so the
+    // table is scanned for the row whose parent matches.
+    private def readPropertiesRange(type_rid: Int): io.spicelabs.cilantro.Range = {
+        val count = moveTo(Table.propertyMap)
+        boundary {
+            for i <- 1 to count do {
+                moveTo(Table.propertyMap, i)
+                val parent = readTableIndex(Table.typeDef)
+                if (parent == type_rid) {
+                    break(readListRange(i, Table.propertyMap, Table.property))
+                }
+            }
+            io.spicelabs.cilantro.Range(0, 0)
+        }
+    }
+    private def readEventsRange(type_rid: Int): io.spicelabs.cilantro.Range = {
+        val count = moveTo(Table.eventMap)
+        boundary {
+            for i <- 1 to count do {
+                moveTo(Table.eventMap, i)
+                val parent = readTableIndex(Table.typeDef)
+                if (parent == type_rid) {
+                    break(readListRange(i, Table.eventMap, Table.event))
+                }
+            }
+            io.spicelabs.cilantro.Range(0, 0)
+        }
+    }
+
     private def getNestedTypeDeclaringType(`type`: TypeDefinition): Option[TypeDefinition] = {
-        None // TODO
-
-
+        initializeNestedTypes()
+        `type`.token.flatMap { tok =>
+            metadata._nestedTypes.find { case (_, list) => list.contains(tok.RID) }
+        }.flatMap { case (enclosing, _) => getTypeDefinition(enclosing) }
     }
     private def readListRange(current_index: Int, current: Table, target: Table) = {
         val list:io.spicelabs.cilantro.Range = new Range(0, 0)
@@ -952,12 +1643,23 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         }
 
     }
+    private val maxTypeRecursionDepth = 128
+    private var typeRecursionDepth = 0
+
     private def readTypeDefinition(rid: Int): Option[TypeDefinition] = {
+        typeRecursionDepth += 1
+        if (typeRecursionDepth > maxTypeRecursionDepth) {
+            typeRecursionDepth -= 1
+            throw DataFormatException()
+        }
         if (!moveTo(Table.typeDef, rid)) {
+            typeRecursionDepth -= 1
             None
         }
         else {
-            readType(rid)
+            val t = readType(rid)
+            typeRecursionDepth -= 1
+            t
 
         }
         }
@@ -1088,13 +1790,16 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
             return None
         }
         val reader = readSignature(readBlobIndex())
-        None
-        // val `type` = reader.readTypeSignature();
-        // if (`type`.token.RID == 0)
-        //     `type`.token = MetadataToken(TokenType.typeSpec, rid)
-        // `type`
-    
+        val `type` = reader.readTypeSignature()
+        `type`.token match {
+            case Some(tok) if tok.RID == 0 => `type`.token = Some(MetadataToken(TokenType.typeSpec, rid))
+            case _ => ()
+        }
+        Some(`type`)
+
     }
+    def readSignaturePublic(signature: Int) = readSignature(signature)
+
     private def readSignature(signature: Int) = {
         SignatureReader(signature, this)
     
@@ -1108,31 +1813,78 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         //     case None => false
         
     }
-    def readInterfaces(`type`: TypeDefinition): Option[InterfaceImplementationCollection] = None // TODO
+    def readInterfaces(`type`: TypeDefinition): Option[InterfaceImplementationCollection] = {
+        // The InterfaceImpl table's first column is the Class (TypeDef);
+        // a type's rows form a contiguous run (Cecil reads it as a range).
+        `type`.token.map { tok =>
+            val interfaces = InterfaceImplementationCollection(`type`)
+            this._context = Some(`type`)
+            val count = moveTo(Table.interfaceImpl)
+            var rid = 1
+            var done = false
+            while (!done && rid <= count) {
+                moveTo(Table.interfaceImpl, rid)
+                val clazz = readTableIndex(Table.typeDef)
+                if (clazz < tok.RID) {
+                    rid += 1
+                } else if (clazz == tok.RID) {
+                    val interface_type = getTypeDefOrRef(readMetadataToken(CodedIndex.typeDefOrRef))
+                        .getOrElse(module.typeSystem.`object`)
+                    interfaces.addOne(InterfaceImplementation(interface_type, MetadataToken(TokenType.interfaceImpl, rid)))
+                    rid += 1
+                } else {
+                    done = true
+                }
+            }
+            interfaces
+        }
+    }
 
 
     private def initializeInterfaces() = { } // TODO
 
     private def addInterfaceMapping(`type`: Int, interface: Row2[Int, MetadataToken]) = { } // TODO
 
-    def readFields(`type`: TypeDefinition) = { } // TODO
+    def readFields(`type`: TypeDefinition): Option[ArrayBuffer[FieldDefinition]] = {
+        `type`.fields_range.map { range =>
+            if (metadata._fields.length == 0) {
+                metadata._fields = Array.ofDim[FieldDefinition](moveTo(Table.field))
+            }
+            val fields = ArrayBuffer[FieldDefinition]()
+            this._context = Some(`type`)
+            for i <- 0 until range.length do {
+                moveTo(Table.field, range.index + i)
+                val field = readField(range.index + i, fields)
+                field.declaringType = `type`
+            }
+            fields
+        }
+    }
 
-    private def readField(field_rid: Int, fields: ArrayBuffer[FieldDefinition]) = { } // TODO
+    private def readField(field_rid: Int, fields: ArrayBuffer[FieldDefinition]): FieldDefinition = {
+        val attributes = readUInt16()
+        val name = readString()
+        val signature = readBlobIndex()
+        val field = FieldDefinition(name, attributes.toChar, readFieldType(signature).getOrElse(module.typeSystem.void))
+        field.token = Some(MetadataToken(TokenType.field, field_rid))
+        metadata.addFieldDefinition(field)
+        fields.addOne(field)
+        field
+    }
 
-    private def initializeFields() = { } // TODO
+    private def initializeFields() = { }
 
     private def readFieldType(signature: Int): Option[TypeReference] = {
-        var reader = readSignature(signature)
-        
-        val field_sig:Byte = 0x6
+        val reader = readSignature(signature)
+
+        val field_sig: Byte = 0x6
 
         if (reader.readByte() != field_sig) {
-            throw OperationNotSupportedException()
-        
+            None
+        } else {
+            Some(reader.readTypeSignature())
         }
-        None
-        // reader.readTypeSignature()
-    
+
     }
     def readFieldRVA(field: FieldDefinition) = 0 // TODO
 
@@ -1147,19 +1899,79 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
 
     private def initializeFieldLayouts() = { } // TODO
 
-    def hasEvents(`type`: TypeDefinition) = false // TODO
+    def hasEvents(`type`: TypeDefinition) = {
+        `type`.events_range.exists(_.length > 0)
+    }
 
-    def readEvents(`type`: TypeDefinition): Option[ArrayBuffer[EventDefinition]] = None // TODO
+    def readEvents(`type`: TypeDefinition): Option[ArrayBuffer[EventDefinition]] = {
+        `type`.events_range.map { range =>
+            if (metadata._event_definitions.length == 0) {
+                metadata._event_definitions = Array.ofDim[EventDefinition](moveTo(Table.event))
+            }
+            this._context = Some(`type`)
+            val events = ArrayBuffer[EventDefinition]()
+            for i <- 0 until range.length do {
+                moveTo(Table.event, range.index + i)
+                val event = readEvent(range.index + i, events)
+                event.declaringType = `type`
+            }
+            events
+        }
+    }
 
-    def readEvent(event_rid: Int, events: ArrayBuffer[EventDefinition]) = { }
+    def readEvent(event_rid: Int, events: ArrayBuffer[EventDefinition]): EventDefinition = {
+        val attributes = readUInt16()
+        val name = readString()
+        val event_type = getTypeDefOrRef(readMetadataToken(CodedIndex.typeDefOrRef))
+            .getOrElse(module.typeSystem.`object`)
+        val event = EventDefinition(name, attributes.toChar, event_type)
+        event.token = Some(MetadataToken(TokenType.event, event_rid))
+        metadata.addEventDefinition(event)
+        events.addOne(event)
+        event
+    }
 
-    private def initializeEvents() = { } // TODO
+    private def initializeEvents() = { }
 
-    def hasProperties(`type`: TypeDefinition) = { } // TODO
+    def hasProperties(`type`: TypeDefinition) = {
+        `type`.properties_range.exists(_.length > 0)
+    }
 
-    def readProperties(`type`: TypeDefinition) = { } // TODO
+    def readProperties(`type`: TypeDefinition): Option[ArrayBuffer[PropertyDefinition]] = {
+        `type`.properties_range.map { range =>
+            if (metadata._property_definitions.length == 0) {
+                metadata._property_definitions = Array.ofDim[PropertyDefinition](moveTo(Table.property))
+            }
+            this._context = Some(`type`)
+            val properties = ArrayBuffer[PropertyDefinition]()
+            for i <- 0 until range.length do {
+                moveTo(Table.property, range.index + i)
+                readProperty(range.index + i, properties).foreach(_.declaringType = `type`)
+            }
+            properties
+        }
+    }
 
-    private def readProperty(property_rid: Int /*, properties: ArrayBuffer[PropertyDefinition] */) = { } // TODO
+    private def readProperty(property_rid: Int, properties: ArrayBuffer[PropertyDefinition]): Option[PropertyDefinition] = {
+        val attributes = readUInt16()
+        val name = readString()
+        val signature = readBlobIndex()
+
+        val reader = readSignature(signature)
+        val property_signature = 0x8
+
+        // Cecil skips rows whose signature does not carry the property bit.
+        if ((reader.readByte().toInt & property_signature) == 0) {
+            None
+        } else {
+            reader.readCompressedUInt32() // parameter count
+            val property = PropertyDefinition(name, attributes.toChar, reader.readTypeSignature())
+            property.token = Some(MetadataToken(TokenType.property, property_rid))
+            metadata.addPropertyDefinition(property)
+            properties.addOne(property)
+            Some(property)
+        }
+    }
 
     private def initializeProperties() = { } // TODO
 
@@ -1185,7 +1997,19 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         //         m._sem_attrs_ready = true
         // })
 
-    def readMethods(`type`: TypeDefinition): Option[ArrayBuffer[MethodDefinition]] = None // TODO
+    def readMethods(`type`: TypeDefinition): Option[ArrayBuffer[MethodDefinition]] = {
+        `type`.methods_range.map { range =>
+            if (metadata._methods.length == 0) {
+                metadata._methods = Array.ofDim[MethodDefinition](moveTo(Table.method))
+            }
+            val methods = ArrayBuffer[MethodDefinition]()
+            for i <- 0 until range.length do {
+                moveTo(Table.method, range.index + i)
+                readMethod(range.index + i, methods, `type`)
+            }
+            methods
+        }
+    }
 
     private def readPointers[TMember <: MemberDefinition](ptr: Table, table: Table, range: Range,
         members: ArrayBuffer[TMember], reader: (Int, ArrayBuffer[TMember]) => Unit) =
@@ -1199,15 +2023,121 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         }
     private def initializeMethods() = { } // TODO
 
-    private def readMethod(method_rid: Int, methods: ArrayBuffer[MethodDefinition]) = { } // TODO
+    private def readMethod(method_rid: Int, methods: ArrayBuffer[MethodDefinition], declaringType: TypeDefinition): MethodDefinition = {
+        val rva = readUInt32()
+        val impl_attrs = readUInt16()
+        val attrs = readUInt16()
+        val name = readString()
+        val signature = readBlobIndex()
 
-    private def readParameters(method: MethodDefinition, param_range: Range) = { } // TODO
+        val method = MethodDefinition(name, attrs.toChar, module.typeSystem.void)
+        method.implAttributes = impl_attrs.toChar
+        method._rva = rva
+        method.token = Some(MetadataToken(TokenType.method, method_rid))
+        method.parameter_range = Some(readListRange(method_rid, Table.method, Table.param))
+        method.declaringType = declaringType
+        metadata.addMethodDefinition(method)
+        methods.addOne(method)
 
-    private def readParameterPointers(method: MethodDefinition, range: Range) = { } // TODO
+        // The signature and parameters are read eagerly with the method
+        // as the generic context (var/mvar resolution).
+        val savedContext = this._context
+        this._context = Some(method)
+        readMethodSignature(signature, method)
+        this._context = savedContext
+        readParameters(method, method.parameter_range.getOrElse(io.spicelabs.cilantro.Range(1, 0)))
+        readSemantics(method)
+        method
+    }
 
-    private def readParameter(param_rid: Int, method: MethodDefinition) = { } // TODO
+    private def readParameters(method: MethodDefinition, param_range: Range) = {
+        // Method pointer tables (paramPtr) are a legacy CLR 1.x shape;
+        // modern assemblies index the Param table directly.
+        for i <- 0 until param_range.length do {
+            moveTo(Table.param, param_range.index + i)
+            readParameter(param_range.index + i, method)
+        }
+    }
 
-    // private def readMethodSignature(signature: Int, method: MethodSignature) = { } // TODO
+    private def readParameterPointers(method: MethodDefinition, range: Range) = { }
+
+    private def readParameter(param_rid: Int, method: MethodDefinition) = {
+        val attributes = readUInt16()
+        val sequence = readUInt16()
+        val name = readString()
+
+        val parameter = if (sequence == 0) method.methodReturnType.parameter else method.parameters(sequence - 1)
+        parameter.metadataToken = MetadataToken(TokenType.param, param_rid)
+        parameter.name = name
+        parameter.attributes = attributes.toChar
+    }
+
+    def readMethodSignature(signature: Int, method: MethodSignature) = {
+        val reader = readSignature(signature)
+        reader.readMethodSignature(method)
+
+    }
+    def readLocalVariables(sigToken: Int): Option[ArrayBuffer[VariableDefinition]] = {
+        // The fat header's local-signature field is a StandAloneSig RID
+        // (0x11 << 24 | rid); the signature blob lives in that table row.
+        val rid = sigToken & 0x00ffffff
+        if (moveTo(Table.standAloneSig, rid)) {
+            readVariables(readBlobIndex())
+        } else {
+            None
+        }
+    }
+    def readVariables(signature: Int): Option[ArrayBuffer[VariableDefinition]] = {
+        val reader = readSignature(signature)
+        val local_sig: Byte = 0x7
+
+        if (reader.readByte() != local_sig) {
+            None
+        } else {
+            val count = reader.readCompressedUInt32()
+            val variables = ArrayBuffer[VariableDefinition]()
+            for i <- 0 until count do {
+                variables.addOne(VariableDefinition(reader.readTypeSignature()))
+            }
+            Some(variables)
+        }
+
+    }
+    private def initializeSemantics() = {
+        if (metadata._semantics.isEmpty) {
+            val count = moveTo(Table.methodSemantics)
+            for rid <- 1 to count do {
+                moveTo(Table.methodSemantics, rid)
+                val semantics = readUInt16()
+                val method_rid = readTableIndex(Table.method)
+                val association = readMetadataToken(CodedIndex.hasSemantics)
+                metadata._semantics.update(method_rid, (semantics.toChar, association))
+            }
+        }
+    }
+    def readSemantics(method: MethodDefinition): Unit = {
+        initializeSemantics()
+        method.token.flatMap(tok => metadata._semantics.get(tok.RID)).foreach { case (semantics, association) =>
+            method._sem_attrs = semantics
+            method._sem_attrs_ready = true
+            val value = semantics.toInt
+            if ((value & MethodSemanticsAttributes.setter.value) != 0) {
+                getPropertyDefinition(association.RID).foreach(_.setMethod = method)
+            }
+            if ((value & MethodSemanticsAttributes.getter.value) != 0) {
+                getPropertyDefinition(association.RID).foreach(_.getMethod = method)
+            }
+            if ((value & MethodSemanticsAttributes.addOn.value) != 0) {
+                getEventDefinition(association.RID).foreach(_.addMethod = method)
+            }
+            if ((value & MethodSemanticsAttributes.removeOn.value) != 0) {
+                getEventDefinition(association.RID).foreach(_.removeMethod = method)
+            }
+            if ((value & MethodSemanticsAttributes.fire.value) != 0) {
+                getEventDefinition(association.RID).foreach(_.invokeMethod = method)
+            }
+        }
+    }
 
     // def readPInvokeInfo(method: MethodDefinition): PInvokeInfo = null // TODO
 
@@ -1218,15 +2148,72 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         false // TODO
     
     }
-    def readGenericParameters(provider: GenericParameterProvider): ArrayBuffer[GenericParameter] = ArrayBuffer.empty[GenericParameter] // TODO
+    private def initializeGenericParameters() = {
+        if (metadata._genericParameters.isEmpty) {
+            val count = moveTo(Table.genericParam)
+            var currentOwner = -1
+            var start = -1
+            var length = 0
+            val grouped = HashMap[Int, ArrayBuffer[io.spicelabs.cilantro.Range]]()
+            def flush(): Unit = {
+                if (currentOwner != -1) {
+                    grouped.getOrElseUpdate(currentOwner, ArrayBuffer[io.spicelabs.cilantro.Range]()).addOne(io.spicelabs.cilantro.Range(start, length))
+                }
+            }
+            for rid <- 1 to count do {
+                moveTo(Table.genericParam, rid)
+                readUInt16() // number
+                readUInt16() // flags
+                val owner = readMetadataToken(CodedIndex.typeOrMethodDef)
+                if (owner.token != currentOwner) {
+                    flush()
+                    currentOwner = owner.token
+                    start = rid
+                    length = 0
+                }
+                length += 1
+            }
+            flush()
+            grouped.foreach { case (owner, ranges) =>
+                metadata._genericParameters.update(MetadataToken(owner), ranges.toArray)
+            }
+        }
+    }
 
-    private def readGenericParametersRange(range: Range, provider: GenericParameterProvider, generic_parameters: GenericParameterCollection) = { }
+    def readGenericParameters(provider: GenericParameterProvider): ArrayBuffer[GenericParameter] = {
+        initializeGenericParameters()
+        val collection = GenericParameterCollection(provider)
+        provider.metadataToken.flatMap(tok => metadata._genericParameters.get(tok))
+            .getOrElse(Array.empty[io.spicelabs.cilantro.Range])
+            .foreach(range => readGenericParametersRange(range, provider, collection))
+        collection
+    }
 
-    private def initializeGenericParameters() = { } // TODO
+    private def readGenericParametersRange(range: Range, provider: GenericParameterProvider, generic_parameters: GenericParameterCollection) = {
+        for i <- 0 until range.length do {
+            moveTo(Table.genericParam, range.index + i)
+            readGenericParameter(range.index + i, provider, generic_parameters)
+        }
+    }
 
-    private def initializeRanges(table: Table, get_next: () => MetadataToken): HashMap[MetadataToken, ArrayBuffer[Range]] = {
+    private def readGenericParameter(gp_rid: Int, provider: GenericParameterProvider, generic_parameters: GenericParameterCollection) = {
+        val number = readUInt16()
+        val attributes = readUInt16()
+        readMetadataToken(CodedIndex.typeOrMethodDef) // owner
+        val name = readString()
+
+
+        val parameter = GenericParameter(name, Some(provider))
+
+        parameter._position = number
+        parameter.attributes_(attributes.toChar)
+        parameter.token = Some(MetadataToken(TokenType.genericParam, gp_rid))
+        generic_parameters.addOne(parameter)
+    }
+
+    private def initializeRanges(table: Table, get_next: () => MetadataToken): HashMap[MetadataToken, ArrayBuffer[io.spicelabs.cilantro.Range]] = {
         val length = moveTo(table)
-        val ranges = HashMap[MetadataToken, ArrayBuffer[Range]]()
+        val ranges = HashMap[MetadataToken, ArrayBuffer[io.spicelabs.cilantro.Range]]()
 
         if (length == 0) {
             return ranges
@@ -1257,9 +2244,42 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
     }
     def hasGenericConstraints(generic_parameter: GenericParameter) = false // TODO
 
-    def readGenericConstraints(generic_parameter: GenericParameter): Option[GenericParameterConstraintCollection] = None // TODO
+    private def initializeGenericConstraints() = {
+        if (metadata._genericConstraints.isEmpty) {
+            val count = moveTo(Table.genericParamConstraint)
+            var currentOwner = -1
+            val grouped = HashMap[Int, ArrayBuffer[Row2[Int, MetadataToken]]]()
+            for rid <- 1 to count do {
+                moveTo(Table.genericParamConstraint, rid)
+                val owner = readTableIndex(Table.genericParam)
+                val constraint = readMetadataToken(CodedIndex.typeDefOrRef)
+                grouped.getOrElseUpdate(owner, ArrayBuffer[Row2[Int, MetadataToken]]())
+                    .addOne(Row2(rid, constraint))
+            }
+            grouped.foreach { case (owner, rows) =>
+                metadata._genericConstraints.update(owner, rows)
+            }
+        }
+    }
 
-    private def initializeGenericConstraints() = { } // TODO
+    def readGenericConstraints(generic_parameter: GenericParameter): Option[GenericParameterConstraintCollection] = {
+        initializeGenericConstraints()
+        val collection = GenericParameterConstraintCollection(generic_parameter)
+        generic_parameter.owner.foreach { owner =>
+            this._context = Some(owner.asInstanceOf[GenericContext])
+        }
+        generic_parameter.token.flatMap(tok => metadata._genericConstraints.get(tok.RID))
+            .getOrElse(ArrayBuffer[Row2[Int, MetadataToken]]())
+            .foreach { row =>
+                val constraint = GenericParameterConstraint(
+                    getTypeDefOrRef(row.col2).getOrElse(module.typeSystem.`object`),
+                    Some(MetadataToken(TokenType.genericParamConstraint, row.col1))
+                )
+                constraint._generic_parameter = Some(generic_parameter)
+                collection.addOne(constraint)
+            }
+        Some(collection)
+    }
 
     private def addGenericConstraintMapping(generic_parameter: Int, constraint: Row2[Int, MetadataToken]) = { } // TODO
 
@@ -1337,6 +2357,36 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
             case Some(t) =>
                 mixinRead(t.methods)
                 metadata.getMethodDefinition(rid)
+        }
+    }
+    def getPropertyDefinition(rid: Int): Option[PropertyDefinition] = {
+        initializeTypeDefinitions()
+        metadata.getPropertyDefinition(rid) match {
+            case Some(p) => Some(p)
+            case None => lookupProperty(rid)
+        }
+    }
+    private def lookupProperty(rid: Int): Option[PropertyDefinition] = {
+        metadata.getPropertyDeclaringType(rid) match {
+            case None => None
+            case Some(t) =>
+                mixinRead(t.properties)
+                metadata.getPropertyDefinition(rid)
+        }
+    }
+    def getEventDefinition(rid: Int): Option[EventDefinition] = {
+        initializeTypeDefinitions()
+        metadata.getEventDefinition(rid) match {
+            case Some(e) => Some(e)
+            case None => lookupEvent(rid)
+        }
+    }
+    private def lookupEvent(rid: Int): Option[EventDefinition] = {
+        metadata.getEventDeclaringType(rid) match {
+            case None => None
+            case Some(t) =>
+                mixinRead(t.events)
+                metadata.getEventDefinition(rid)
         }
     }
     private def getMethodSpecification(rid: Int): Option[MethodSpecification] = {
@@ -1538,7 +2588,7 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         val (blob, index, count) = getBlobView(signature)
         val actualCount = if ((count & 1) == 1) then count - 1 else count
 
-        String(blob, index, actualCount, "UTF-16")
+        String(blob, index, actualCount, "UTF-16LE")
 
     }
     private def readConstantPrimitive(`type`: ElementType, signature: Int): Any = {
@@ -1792,6 +2842,8 @@ sealed class SignatureReader(blob: Int, private val _reader: MetadataReader) ext
     this.position = blob
     private val _sig_length = readCompressedUInt32()
     private val _start = position
+    private var _typeDepth = 0
+    private val maxTypeSignatureDepth = 128
 
     private def _typeSystem = _reader.module.typeSystem
 
@@ -1881,7 +2933,20 @@ sealed class SignatureReader(blob: Int, private val _reader: MetadataReader) ext
     
     }
     def readTypeSignature(): TypeReference = {
-        readTypeSignature(ElementType.fromOrdinalValue(readByte()))
+        // Recursion bound from plan 04: a hostile signature blob can nest
+        // ptr/byref/array/genericInst/modifier types arbitrarily deep and
+        // blow the stack. Every recursive arm goes through this entry
+        // point, so one depth guard covers the whole family (and bounds
+        // the structure before GenericParameterResolver ever walks it).
+        _typeDepth += 1
+        if (_typeDepth > maxTypeSignatureDepth) {
+            throw DataFormatException()
+        }
+        try {
+            readTypeSignature(ElementType.fromOrdinalValue(readByte()))
+        } finally {
+            _typeDepth -= 1
+        }
     
     }
     def readTypeToken(): TypeReference = {
@@ -1960,13 +3025,9 @@ sealed class SignatureReader(blob: Int, private val _reader: MetadataReader) ext
             calling_convention = (calling_convention.toInt & ~explicit_this).toByte
         
         }
-        var has_arity = false
-        if ((calling_convention.toInt & arity) != 0) {
-            has_arity = true
-            calling_convention = (calling_convention.toInt & ~arity).toByte
-
-        
-        }
+        // Cecil keeps the 0x10 (Generic) bit in CallingConvention; only
+        // hasThis and explicitThis are stripped (golden-pinned).
+        val has_arity = (calling_convention.toInt & arity) != 0
         method.callingConvention = MethodCallingConvention.fromOrdinalValue(calling_convention)
 
         method.as[MethodReference] match {
@@ -2110,7 +3171,10 @@ sealed class SignatureReader(blob: Int, private val _reader: MetadataReader) ext
         }
         etype match {
             case ElementType.string =>
-                readUTF8String().getOrElse("")
+                readUTF8String() match {
+                    case Some(s) => s
+                    case None => CilNullConstant
+                }
             case ElementType.none =>
                 if (thisType.isTypeOf("System", "Type")) {
                     readTypeReference()
@@ -2126,11 +3190,15 @@ sealed class SignatureReader(blob: Int, private val _reader: MetadataReader) ext
     private def readPrimitiveValue(`type`: ElementType): Any = {
         `type` match {
             case ElementType.boolean => readByte() == 1
-            case ElementType.i1 | ElementType.u1 => readByte()
-            case ElementType.u2 | ElementType.char => readUInt16()
+            case ElementType.i1 => readByte()
+            case ElementType.u1 => readByte().toInt & 0xff
+            case ElementType.u2 => readUInt16().toInt
+            case ElementType.char => readUInt16()
             case ElementType.i2 => readInt16()
-            case ElementType.i4 | ElementType.u4 => readInt32()
-            case ElementType.i8 | ElementType.u8 => readInt64()
+            case ElementType.i4 => readInt32()
+            case ElementType.u4 => readInt32().toLong & 0xffffffffL
+            case ElementType.i8 => readInt64()
+            case ElementType.u8 => java.math.BigInteger(java.lang.Long.toUnsignedString(readInt64()))
             case ElementType.r4 => readSingle()
             case ElementType.r8 => readDouble()
             case _ => throw OperationNotSupportedException(`type`.toString())
@@ -2172,7 +3240,7 @@ sealed class SignatureReader(blob: Int, private val _reader: MetadataReader) ext
 
     }
     private def readCustomAttributeEnum(enum_type: TypeReference): Any = {
-        val `type` = enum_type.checkedResolve().getOrElse(throw IllegalArgumentException())
+        val `type` = resolveForCustomAttributeEnum(enum_type).getOrElse(throw ResolutionException())
         if (!`type`.isEnum) {
             throw IllegalArgumentException()
         }
@@ -2184,6 +3252,18 @@ sealed class SignatureReader(blob: Int, private val _reader: MetadataReader) ext
     // TODO
     // def readMarshalInfo(): MarshalInfo = null
 
+    }
+    private def resolveForCustomAttributeEnum(reference: TypeReference): Option[TypeDefinition] = {
+        reference.scope match {
+            case Some(scope) if scope == _reader.module =>
+                if (!reference.isNested) {
+                    _reader.module.getType(reference.fullName)
+                }
+                else {
+                    reference.declaringType.flatMap(resolveForCustomAttributeEnum).flatMap(_.getNestedType(reference.name))
+                }
+            case _ => None
+        }
     }
     private def readNativeType() = {
         NativeType.fromOrdinalValue(readByte())

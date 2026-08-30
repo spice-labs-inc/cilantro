@@ -120,11 +120,17 @@ class StyleRulesSuite extends munit.FunSuite {
     codeOnly(lines)
   }
 
+  // Word-boundary search over the comment/string-stripped code. Note:
+  // String.matches is a FULL-string match and `.` does not cross newlines,
+  // so a multi-line file would never match `.*\bnull\b.*`; the scans here
+  // use Pattern.find instead, which searches anywhere in the text.
+  private def containsWord(f: String, word: String): Boolean = {
+    java.util.regex.Pattern.compile("\\b" + word + "\\b").matcher(codeTextOf(f)).find()
+  }
+
   test("C0-03: no null literal in test sources") {
     val files = scalaSourcesUnder("src/test")
-    val offenders = files.filter { f =>
-      codeTextOf(f).matches(".*\\bnull\\b.*")
-    }
+    val offenders = files.filter(f => containsWord(f, "null"))
     assertEquals(
       offenders,
       Seq.empty[String],
@@ -134,9 +140,7 @@ class StyleRulesSuite extends munit.FunSuite {
 
   test("C0-03b: no null literal in main sources") {
     val files = scalaSourcesUnder("src/main")
-    val offenders = files.filter { f =>
-      codeTextOf(f).matches(".*\\bnull\\b.*")
-    }
+    val offenders = files.filter(f => containsWord(f, "null"))
     assertEquals(
       offenders,
       Seq.empty[String],
@@ -146,13 +150,46 @@ class StyleRulesSuite extends munit.FunSuite {
 
   test("C0-04: no throw keyword in test sources") {
     val files = scalaSourcesUnder("src/test")
-    val offenders = files.filter { f =>
-      codeTextOf(f).matches(".*\\bthrow\\b.*")
-    }
+    val offenders = files.filter(f => containsWord(f, "throw"))
     assertEquals(
       offenders,
       Seq.empty[String],
       "src/test must contain no throw keyword (exceptions must not be used for control flow)"
+    )
+  }
+
+  test("C4-10: corpus parity suite is tagged Slow and excluded by default") {
+    // The plan requires the corpus parity run to be a tagged (slow)
+    // suite that runs explicitly, never as part of the default fast
+    // gate. Pinning the tag and the build.sbt exclusion means removing
+    // either turns this test red.
+    val buildLines = buildSbtLines
+    assert(
+      buildLines.exists(_.contains("--exclude-tags=Slow")),
+      "build.sbt must exclude the Slow tag from the default test run"
+    )
+    val paritySource = Files
+      .readAllLines(Paths.get("src/test/scala/cilantro/cil/ParityHarnessTests.scala"))
+      .toArray
+      .map(_.toString)
+      .toSeq
+    assert(
+      paritySource.exists(_.contains("new munit.Tag(\"Slow\")")),
+      "ParityHarnessTests must declare the Slow tag"
+    )
+    val slowTagged = paritySource.exists(line =>
+      line.contains("full-corpus tier1/tier2") || line.contains("tag(Slow)")
+    )
+    assert(slowTagged, "the full-corpus parity test must be tagged Slow")
+    val corpusSource = Files
+      .readAllLines(Paths.get("src/test/scala/cilantro/cil/CorpusPropertyTests.scala"))
+      .toArray
+      .map(_.toString)
+      .toSeq
+    assert(
+      corpusSource.exists(_.contains("new munit.Tag(\"Slow\")")) &&
+        corpusSource.exists(_.contains("tag(Slow)")),
+      "CorpusPropertyTests must declare and use the Slow tag"
     )
   }
 }

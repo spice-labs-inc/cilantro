@@ -102,6 +102,108 @@
     .maxstack 1
     ret
   }
+
+  // Small-format EH: a single catch clause.
+  .method public hidebysig static int32 EhSmall(int32 x) cil managed
+  {
+    .maxstack 2
+    .try
+    {
+      ldarg.0
+      brfalse LOK
+      newobj instance void [mscorlib]System.Exception::.ctor()
+      throw
+      LOK: leave LEnd
+    }
+    catch [mscorlib]System.Exception
+    {
+      pop
+      ldc.i4.2
+      ret
+    }
+    LEnd: ldc.i4.1
+    ret
+  }
+
+  // Fat-format EH: two catches, a filter handler and a finally in one
+  // method (four clauses force the fat layout).
+  .method public hidebysig static int32 EhFat(int32 x) cil managed
+  {
+    .maxstack 2
+    .try
+    {
+      .try
+      {
+        ldarg.0
+        brtrue LThrow
+        leave LOK
+        LThrow: newobj instance void [mscorlib]System.Exception::.ctor()
+        throw
+        LOK: leave LDone
+      }
+      catch [mscorlib]System.ArgumentException
+      {
+        pop
+        leave LDone
+      }
+      catch [mscorlib]System.Exception
+      {
+        pop
+        leave LDone
+      }
+      filter
+      {
+        pop
+        ldc.i4.0
+      }
+      {
+        pop
+        leave LDone
+      }
+      LDone: leave LFin
+    }
+    finally
+    {
+      pop
+      endfinally
+    }
+    LFin: ldc.i4.7
+    ret
+  }
+
+  // The try starts at instruction offset 0 and the handler runs to the
+  // end of the body.
+  .method public hidebysig static int32 EhFullBody() cil managed
+  {
+    .maxstack 1
+    .try
+    {
+      ldc.i4.1
+      leave LRet
+    }
+    catch [mscorlib]System.Exception
+    {
+      pop
+      ldc.i4.2
+      ret
+    }
+    LRet: ret
+  }
+
+  // The finally handler contains only endfinally.
+  .method public hidebysig static void EhEmptyTry() cil managed
+  {
+    .maxstack 1
+    .try
+    {
+      leave LRet
+    }
+    finally
+    {
+      endfinally
+    }
+    LRet: ret
+  }
 }
 
 .class public auto ansi beforefieldinit GenericBox`1<T>

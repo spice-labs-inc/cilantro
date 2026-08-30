@@ -1,9 +1,5 @@
 import io.spicelabs.cilantro.*
-import java.nio.*
 import java.nio.file.*
-import java.io.FileInputStream
-import io.spicelabs.cilantro.PE.BinaryStreamReader
-import io.spicelabs.cilantro.AnyExtension.as
 
 class CodeAnalyzerGeneratorTests extends munit.FunSuite {
     import CodeAnalyzerGeneratorTests.{codeGenPath, codeGenPathStr, v90}

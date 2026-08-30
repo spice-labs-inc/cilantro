@@ -1,9 +1,5 @@
 import io.spicelabs.cilantro.*
-import java.nio.*
 import java.nio.file.*
-import java.io.FileInputStream
-import io.spicelabs.cilantro.PE.BinaryStreamReader
-import io.spicelabs.cilantro.AnyExtension.as
 
 class NewtonsoftTests extends munit.FunSuite {
     import NewtonsoftTests.{newtonPath, newtonPathStr, v60, v20}

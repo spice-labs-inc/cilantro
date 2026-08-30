@@ -24,6 +24,8 @@ import io.spicelabs.cilantro.metadata.ElementType
 class TypeParser(private val _fullname: String) {
     val _length = _fullname.length()
     var _position = 0
+    private var _depth = 0
+    private val maxTypeParserDepth = 128
 
     private class Type {
         var type_fullname: String = ""
@@ -35,25 +37,36 @@ class TypeParser(private val _fullname: String) {
     }
 
     private def parseType(fq_name: Boolean) = {
-        var `type` = Type()
-        `type`.type_fullname = parsePart()
-        `type`.nested_names = parseNestedNames()
-        if (tryGetArity(`type`)) {
-            `type`.generic_arguments = parseGenericArguments(`type`.arity)
-        
+        // Recursion bound from plan 04: nested generic arguments
+        // (`A`1[[A`1[[...]]]]`) recurse through parseType; a hostile
+        // custom-attribute type string must fail, not overflow the stack.
+        _depth += 1
+        if (_depth > maxTypeParserDepth) {
+            throw IllegalArgumentException()
         }
-        `type`.specs = Option(parseSpecs())
+        try {
+            var `type` = Type()
+            `type`.type_fullname = parsePart()
+            `type`.nested_names = parseNestedNames()
+            if (tryGetArity(`type`)) {
+                `type`.generic_arguments = parseGenericArguments(`type`.arity)
+            
+            }
+            `type`.specs = Option(parseSpecs())
 
-        if (fq_name) {
-            `type`.assembly = parseAssemblyName()
-        
+            if (fq_name) {
+                `type`.assembly = parseAssemblyName()
+            
+            }
+            `type`
+        } finally {
+            _depth -= 1
         }
-        `type`
     
     }
     private def parsePart() = {
         var part = StringBuilder()
-        while _position < _length do {
+        while _position < _length && !TypeParser.isDelimeter(_fullname.charAt(_position)) do {
             if (_fullname.charAt(_position) == '\\') {
                 _position += 1
             }
@@ -164,7 +177,7 @@ class TypeParser(private val _fullname: String) {
                     _position += 1
                 }
             }
-            Some(_fullname.substring(start, _position - start))
+            Some(_fullname.substring(start, _position))
 
 
             
@@ -208,7 +221,7 @@ object TypeParser {
     
         }
     }
-    private def isDelimeter(chr: Char) = {
+    def isDelimeter(chr: Char) = {
         "+,[]*&".indexOf(chr) >= 0
     
     }
