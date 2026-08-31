@@ -15,8 +15,6 @@ package io.spicelabs.cilantro.cil
 import io.spicelabs.cilantro.*
 import java.io.FileInputStream
 import scala.collection.mutable.ArrayBuffer
-import scala.util.boundary, boundary.break
-import io.spicelabs.cilantro.PE.BinaryStreamReader
 
 sealed class ImageDebugDirectory {
     var characteristics: Int = 0
@@ -41,10 +39,12 @@ enum ImageDebugType(val value: Int) {
 }
 
 object ImageDebugType {
-    def fromOrdinalValue(value: Int) =
-        ImageDebugType.values.find(x => {x.value == value}) match
+    def fromOrdinalValue(value: Int) = {
+        ImageDebugType.values.find(x => {x.value == value}) match {
         case Some(result) => result
-        case None => throw IllegalArgumentException(s"value $value not found in ImageDebugType")  
+        case None => throw IllegalArgumentException(s"value $value not found in ImageDebugType")
+        }
+    }
 }
 
 sealed class ImageDebugHeader(private val _entries: Array[ImageDebugHeaderEntry]) {
@@ -53,16 +53,19 @@ sealed class ImageDebugHeader(private val _entries: Array[ImageDebugHeaderEntry]
 
     def entties = _entries
 
-    def this() =
+    def this() = {
         this(Array.ofDim[ImageDebugHeaderEntry](0))
     
-    def this(entry: ImageDebugHeaderEntry) =
+    }
+    def this(entry: ImageDebugHeaderEntry) = {
         this(Array(entry))
 
+    }
 }
 
 sealed class ImageDebugHeaderEntry(private val _directory: ImageDebugDirectory, private val _data: Array[Byte]) {
-
+    def directory = _directory
+    def data = _data
 }
 
 
@@ -74,15 +77,15 @@ trait SymbolReader extends AutoCloseable { // TODO
 }
 
 trait SymbolReaderProvider {
-    def getSymbolReader(module: ModuleDefinition, fileName: String) : SymbolReader
-    def getSymbolReader(module: ModuleDefinition, symbolStream: FileInputStream) : SymbolReader
+    def getSymbolReader(module: ModuleDefinition, fileName: String) : Option[SymbolReader]
+    def getSymbolReader(module: ModuleDefinition, symbolStream: FileInputStream) : Option[SymbolReader]
 }
 
 class DefaultSymbolReaderProvider(private val throwIfNoSymbol: Boolean) extends SymbolReaderProvider {
     def this() = this(true)
-    override def getSymbolReader(module: ModuleDefinition, fileName: String): SymbolReader =
-        if (module.image.hasDebugTables())
-            return null
+    override def getSymbolReader(module: ModuleDefinition, fileName: String): Option[SymbolReader] = {
+        if (module.image.exists(_.hasDebugTables())) {
+            return None
         
         // TODO
         // if (module.hasDebugHeader)
@@ -108,14 +111,17 @@ class DefaultSymbolReaderProvider(private val throwIfNoSymbol: Boolean) extends 
         //     catch
         //         case _ =>
 
-        if (throwIfNoSymbol)
+        }
+        if (throwIfNoSymbol) {
             throw IllegalArgumentException(s"No symbol found for $fileName")
         
-        null
+        }
+        None
 
-    def getSymbolReader(module: ModuleDefinition, symbolStream: FileInputStream) : SymbolReader =
-        if (module.image.hasDebugTables())
-            return null
+    }
+    def getSymbolReader(module: ModuleDefinition, symbolStream: FileInputStream) : Option[SymbolReader] = {
+        if (module.image.exists(_.hasDebugTables())) {
+            return None
 
         // TODO        
         // if (module.hasDebugHeader)
@@ -167,12 +173,15 @@ class DefaultSymbolReaderProvider(private val throwIfNoSymbol: Boolean) extends 
         //     catch
         //         case _ => null
         
-        if (throwIfNoSymbol)
+        }
+        if (throwIfNoSymbol) {
             throw IllegalArgumentException("No symbol found in stream")
         
-        null        
+        }
+        None        
 
 
+    }
 }
 
 abstract class DebugInformation() extends CustomDebugInformationProvider
@@ -180,7 +189,7 @@ abstract class DebugInformation() extends CustomDebugInformationProvider
     private var _token: MetadataToken = MetadataToken(TokenType.assembly) // not initialized in C# code
     private val _custom_infos: ArrayBuffer[CustomDebugInformation] = ArrayBuffer.empty[CustomDebugInformation]
 
-    def metadataToken = _token
+    def metadataToken: Option[MetadataToken] = Some(_token)
     def metadataToken_(value: MetadataToken) = _token = value
 
     def hasCustomDebugInformation = !_custom_infos.isEmpty

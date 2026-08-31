@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "B3k8oN+3GqQ=",
+  "success": true,
+  "projectFilePath": "/work/scripts/GoldenDumper/GoldenDumper.csproj",
+  "expectedPackageFiles": [
+    "/tmp/container-home/.nuget/packages/mono.cecil/0.11.6/mono.cecil.0.11.6.nupkg.sha512",
+    "/tmp/container-home/.nuget/packages/system.reflection.metadata/8.0.1/system.reflection.metadata.8.0.1.nupkg.sha512"
+  ],
+  "logs": []
+}

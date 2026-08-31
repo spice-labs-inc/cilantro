@@ -17,19 +17,23 @@ import scala.collection.mutable.ArrayBuffer
 trait GenericParameterProvider extends MetadataTokenProvider {
     def hasGenericParameters: Boolean
     def isDefinition: Boolean
-    def module: ModuleDefinition
+    def module: Option[ModuleDefinition]
     def genericParameters: ArrayBuffer[GenericParameter]
     def genericParameterType: GenericParameterType
 
-    def getHasGenericParameters(module: ModuleDefinition) =
-        module.hasImage && module.read(this, (provider, reader) => reader.hasGenericParameters(provider))
+    def getHasGenericParameters(module: Option[ModuleDefinition]) = {
+        module.exists(m => m.hasImage && m.read(this, (provider, reader) => reader.hasGenericParameters(provider)))
 
-    def getGenericParameters(collection: ArrayBuffer[GenericParameter], module: ModuleDefinition): ArrayBuffer[GenericParameter] =
-        if (module.hasImage)
-            module.read(collection, this, (provider, reader) => reader.readGenericParameters(provider))
-        else
-            GenericParameterCollection(this)        
+    }
+    def getGenericParameters(collection: ArrayBuffer[GenericParameter], module: Option[ModuleDefinition]): ArrayBuffer[GenericParameter] = {
+        module match {
+            case Some(m) if m.hasImage =>
+                m.read(collection, this, (provider, reader) => reader.readGenericParameters(provider))
+            case _ =>
+                GenericParameterCollection(this)        
 
+        }
+    }
 }
 
 enum GenericParameterType {
@@ -38,6 +42,6 @@ enum GenericParameterType {
 
 trait GenericContext {
     def isDefinition: Boolean
-    def `type`: GenericParameterProvider
-    def method: GenericParameterProvider
+    def `type`: Option[GenericParameterProvider]
+    def method: Option[GenericParameterProvider]
 }

@@ -14,27 +14,30 @@ package io.spicelabs.cilantro
 
 import javax.naming.OperationNotSupportedException
 
-class FieldReference(name: String, _fieldType: TypeReference, _declaringType: TypeReference = null) extends MemberReference(name) {
+class FieldReference(name: String, _fieldType: TypeReference, _declaringType: Option[TypeReference] = None) extends MemberReference(name) {
     private var _field_type = _fieldType
-    token = MetadataToken(TokenType.memberRef)
-    declaringType = _declaringType
+    token = Some(MetadataToken(TokenType.memberRef))
+    _declaringType.foreach(declaringType = _)
 
     def fieldType = _field_type
     def fieldType_=(value: TypeReference) = _field_type = value
 
     override def fullName = _field_type.fullName + " " + memberFullName()
 
-    override def containsGenericParameter =
+    override def containsGenericParameter = {
         _field_type.containsGenericParameter || super.containsGenericParameter
     
+    }
     override def resolveDefinition() = this.resolve()
 
-    override def resolve(): MemberDefinition =
-        var module = this.module
-        if (module == null)
-            throw OperationNotSupportedException()
-        module.resolve(this).asInstanceOf[TypeDefinition]
+    override def resolve(): MemberDefinition = {
+        this.module match {
+            case Some(module) => module.resolve(this).asInstanceOf[TypeDefinition]
+            case None => throw OperationNotSupportedException()
+        }
   
-    def this() =
-        this(null, null, null)
+    }
+    def this() = {
+        this("", TypeReference("", ""), None)
+    }
 }

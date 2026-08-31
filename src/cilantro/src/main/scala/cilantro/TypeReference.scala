@@ -54,108 +54,123 @@ enum MetadataType(val value: Byte) {
 }
 
 object MetadataType {
-  def fromOrdinalValue(value: Int) =
-    MetadataType.values.find(x => {x.value == value}) match
+  def fromOrdinalValue(value: Int) = {
+    MetadataType.values.find(x => {x.value == value}) match {
       case Some(result) => result
       case None => throw IllegalArgumentException(s"value $value not found in TokenType")
 
+    }
+  }
 }
 
 class TypeReference(private var _namespace: String, _name: String) extends MemberReference(_name) with GenericParameterProvider with GenericContext { // TODO
     private var value_type: Boolean = false
-    var _scope: MetadataScope = null
-    var _module: ModuleDefinition = null
+    var _scope: Option[MetadataScope] = None
+    var _module: Option[ModuleDefinition] = None
 
     var etype: ElementType = ElementType.none
 
-    private var fullname: String = null
+    private var fullname: Option[String] = None
 
-    protected var generic_parameters: ArrayBuffer[GenericParameter] = null
+    protected var generic_parameters: Option[ArrayBuffer[GenericParameter]] = None
 
     override def name = super.name
-    override def name_=(value: String) =
-        if (isWindowsRuntimeProjection && value != super.name)
+    override def name_=(value: String) = {
+        if (isWindowsRuntimeProjection && value != super.name) {
             throw OperationNotSupportedException("Projected type reference name can't be changed.")
         
+        }
         super.name = value
         clearFullName()
 
+    }
     def nameSpace = _namespace
-    def nameSpace_=(value: String) =
-        if (isWindowsRuntimeProjection && value != _namespace)
+    def nameSpace_=(value: String) = {
+        if (isWindowsRuntimeProjection && value != _namespace) {
             throw OperationNotSupportedException("Projected type reference name can't be changed.")
         
+        }
         _namespace = value
         clearFullName()
 
+    }
     def isValueType = value_type
     def isValueType_=(value: Boolean) = value_type = value
 
-    override def module =
-        if (_module != null)
-            _module
-        else
-            val declaring_type = declaringType
-            if (declaring_type != null)
-                declaring_type.module
-            else
-                null
+    override def module = {
+        _module.orElse(declaringType.flatMap(_.module))
 
-    def windowsRuntimeProjection = projection.asInstanceOf[TypeReferenceProjection]
-    def windowsRuntimeProjection_=(value: TypeReferenceProjection) = projection = value
+    }
+    def windowsRuntimeProjection: Option[TypeReferenceProjection] = projection.map(_.asInstanceOf[TypeReferenceProjection])
+    def windowsRuntimeProjection_=(value: TypeReferenceProjection) = projection = Some(value)
 
-    override def `type`: GenericParameterProvider = this
+    override def `type`: Option[GenericParameterProvider] = Some(this)
 
-    override def method: GenericParameterProvider = null
+    override def method: Option[GenericParameterProvider] = None
 
     override def genericParameterType: GenericParameterType = GenericParameterType.`type`
 
-    def hasGenericParameters:Boolean =
-        generic_parameters == null || generic_parameters.length == 0
+    def hasGenericParameters:Boolean = {
+        generic_parameters.exists(_.length > 0)
     
-    def genericParameters: ArrayBuffer[GenericParameter] =
-        if (generic_parameters == null)
-            generic_parameters = GenericParameterCollection(this)
-        generic_parameters.asInstanceOf[ArrayBuffer[GenericParameter]]
+    }
+    def genericParameters: ArrayBuffer[GenericParameter] = {
+        generic_parameters match {
+            case Some(gp) => gp
+            case None =>
+                val gp = GenericParameterCollection(this)
+                generic_parameters = Some(gp)
+                gp
+        }
 
-    def scope:MetadataScope =
-        val declaring_type = declaringType
-        if (declaring_type != null)
-            declaring_type.scope
-        
-        _scope
+    }
+    def scope: Option[MetadataScope] = {
+        declaringType match {
+            case Some(declaring_type) => declaring_type.scope
+            case None => _scope
+        }
     
-    def scope_=(value: MetadataScope):Unit =
-        val declaring_type = declaringType
-        if (declaring_type != null)
-            if (isWindowsRuntimeProjection && value != declaring_type.scope)
+    }
+    def scope_=(value: Option[MetadataScope]):Unit = _scope = value
+    def scope_=(value: MetadataScope):Unit = {
+        declaringType.foreach { declaring_type =>
+            if (isWindowsRuntimeProjection && !declaring_type.scope.contains(value)) {
                 throw OperationNotSupportedException("Projected type reference scope can't be changed.")
+            }
             declaring_type.scope = value
 
-        if (isWindowsRuntimeProjection && value != _scope)
+        }
+        if (isWindowsRuntimeProjection && !_scope.contains(value)) {
             throw OperationNotSupportedException("Projected type reference scope can't be changed.")
         
-        _scope = value
+        }
+        _scope = Some(value)
 
-    def isNested = declaringType != null
+    }
+    def isNested = declaringType.isDefined
 
-    override def declaringType: TypeReference = super.declaringType
-    override def declaringType_=(value: TypeReference) =
-        if (isWindowsRuntimeProjection && value != super.declaringType)
+    override def declaringType: Option[TypeReference] = super.declaringType
+    override def declaringType_=(value: TypeReference) = {
+        if (isWindowsRuntimeProjection && !super.declaringType.contains(value)) {
             throw OperationNotSupportedException("Projected type declaring type can't be changed.")
+        }
         super.declaringType = value
         clearFullName()
 
-    override def fullName =
-        if (fullname != null)
-            fullname
-        
-        var new_fullname = this.typeFullName()
-        if (isNested)
-            new_fullname = declaringType.fullName + "/" + new_fullname
-        fullname = new_fullname
-        fullname
+    }
+    override def fullName = {
+        fullname match {
+            case Some(f) => f
+            case None =>
+                var new_fullname = this.typeFullName()
+                if (isNested) {
+                    new_fullname = declaringType.map(_.fullName).getOrElse("") + "/" + new_fullname
+                }
+                fullname = Some(new_fullname)
+                new_fullname
+        }
 
+    }
     def isByReference = false
     def isPointer = false
     def isSentinel = false
@@ -168,45 +183,60 @@ class TypeReference(private var _namespace: String, _name: String) extends Membe
     def isFunctionPointer = false
     def isPrimitive = false
 
-    def metadataType =
-        etype match
+    def metadataType = {
+        etype match {
             case ElementType.none => if isValueType then MetadataType.valueType else MetadataType.`class`
             case el: ElementType  => MetadataType.fromOrdinalValue(el.value)
 
 
-    def this(namespace: String, name: String, module: ModuleDefinition, scope: MetadataScope) =
+        }
+    }
+    def this(namespace: String, name: String, module: ModuleDefinition) = {
         this(namespace, name)
-        _module = module
-        _scope = scope
+        _module = Some(module)
 
-    def this(namespace: String, name: String, module: ModuleDefinition, scope: MetadataScope, valueType: Boolean) =
+    }
+    def this(namespace: String, name: String, module: ModuleDefinition, scope: MetadataScope) = {
+        this(namespace, name)
+        _module = Some(module)
+        _scope = Some(scope)
+
+    }
+    def this(namespace: String, name: String, module: ModuleDefinition, scope: MetadataScope, valueType: Boolean) = {
         this(namespace, name, module, scope)
         value_type = valueType
 
-    protected def clearFullName() =
-        this.fullname = null
+    }
+    protected def clearFullName() = {
+        this.fullname = None
     
+    }
     def getElementType(): TypeReference = this
 
     override def resolveDefinition() = resolve()
 
-    override def resolve(): TypeDefinition =
-        var module = this.module
-        if (module == null)
-            throw new OperationNotSupportedException()
-        module.resolve(this)
+    override def resolve(): TypeDefinition = {
+        this.module match {
+            case Some(module) => module.resolve(this)
+            case None => throw new OperationNotSupportedException()
+        }
 
-    def typeFullName() =
-        if (this.nameSpace == null || this.nameSpace.isEmpty)
+    }
+    def typeFullName() = {
+        if (this.nameSpace.isEmpty) {
             this.name
-        else
+        }
+        else {
             this.nameSpace + "." + this.name
 
-    def isTypeOf(namespace: String, name: String) =
+        }
+    }
+    def isTypeOf(namespace: String, name: String) = {
         this._name == name && this._namespace == namespace
     
-    def isTypeSpecification() =
-        etype match
+    }
+    def isTypeSpecification() = {
+        etype match {
             case ElementType.array |
                 ElementType.byRef |
                 ElementType.cModOpt |
@@ -221,16 +251,18 @@ class TypeReference(private var _namespace: String, _name: String) extends Membe
                 ElementType.`var` => true
             case _ => false
     
-    def knownValueType() =
-        if (!isDefinition)
+        }
+    }
+    def knownValueType() = {
+        if (!isDefinition) {
             isValueType = true
 
-    def checkedResolve() =
-        var `type` = this.resolve()
-        if (`type` == null)
-            throw new OperationNotSupportedException(s"unable to resolve $this")
-        `type`.as[TypeDefinition]
+        }
+    }
+    def checkedResolve() = {
+        this.resolve().as[TypeDefinition]
 
+    }
     override def hashCode(): Int = {
         val hashCodeMultiplier = 486187739
         val genericInstanceTypeMultiplier = 31
@@ -260,14 +292,14 @@ class TypeReference(private var _namespace: String, _name: String) extends Membe
         if (metadataType == MetadataType.`var` || metadataType == MetadataType.mVar) {
             val genericParameter = this.asInstanceOf[GenericParameter]
             val hashCode = genericParameter.position.hashCode() * hashCodeMultiplier + metadataType.value.hashCode()
-            val ownerTypeReference = genericParameter.owner.as[TypeReference]
-            if (ownerTypeReference != null) {
-                return hashCode * hashCodeMultiplier | ownerTypeReference.hashCode()
+            val ownerTypeReference = genericParameter.owner.flatMap(_.as[TypeReference])
+            if (ownerTypeReference.isDefined) {
+                return hashCode * hashCodeMultiplier | ownerTypeReference.get.hashCode()
             }
 
-            val ownerMethodReference = genericParameter.owner.as[MethodReference]
-            if (ownerMethodReference != null) {
-                return hashCode * hashCodeMultiplier + ownerMethodReference.hashCode()
+            val ownerMethodReference = genericParameter.owner.flatMap(_.as[MethodReference])
+            if (ownerMethodReference.isDefined) {
+                return hashCode * hashCodeMultiplier + ownerMethodReference.get.hashCode()
             }
 
             throw new OperationNotSupportedException("Generic parameter encountered with invalid owner")
@@ -322,60 +354,67 @@ class TypeReference(private var _namespace: String, _name: String) extends Membe
 
 object TypeReference {
     def areEqual(a: TypeReference, b: TypeReference, comparisonMode: TypeComparisonMode = TypeComparisonMode.exact): Boolean = {
-        if (a eq b)
+        if (a eq b) {
             return true
         
-        if (a == null || b == null)
-            return false
-        
+        }
+
         val aMetadataType = a.metadataType
         val bMetadataType = b.metadataType
 
         if (aMetadataType == MetadataType.genericInstance || b.metadataType == MetadataType.genericInstance) {
-            if (aMetadataType != bMetadataType)
+            if (aMetadataType != bMetadataType) {
                 return false;
+            }
             return areEqual(a.asInstanceOf[GenericInstanceType], b.asInstanceOf[GenericInstanceType], comparisonMode)
         }
 
         if (aMetadataType == MetadataType.array || bMetadataType == MetadataType.array) {
-            if (aMetadataType != bMetadataType)
+            if (aMetadataType != bMetadataType) {
                 return false
             
+            }
             var a1 = a.asInstanceOf[ArrayType]
             var b1 = b.asInstanceOf[ArrayType]
-            if (a1.rank != b1.rank)
+            if (a1.rank != b1.rank) {
                 return false
             
+            }
             return areEqual(a1.elementType, b1.elementType, comparisonMode)
         }
 
         if (aMetadataType == MetadataType.`var` || bMetadataType == MetadataType.`var`) {
-            if (aMetadataType != bMetadataType)
+            if (aMetadataType != bMetadataType) {
                 return false
+            }
             return areEqual(a.asInstanceOf[GenericParameter], b.asInstanceOf[GenericParameter], comparisonMode)
         }
 
         if (aMetadataType == MetadataType.mVar || bMetadataType == MetadataType.mVar) {
-            if (aMetadataType != bMetadataType)
+            if (aMetadataType != bMetadataType) {
                 return false
+            }
             return areEqual(a.asInstanceOf[GenericParameter], b.asInstanceOf[GenericParameter], comparisonMode)
         }
 
         if (aMetadataType == MetadataType.byReference || bMetadataType == MetadataType.byReference) {
-            if (aMetadataType != bMetadataType)
+            if (aMetadataType != bMetadataType) {
                 return false
+            }
             return areEqual(a.asInstanceOf[ByReferenceType].elementType, b.asInstanceOf[ByReferenceType].elementType, comparisonMode)
         }
 
         if (aMetadataType == MetadataType.pointer || bMetadataType == MetadataType.pointer) {
-            if (aMetadataType != bMetadataType)
+            if (aMetadataType != bMetadataType) {
                 return false
+            }
             return areEqual(a.asInstanceOf[PointerType].elementType, b.asInstanceOf[PointerType].elementType, comparisonMode)
         }
 
         if (aMetadataType == MetadataType.requiredModifer || bMetadataType == MetadataType.requiredModifer) {
-            if (aMetadataType != bMetadataType)
+            if (aMetadataType != bMetadataType) {
                 return false
+            }
             val a1 = a.asInstanceOf[RequiredModifierType]
             val b1 = b.asInstanceOf[RequiredModifierType]
             return areEqual(a1.modifierType, b1.modifierType, comparisonMode) &&
@@ -383,8 +422,9 @@ object TypeReference {
         }
 
         if (aMetadataType == MetadataType.optionalModifier || bMetadataType == MetadataType.optionalModifier) {
-            if (aMetadataType != bMetadataType)
+            if (aMetadataType != bMetadataType) {
                 return false
+            }
             val a1 = a.asInstanceOf[OptionalModifierType]
             val b1 = b.asInstanceOf[OptionalModifierType]
             return areEqual(a1.modifierType, b1.modifierType, comparisonMode) &&
@@ -392,14 +432,16 @@ object TypeReference {
         }
 
         if (aMetadataType == MetadataType.pinned || bMetadataType == MetadataType.pinned) {
-            if (aMetadataType != bMetadataType)
+            if (aMetadataType != bMetadataType) {
                 return false
+            }
             return areEqual(a.asInstanceOf[PinnedType].elementType, b.asInstanceOf[PinnedType].elementType, comparisonMode)
         }
 
         if (aMetadataType == MetadataType.sentinel || bMetadataType == MetadataType.sentinel) {
-            if (aMetadataType != bMetadataType)
+            if (aMetadataType != bMetadataType) {
                 return false;
+            }
             return areEqual(a.asInstanceOf[SentinelType].elementType, b.asInstanceOf[SentinelType].elementType, comparisonMode)
         }
 
@@ -411,10 +453,14 @@ object TypeReference {
         val yDefinition = b.resolve()
 
         if (comparisonMode == TypeComparisonMode.signatureOnlyLoose) {
-            if (xDefinition.module.name != yDefinition.module.name)
+            if (xDefinition.module.exists(xm => yDefinition.module.exists(ym => xm.name != ym.name))) {
                 return false
-            if (xDefinition.module.assembly.name.name != yDefinition.module.assembly.name.name)
+            }
+            val xAssemblyName = xDefinition.module.flatMap(_.assembly).flatMap(_.name).map(_.name)
+            val yAssemblyName = yDefinition.module.flatMap(_.assembly).flatMap(_.name).map(_.name)
+            if (xAssemblyName != yAssemblyName) {
                 return false
+            }
             return xDefinition.fullName == yDefinition.fullName
         }
 

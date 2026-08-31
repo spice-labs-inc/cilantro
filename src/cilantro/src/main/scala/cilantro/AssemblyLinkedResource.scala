@@ -12,9 +12,9 @@
 
 package io.spicelabs.cilantro
 
-class AssemblyLinkedResource(name: String, flags: Int, private var _reference: AssemblyNameReference = null) extends Resource(name, flags) {
+class AssemblyLinkedResource(name: String, flags: Int, private var _reference: Option[AssemblyNameReference] = None) extends Resource(name, flags) {
     def assembly = _reference
-    def assembly_=(value: AssemblyNameReference) = _reference = value
+    def assembly_=(value: AssemblyNameReference) = _reference = Some(value)
 
     override def resourceType = ResourceType.assemblyLinked
 }

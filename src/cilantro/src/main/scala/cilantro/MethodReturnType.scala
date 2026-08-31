@@ -12,45 +12,53 @@
 
 package io.spicelabs.cilantro
 
+import javax.naming.OperationNotSupportedException
+import scala.collection.mutable.ArrayBuffer
+
 
 sealed class MethodReturnType(val _method: MethodSignature) extends ConstantProvider with CustomAttributeProvider /* TODO with MarshalInfoProvider */ {
-    var _parameter: ParameterDefinition = null
-    var _return_type: TypeReference = null
+    var _parameter: Option[ParameterDefinition] = None
+    var _return_type: Option[TypeReference] = None
 
     def method = _method
 
-    def returnType = _return_type
-    def returnType_=(value: TypeReference) = _return_type = value
+    def returnType = _return_type.getOrElse(throw OperationNotSupportedException())
+    def returnType_=(value: TypeReference) = _return_type = Some(value)
 
-    def parameter =
-        if (_parameter == null)
-            _parameter = ParameterDefinition(_return_type, _method)
-        _parameter
+    def parameter = {
+        _parameter match {
+            case Some(p) => p
+            case None =>
+                val p = ParameterDefinition(_return_type.getOrElse(throw OperationNotSupportedException()), _method)
+                _parameter = Some(p)
+                p
+        }
 
-    def metadataToken = _parameter.metadataToken
-    def metadataToken_=(value: MetadataToken) = _parameter.metadataToken = value
+    }
+    def metadataToken: Option[MetadataToken] = _parameter.flatMap(_.metadataToken)
+    def metadataToken_=(value: MetadataToken) = _parameter.foreach(_.metadataToken = value)
 
-    def attributes = _parameter.attributes
-    def attributes_=(value: Char) = _parameter.attributes = value
+    def attributes = _parameter.map(_.attributes).getOrElse(0.toChar)
+    def attributes_=(value: Char) = _parameter.foreach(_.attributes = value)
 
-    def name = _parameter.name
-    def name_=(value: String) = _parameter.name = value
+    def name = _parameter.map(_.name).getOrElse("")
+    def name_=(value: String) = _parameter.foreach(_.name = value)
 
-    def hasCustomAttributes = _parameter != null && _parameter.hasCustomAttributes
+    def hasCustomAttributes = _parameter.exists(_.hasCustomAttributes)
 
-    def customAttributes = _parameter.customAttributes
+    def customAttributes = _parameter.map(_.customAttributes).getOrElse(ArrayBuffer.empty[CustomAttribute])
 
-    def hasDefault = _parameter != null && _parameter.hasDefault
-    def hasDefault_=(value: Boolean) = _parameter.hasDefault = value
+    def hasDefault = _parameter.exists(_.hasDefault)
+    def hasDefault_=(value: Boolean) = _parameter.foreach(_.hasDefault = value)
 
-    def hasConstant = _parameter != null && _parameter.hasConstant
-    def hasConstant_=(value: Boolean) = _parameter.hasConstant = value
+    def hasConstant = _parameter.exists(_.hasConstant)
+    def hasConstant_=(value: Boolean) = _parameter.foreach(_.hasConstant = value)
 
-    override def constant: Any = _parameter.constant
-    override def constant_=(value: Any): Unit = _parameter.constant = value
+    override def constant: Any = _parameter.map(_.constant).getOrElse(ConstantProvider.noValue)
+    override def constant_=(value: Any): Unit = _parameter.foreach(_.constant = value)
 
-    def hasFieldMarshal = _parameter != null && _parameter.hasFieldMarshal
-    def hasFieldMarshal_=(value: Boolean) = _parameter.hasFieldMarshal = value
+    def hasFieldMarshal = _parameter.exists(_.hasFieldMarshal)
+    def hasFieldMarshal_=(value: Boolean) = _parameter.foreach(_.hasFieldMarshal = value)
 
     // TODO
     // def hasMarshalInfo = ...

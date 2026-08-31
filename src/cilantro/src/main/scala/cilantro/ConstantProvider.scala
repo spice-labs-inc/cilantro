@@ -20,23 +20,31 @@ trait ConstantProvider extends MetadataTokenProvider {
     def constant: Any
     def constant_=(value: Any): Unit
 
-    def resolveConstant(constant: Any, module: ModuleDefinition): Any =
-        if (module == null)
-            ConstantProvider.noValue
-        else
-            module.syncRoot.synchronized {
-                if (constant != ConstantProvider.notResolved)
-                    return constant
-                return ConstantProvider.noValue
-                // TODO
-                // if (module.hasImage)
-                //     module.read(this, (provider, reader) => reader.readConstant(provider))
-                // else
-                //     ConstantProvider.noValue
-            }
+    def resolveConstant(constant: Any, module: Option[ModuleDefinition]): Any = {
+        module match {
+            case None => ConstantProvider.noValue
+            case Some(m) =>
+                m.syncRoot.synchronized {
+                    if (constant != ConstantProvider.notResolved) {
+                        return constant
+                    }
+                    if (m.hasImage) {
+                        m.read(this, (provider: ConstantProvider, reader: io.spicelabs.cilantro.MetadataReader) => reader.readConstant(provider))
+                    } else {
+                        ConstantProvider.noValue
+                    }
+                }
+        }
+    }
 }
 
 object ConstantProvider {
     val noValue = Object()
     val notResolved = Object()
 }
+
+// Sentinel standing in for the null reference constant value: Cecil returns a
+// C# null for a nullref constant embedded in metadata. With -Yexplicit-nulls
+// a null literal is not representable, so consumers that receive a constant
+// and find CilNullConstant must treat it as the null constant.
+object CilNullConstant

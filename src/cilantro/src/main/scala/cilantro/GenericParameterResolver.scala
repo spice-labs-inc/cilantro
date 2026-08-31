@@ -20,136 +20,161 @@ sealed class GenericParameterResolver {
 }
 
 object GenericParameterResolver {
-    def resolveReturnTypeIfNeeded(methodReference: MethodReference): TypeReference =
-        if (methodReference.declaringType.isArray && methodReference.name == "Get")
+    def resolveReturnTypeIfNeeded(methodReference: MethodReference): TypeReference = {
+        if (methodReference.declaringType.exists(_.isArray) && methodReference.name == "Get") {
             return methodReference.returnType
         
+        }
         val genericInstanceMethod = methodReference.as[GenericInstanceMethod]
-        val declaringGenericInstanceType = methodReference.declaringType.as[GenericInstanceType]
+        val declaringGenericInstanceType = methodReference.declaringType.flatMap(_.as[GenericInstanceType])
 
-        if (genericInstanceMethod == null && declaringGenericInstanceType == null)
+        if (genericInstanceMethod.isEmpty && declaringGenericInstanceType.isEmpty) {
             return methodReference.returnType
         
+        }
         resolveIfNeeded(genericInstanceMethod, declaringGenericInstanceType, methodReference.returnType)
     
-    def resolveFieldTypeIfNeeded(fieldReference: FieldReference) =
-        resolveIfNeeded(null, fieldReference.declaringType.as[GenericInstanceType], fieldReference.fieldType)
+    }
+    def resolveFieldTypeIfNeeded(fieldReference: FieldReference) = {
+        resolveIfNeeded(None, fieldReference.declaringType.flatMap(_.as[GenericInstanceType]), fieldReference.fieldType)
 
-    def resolveParameterTypeIfNeeded(method: MethodReference, parameter: ParameterReference): TypeReference =
+    }
+    def resolveParameterTypeIfNeeded(method: MethodReference, parameter: ParameterReference): TypeReference = {
         val genericInstanceMethod = method.as[GenericInstanceMethod]
-        val declaringGenericInstanceType = method.declaringType.as[GenericInstanceType]
+        val declaringGenericInstanceType = method.declaringType.flatMap(_.as[GenericInstanceType])
 
-        if (genericInstanceMethod == null && declaringGenericInstanceType == null)
+        if (genericInstanceMethod.isEmpty && declaringGenericInstanceType.isEmpty) {
             return parameter.parameterType
         
+        }
         resolveIfNeeded(genericInstanceMethod, declaringGenericInstanceType, parameter.parameterType)
 
-    def resolveVariableTypeIfNeeded(method: MethodReference, variable: VariableReference): TypeReference =
+    }
+    def resolveVariableTypeIfNeeded(method: MethodReference, variable: VariableReference): TypeReference = {
         val genericInstanceMethod = method.as[GenericInstanceMethod]
-        val declaringGenericInstanceType = method.declaringType.as[GenericInstanceType]
+        val declaringGenericInstanceType = method.declaringType.flatMap(_.as[GenericInstanceType])
 
-        if (genericInstanceMethod == null && declaringGenericInstanceType == null)
+        if (genericInstanceMethod.isEmpty && declaringGenericInstanceType.isEmpty) {
             return variable.variableType
 
+        }
         resolveIfNeeded(genericInstanceMethod, declaringGenericInstanceType, variable.variableType)
     
-    private def resolveIfNeeded(genericInstanceMethod: GenericInstance, declaringType: GenericInstance, parameterType: TypeReference): TypeReference =
-        val byRefType = parameterType.as[ByReferenceType]
-        if (byRefType != null)
-            return resolveIfNeeded(genericInstanceMethod, declaringType, byRefType)
-        
-        val arrayType = parameterType.as[ArrayType]
-        if (arrayType != null)
-            return resolveIfNeeded(genericInstanceMethod, declaringType, arrayType)
-        
-        val genericInstanceType = parameterType.as[GenericInstanceType]
-        if (genericInstanceType != null)
-            return resolveIfNeeded(genericInstanceMethod, declaringType, genericInstanceType)
-
-        val genericParameter = parameterType.as[GenericParameter]
-        if (genericParameter != null)
-            return resolveIfNeeded(genericInstanceMethod, declaringType, genericParameter)
-        
-        val requiredModifierType = parameterType.as[RequiredModifierType]
-        if (requiredModifierType != null && containsGenericParameters(requiredModifierType))
-            return resolveIfNeeded(genericInstanceMethod, declaringType, requiredModifierType)
-        
-        if (containsGenericParameters(parameterType))
+    }
+    private def resolveIfNeeded(genericInstanceMethod: Option[GenericInstance], declaringType: Option[GenericInstance], parameterType: TypeReference): TypeReference = {
+        parameterType.as[ByReferenceType] match {
+            case Some(byRefType) => return resolveIfNeeded(genericInstanceMethod, declaringType, byRefType)
+            case None => ()
+        }
+        parameterType.as[ArrayType] match {
+            case Some(arrayType) => return resolveIfNeeded(genericInstanceMethod, declaringType, arrayType)
+            case None => ()
+        }
+        parameterType.as[GenericInstanceType] match {
+            case Some(genericInstanceType) => return resolveIfNeeded(genericInstanceMethod, declaringType, genericInstanceType)
+            case None => ()
+        }
+        parameterType.as[GenericParameter] match {
+            case Some(genericParameter) => return resolveIfNeeded(genericInstanceMethod, declaringType, genericParameter)
+            case None => ()
+        }
+        parameterType.as[RequiredModifierType] match {
+            case Some(requiredModifierType) if containsGenericParameters(requiredModifierType) =>
+                return resolveIfNeeded(genericInstanceMethod, declaringType, requiredModifierType)
+            case _ => ()
+        }
+        if (containsGenericParameters(parameterType)) {
             throw IllegalArgumentException("Unexpected generic parameter.")
         
+        }
         parameterType
 
-    private def resolveIfNeeded(genericInstanceMethod: GenericInstance, genericInstanceType: GenericInstance, genericParameterElement: GenericParameter): TypeReference =
-        if genericParameterElement.metadataType == MetadataType.mVar then
-            if genericInstanceMethod != null then genericInstanceMethod.genericArguments(genericParameterElement.position) else genericParameterElement
-        else
-            genericInstanceType.genericArguments(genericParameterElement.position)
+    }
+    private def resolveIfNeeded(genericInstanceMethod: Option[GenericInstance], genericInstanceType: Option[GenericInstance], genericParameterElement: GenericParameter): TypeReference = {
+        if genericParameterElement.metadataType == MetadataType.mVar then {
+            genericInstanceMethod.map(_.genericArguments(genericParameterElement.position)).getOrElse(genericParameterElement)
+        }
+        else {
+            genericInstanceType.map(_.genericArguments(genericParameterElement.position)).getOrElse(genericParameterElement)
     
-    private def resolveIfNeeded(genericInstanceMethod: GenericInstance, genericInstanceType: GenericInstance, arrayType: ArrayType): ArrayType =
+        }
+    }
+    private def resolveIfNeeded(genericInstanceMethod: Option[GenericInstance], genericInstanceType: Option[GenericInstance], arrayType: ArrayType): ArrayType = {
         ArrayType(resolveIfNeeded(genericInstanceMethod, genericInstanceType, arrayType.elementType), arrayType.rank)
     
-    private def resolveIfNeeded(genericInstanceMethod: GenericInstance, genericInstanceType: GenericInstance, byReferenceType: ByReferenceType): ByReferenceType =
+    }
+    private def resolveIfNeeded(genericInstanceMethod: Option[GenericInstance], genericInstanceType: Option[GenericInstance], byReferenceType: ByReferenceType): ByReferenceType = {
         ByReferenceType(resolveIfNeeded(genericInstanceMethod, genericInstanceType, byReferenceType.elementType))
 
-    private def resolveIfNeeded(genericInstanceMethod: GenericInstance, genericInstanceType: GenericInstance, genericInstanceType1: GenericInstanceType): GenericInstanceType =
-        if (!containsGenericParameters(genericInstanceType1))
+    }
+    private def resolveIfNeeded(genericInstanceMethod: Option[GenericInstance], genericInstanceType: Option[GenericInstance], genericInstanceType1: GenericInstanceType): GenericInstanceType = {
+        if (!containsGenericParameters(genericInstanceType1)) {
             return genericInstanceType1
 
+        }
         val newGenericInstance = GenericInstanceType(genericInstanceType1.elementType)
 
-        for genericArgument <- genericInstanceType1.genericArguments do
-            if (!genericArgument.isGenericParameter)
+        for genericArgument <- genericInstanceType1.genericArguments do {
+            if (!genericArgument.isGenericParameter) {
                 newGenericInstance.genericArguments.addOne(resolveIfNeeded(genericInstanceMethod, genericInstanceType, genericArgument))
-            else
+            }
+            else {
                 val genParam = genericArgument.asInstanceOf[GenericParameter]
-                genParam.`type` match
+                genParam._type match {
                     case GenericParameterType.`type` =>
-                        if (genericInstanceType == null)
-                            throw OperationNotSupportedException()
-                        newGenericInstance.genericArguments.addOne(genericInstanceType.genericArguments(genParam.position))
+                        genericInstanceType match {
+                            case None => throw OperationNotSupportedException()
+                            case Some(git) => newGenericInstance.genericArguments.addOne(git.genericArguments(genParam.position))
+                        }
                     case GenericParameterType.method =>
-                        if (genericInstanceMethod == null)
-                            newGenericInstance.genericArguments.addOne(genParam)
-                        else
-                            newGenericInstance.genericArguments.addOne(genericInstanceMethod.genericArguments(genParam.position))
+                        genericInstanceMethod match {
+                            case None => newGenericInstance.genericArguments.addOne(genParam)
+                            case Some(gim) => newGenericInstance.genericArguments.addOne(gim.genericArguments(genParam.position))
+                        }
+                }
+            }
+        }
         newGenericInstance
     
-    private def containsGenericParameters(typeReference: TypeReference): Boolean =
-        val genericParameter = typeReference.as[GenericParameter]
-        if (genericParameter != null)
+    }
+    private def containsGenericParameters(typeReference: TypeReference): Boolean = {
+        if (typeReference.as[GenericParameter].isDefined) {
             return true
         
-        val arrayType = typeReference.as[ArrayType]
-        if (arrayType != null)
-            return containsGenericParameters(arrayType.elementType)
-        
-        val pointerType = typeReference.as[PointerType]
-        if (pointerType != null)
-            return containsGenericParameters(pointerType.elementType)
-
-        val byReferenceType = typeReference.as[ByReferenceType]
-        if (byReferenceType != null)
-            return containsGenericParameters(byReferenceType.elementType)
-        
-        val sentinelType = typeReference.as[SentinelType]
-        if (sentinelType != null)
-            return containsGenericParameters(sentinelType.elementType)
-        
-        val pinnedType = typeReference.as[PinnedType]
-        if (pinnedType != null)
-            return containsGenericParameters(pinnedType.elementType)
-        
-        val requiredModifierType = typeReference.as[RequiredModifierType]
-        if (requiredModifierType != null)
-            return containsGenericParameters(requiredModifierType.elementType)
-        
-        val genericInstance = typeReference.as[GenericInstanceType]
-        if (genericInstance != null)
-            return genericInstance.genericArguments.exists(containsGenericParameters)
-        
-        if (typeReference.isInstanceOf[TypeSpecification])
+        }
+        typeReference.as[ArrayType] match {
+            case Some(arrayType) => return containsGenericParameters(arrayType.elementType)
+            case None => ()
+        }
+        typeReference.as[PointerType] match {
+            case Some(pointerType) => return containsGenericParameters(pointerType.elementType)
+            case None => ()
+        }
+        typeReference.as[ByReferenceType] match {
+            case Some(byReferenceType) => return containsGenericParameters(byReferenceType.elementType)
+            case None => ()
+        }
+        typeReference.as[SentinelType] match {
+            case Some(sentinelType) => return containsGenericParameters(sentinelType.elementType)
+            case None => ()
+        }
+        typeReference.as[PinnedType] match {
+            case Some(pinnedType) => return containsGenericParameters(pinnedType.elementType)
+            case None => ()
+        }
+        typeReference.as[RequiredModifierType] match {
+            case Some(requiredModifierType) => return containsGenericParameters(requiredModifierType.elementType)
+            case None => ()
+        }
+        typeReference.as[GenericInstanceType] match {
+            case Some(genericInstance) => return genericInstance.genericArguments.exists(containsGenericParameters)
+            case None => ()
+        }
+        if (typeReference.isInstanceOf[TypeSpecification]) {
             throw OperationNotSupportedException()
+        }
         return false
 
                         
+    }
 }

@@ -56,23 +56,28 @@ enum ElementType (val value: Byte) {
   case boxed extends ElementType(0x51)
   case `enum` extends ElementType(0x55)
 
-  def asMetadataType: MetadataType =
+  def asMetadataType: MetadataType = {
     MetadataType.fromOrdinalValue(value)
   
-  def isPrimitive =
-    this match
+  }
+  def isPrimitive = {
+    this match {
       case ElementType.boolean | ElementType.char | ElementType.i | ElementType.u
       | ElementType.i1 | ElementType.u1 | ElementType.i2 | ElementType.u2
       | ElementType.i4 | ElementType.u4 | ElementType.i8 | ElementType.u8
       | ElementType.r4 | ElementType.r8 => true
       case _ => false
     
+    }
+  }
 }
 
 object ElementType {
-  def fromOrdinalValue(value: Byte) =
-    ElementType.values.find(x => {x.value == value}) match
+  def fromOrdinalValue(value: Byte) = {
+    ElementType.values.find(x => {x.value == value}) match {
       case Some(result) => result
       case None => throw IllegalArgumentException(s"value $value not found in ElementType")
 
+    }
+  }
 }

@@ -59,6 +59,7 @@ credentials += Credentials(
 // make the PGP_PASSPHRASE available
 ThisBuild / pgpPassphrase := sys.env.get("PGP_PASSPHRASE").map(_.toCharArray)
 Global / excludeLintKeys += pgpPassphrase
+Global / excludeLintKeys += ThisBuild / organization
 
 Compile / packageBin := (Compile /  packageBin).value
 
@@ -68,6 +69,19 @@ lazy val root = project
   .in(file("."))
   .settings(
     name := "cilantro",
+    scalacOptions ++= Seq(
+      "-no-indent",
+      "-Yexplicit-nulls",
+      // json4s' extract[A] API requires a Manifest; Scala 3 deprecates the
+      // compiler-synthesized Manifest. The API shape is the only idiomatic
+      // json4s accessor for the corpus manifests, so this one warning class
+      // is silenced by message (everything else must stay warning-free).
+      "-Wconf:msg=(?s).*synthesis of Manifest.*:s",
+      "-deprecation",
+      "-unchecked",
+      "-Wunused:imports",
+      "-feature"
+    ),
 
     organization := "io.spicelabs",
 
@@ -75,5 +89,30 @@ lazy val root = project
 
     scalaVersion := scala3Version,
 
-    libraryDependencies += "org.scalameta" %% "munit" % "1.0.0" % Test
+    libraryDependencies += "org.scalameta" %% "munit" % "1.3.5" % Test,
+    libraryDependencies += "org.json4s" %% "json4s-native" % "4.0.7" % Test,
+    Test / testOptions += Tests.Argument("--exclude-tags=Slow"),
+    Test / fork := true,
+    Test / javaOptions += "-Xmx6g",
+    Test / javaOptions += "-Xss16m"
   )
+
+// House style (see workspace/2026_08_26_cilantro/00_style_and_ground_rules.md):
+// brace format only, Option-only (no null), enforced at the compiler level.
+lazy val root2 = root.settings(
+  scalacOptions ++= Seq(
+    "-no-indent",
+    "-Yexplicit-nulls",
+    // json4s' extract[A] API requires a Manifest; Scala 3 deprecates the
+    // compiler-synthesized Manifest. The API shape is the only idiomatic
+    // json4s accessor for the corpus manifests, so this one warning class
+    // is silenced by message (everything else must stay warning-free).
+    "-Wconf:msg=(?s).*synthesis of Manifest.*:s",
+    "-deprecation",
+    "-unchecked",
+    "-Wunused:imports",
+    "-feature"
+  )
+)
+
+lazy val rootFinal = root2

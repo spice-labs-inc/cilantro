@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "generator": "sha256 of the committed corpus/golden/fixtures oracle dumps (see ADR-0006)",
+  "files": {
+    "golden/fixtures/embedded_pdb_fixture.debug.json": "75844166a2e9f19bbf227ce4054f00dd30b59aab80dafd3f9c51ee222ef5ee5c",
+    "golden/fixtures/ilasm_fixture.tier1.json": "0dd1366c76fc6ee8c8cd9e1083002a9c175fe86a90442f82b2fa7a61f7e46350",
+    "golden/fixtures/ilasm_fixture.tier2.json": "72d8da332bdf6e2d3d265e1122f66c915f89fe531c091a1c3de927087e12d192",
+    "golden/fixtures/resources_fixture.resources.json": "c2ba680e2a4fec947ba22cd6c5a29e41c4caf7a9c86e2d2895fb22de41ab7aae",
+    "golden/fixtures/x64_fixture.tier1.json": "d1aa7ee867f77183238d9fa369d3ebef2635f81a5d1152e390f0cffd29efbc13",
+    "golden/fixtures/x64_fixture.tier2.json": "432ff1cb2e932c424acd6dab497d5ff49210319b7f84839d0b857dff1450e93d"
+  }
+}

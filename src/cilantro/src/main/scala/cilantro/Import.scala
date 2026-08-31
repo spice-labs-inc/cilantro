@@ -16,7 +16,6 @@ import scala.collection.mutable.ArrayBuffer
 import io.spicelabs.cilantro.AnyExtension.as
 import javax.naming.OperationNotSupportedException
 import io.spicelabs.cilantro.ImportGenericContext.genericTypeFor
-import scala.compiletime.ops.any
 import io.spicelabs.cilantro.metadata.ElementType
 import io.spicelabs.cilantro.DefaultMetadataImport.importGenericParameters
 import scala.annotation.tailrec
@@ -25,7 +24,6 @@ import io.spicelabs.cilantro.DefaultReflectionImporter.isNestedType
 import java.lang.reflect.ParameterizedType
 import io.spicelabs.cilantro.DefaultReflectionImporter.ImportGenericKind
 import io.spicelabs.cilantro.DefaultReflectionImporter.genericParameters
-import java.lang.Runtime.Version
 import java.lang.module.ModuleDescriptor
 import scala.jdk.OptionConverters._
 import io.spicelabs.cilantro.DefaultReflectionImporter.moduleVersion
@@ -53,74 +51,90 @@ trait ReflectionImporter { // TODO
 }
 
 sealed class ImportGenericContext(_provider: GenericParameterProvider) {
-    if (_provider == null)
-        throw IllegalArgumentException("_provider")
-    private var stack: ArrayBuffer[GenericParameterProvider] = null
+    private var stack: Option[ArrayBuffer[GenericParameterProvider]] = None
     push(_provider)
 
-    def isEmpty = stack == null
+    def isEmpty = stack.isEmpty
 
-    def push(provider: GenericParameterProvider) =
-        if (stack == null)
-            stack = ArrayBuffer[GenericParameterProvider](provider)
-        else
-            stack.addOne(provider)
-    
-    def pop() =
-        stack.remove(stack.length - 1)
+    def push(provider: GenericParameterProvider) = {
+        stack match {
+            case None => stack = Some(ArrayBuffer[GenericParameterProvider](provider))
+            case Some(s) => s.addOne(provider)
+        }
+    }
+    def pop() = {
+        stack.foreach(_.remove(stack.get.length - 1))
 
+    }
     @tailrec
-    private def methodParameterFind(method: String, position: Int, curr: Int): Option[TypeReference] =
-        if (curr < 0)
+    private def methodParameterFind(method: String, position: Int, curr: Int): Option[TypeReference] = {
+        if (curr < 0) {
             None
-        else
-            val candidate = stack(curr).as[MethodReference]
-            if (candidate != null && method == normalizeMethodName(candidate))
-                Some(candidate.genericParameters(position))
-            else
+        }
+        else {
+            val candidate = stack.flatMap(_(curr).as[MethodReference])
+            if (candidate.isDefined && method == normalizeMethodName(candidate.get)) {
+                Some(candidate.get.genericParameters(position))
+            }
+            else {
                 methodParameterFind(method, position, curr - 1)
     
-    def methodParameter(method: String, position: Int): TypeReference =
-        methodParameterFind(method, position, stack.length - 1) match
+            }
+        }
+    }
+    def methodParameter(method: String, position: Int): TypeReference = {
+        methodParameterFind(method, position, stack.map(_.length - 1).getOrElse(-1)) match {
             case Some(me) => me
             case None => throw OperationNotSupportedException()
 
-    def normalizeMethodName(method: MethodReference) =
-        method.declaringType.getElementType().fullName + "." + method.name
+        }
+    }
+    def normalizeMethodName(method: MethodReference) = {
+        method.declaringType.map(_.getElementType().fullName).getOrElse("") + "." + method.name
     
+    }
     @tailrec
-    private def typeParameterFind(`type`: String, position: Int, curr: Int): Option[TypeReference] =
-        if (curr < 0)
+    private def typeParameterFind(`type`: String, position: Int, curr: Int): Option[TypeReference] = {
+        if (curr < 0) {
             None
-        else
-            val candidate = genericTypeFor(stack(curr))
-            if (candidate.fullName == `type`)
-                Some(candidate.genericParameters(position))
-            else
+        }
+        else {
+            val candidate = stack.map(s => genericTypeFor(s(curr)))
+            if (candidate.exists(_.fullName == `type`)) {
+                candidate.flatMap(c => Option(c.genericParameters(position)))
+            }
+            else {
                 typeParameterFind(`type`, position, curr - 1)
 
 
-    def typeParameter(`type`: String, position: Int): TypeReference =
-        typeParameterFind(`type`, position, stack.length - 1) match
+            }
+        }
+    }
+    def typeParameter(`type`: String, position: Int): TypeReference = {
+        typeParameterFind(`type`, position, stack.map(_.length - 1).getOrElse(-1)) match {
             case Some(ty) => ty
             case None => throw OperationNotSupportedException()
 
+        }
+    }
 }
 
 object ImportGenericContext {
-    private def genericTypeFor(context: GenericParameterProvider): TypeReference =
-        val `type` = context.as[TypeReference]
-        if (`type` != null)
-            return `type`.getElementType()
-
-        val method = context.as[MethodReference]
-        if (method != null)
-            return method.declaringType.getElementType()
-        
+    private def genericTypeFor(context: GenericParameterProvider): TypeReference = {
+        context.as[TypeReference] match {
+            case Some(t) => return t.getElementType()
+            case None => ()
+        }
+        context.as[MethodReference] match {
+            case Some(method) => return method.declaringType.map(_.getElementType()).getOrElse(throw OperationNotSupportedException())
+            case None => ()
+        }
         throw OperationNotSupportedException()
 
-    def `for`(context: GenericParameterProvider) =
-        if context != null then ImportGenericContext(context) else null
+    }
+    def `for`(context: GenericParameterProvider): Option[ImportGenericContext] = {
+        Option(context).map(ImportGenericContext(_))
+    }
 }
 
 // this is a weird thing to port since we can't actually reflect on .NET types, but...
@@ -150,9 +164,10 @@ class DefaultReflectionImporter(protected val module: ModuleDefinition) extends 
         import DefaultReflectionImporter.importElementType
         import DefaultReflectionImporter.importGenericParameters
 
-        if (isTypeSpecification(`type`) || importOpenGenericType(`type`, import_kind))
+        if (isTypeSpecification(`type`) || importOpenGenericType(`type`, import_kind)) {
             return importTypeSpecification(`type`, context)
         
+        }
         val reference = TypeReference("", `type`.getSimpleName(), module, importScope(`type`), isValueType(`type`))
         reference.etype = importElementType(`type`)
         if (isNestedType(`type`)) {
@@ -161,8 +176,9 @@ class DefaultReflectionImporter(protected val module: ModuleDefinition) extends 
             reference.nameSpace = `type`.getPackage().getName()
         }
 
-        if (`type`.getTypeParameters().length > 0)
+        if (`type`.getTypeParameters().length > 0) {
             importGenericParameters(reference, `type`.getTypeParameters().map(ty => Class.forName(ty.getTypeName())))
+        }
         reference
     }
 
@@ -178,12 +194,13 @@ class DefaultReflectionImporter(protected val module: ModuleDefinition) extends 
         // if (`type`.isPointer)
         //     return PointerType(ImportType(`type`.getElementType(), context))
         
-        if (`type`.isArray())
+        if (`type`.isArray()) {
             return ArrayType(importType(`type`.arrayType(), context), 1 /*`type`.getArrayRank()*/)
         
         // if (`type`.isGenericParameter())
         //     return ImportGenericParameter(`type`, context)
         
+        }
         throw OperationNotSupportedException(`type`.getName())
     }
 
@@ -231,7 +248,7 @@ class DefaultReflectionImporter(protected val module: ModuleDefinition) extends 
 
         context.push(declaring_type)
         try {
-            return FieldReference(localField.getName(), declaring_type, importType(localField.getType(), context, Array[Class[?]](), Array[Class[?]]()))
+            return FieldReference(localField.getName(), declaring_type, Some(importType(localField.getType(), context, Array[Class[?]](), Array[Class[?]]())))
         } finally {
             context.pop()
         }
@@ -242,9 +259,10 @@ class DefaultReflectionImporter(protected val module: ModuleDefinition) extends 
         import DefaultReflectionImporter.isMethodSpecification
         import DefaultReflectionImporter.importOpenGenericMethod
         import DefaultReflectionImporter.resolveMethodDefinition
-        if (isMethodSpecification(method) || importOpenGenericMethod(method, import_kind))
+        if (isMethodSpecification(method) || importOpenGenericMethod(method, import_kind)) {
             return importMethodSpecification(method, context)
         
+        }
         val declaring_type = importType(method.getDeclaringClass(), context)
 
         val localMethod = if (isGenericInstance(method.getDeclaringClass())) then resolveMethodDefinition(method) else method
@@ -254,9 +272,10 @@ class DefaultReflectionImporter(protected val module: ModuleDefinition) extends 
         reference.hasThis = !Modifier.isStatic(localMethod.getModifiers())
         reference.declaringType = importType(localMethod.getDeclaringClass(), context, ImportGenericKind.definition)
         
-        if (localMethod.isVarArgs())
+        if (localMethod.isVarArgs()) {
             reference.callingConvention = MethodCallingConvention.fromOrdinalValue(reference.callingConvention.value & MethodCallingConvention.varArg.value)
         
+        }
         if (localMethod.getTypeParameters().length > 0) {
             importGenericParameters(reference, localMethod.getParameterTypes())
         }
@@ -296,15 +315,15 @@ class DefaultReflectionImporter(protected val module: ModuleDefinition) extends 
     }
 
     def importReference(`type`: Class[?], context: GenericParameterProvider): TypeReference = {
-        importType(`type`, ImportGenericContext.`for`(context))
+        importType(`type`, ImportGenericContext.`for`(context).getOrElse(throw OperationNotSupportedException()))
     }
 
     def importReference(field: Field, context: GenericParameterProvider): FieldReference = {
-        importField(field, ImportGenericContext.`for`(context))
+        importField(field, ImportGenericContext.`for`(context).getOrElse(throw OperationNotSupportedException()))
     }
 
     def importReference(method: Method, context: GenericParameterProvider): MethodReference = {
-        importMethod(method, ImportGenericContext.`for`(context), if context != null then ImportGenericKind.open else ImportGenericKind.definition)
+        importMethod(method, ImportGenericContext.`for`(context).getOrElse(throw OperationNotSupportedException()), ImportGenericKind.open)
     }
 }
 
@@ -349,15 +368,20 @@ object DefaultReflectionImporter {
     }
 
     def importGenericParameter(`type`: Class[?], context: ImportGenericContext): TypeReference = {
-        if (context.isEmpty)
+        if (context.isEmpty) {
             throw OperationNotSupportedException();
         
-        if (`type`.getEnclosingMethod() != null)
-            return context.methodParameter(normalizeMethodName(`type`.getEnclosingMethod()), genericIndex(`type`))
-
-        if (`type`.getEnclosingClass() != null)
-            return context.typeParameter(normalizeTypeFullName(`type`.getEnclosingClass()), genericIndex(`type`))
-
+        }
+        Option(`type`.getEnclosingMethod()) match {
+            case Some(m) =>
+                return context.methodParameter(normalizeMethodName(m), genericIndex(`type`))
+            case None => ()
+        }
+        Option(`type`.getEnclosingClass()) match {
+            case Some(c) =>
+                return context.typeParameter(normalizeTypeFullName(c), genericIndex(`type`))
+            case None => ()
+        }
         throw OperationNotSupportedException();
     }
 
@@ -366,13 +390,14 @@ object DefaultReflectionImporter {
     }
 
     def normalizeTypeFullName(`type`: Class[?]): String = {
-        if (`type`.getDeclaringClass() != null)
-            return normalizeTypeFullName(`type`.getDeclaringClass()) + "/" + `type`.getSimpleName()
-        `type`.getName()
+        Option(`type`.getDeclaringClass()) match {
+            case Some(dc) => normalizeTypeFullName(dc) + "/" + `type`.getSimpleName()
+            case None => `type`.getName()
+        }
     }
 
     def isTypeSpecification(`type`: Class[?]): Boolean = {
-        isGenericInstance(`type`) || `type`.getEnclosingClass() != null
+        isGenericInstance(`type`) || Option(`type`.getEnclosingClass()).isDefined
     }
 
     def isGenericInstance(`type`: Class[?]): Boolean = {
@@ -388,7 +413,7 @@ object DefaultReflectionImporter {
     }
 
     def genericParameters(`type`: Class[?]): Array[Class[?]] = {
-        `type`.getGenericSuperclass().as[ParameterizedType].getActualTypeArguments().map(t => t.as[Class[?]])
+        `type`.getGenericSuperclass().as[ParameterizedType].map(_.getActualTypeArguments().map(t => t.as[Class[?]].get)).getOrElse(Array.empty[Class[?]])
     }
 
     def moduleVersion(desc: ModuleDescriptor): CSVersion = {
@@ -412,7 +437,7 @@ object DefaultReflectionImporter {
     def importGenericParameters(provider: GenericParameterProvider, arguments: Array[Class[?]]): Unit = {
         val provider_parameters = provider.genericParameters
         for i <- 0 until arguments.length do {
-            provider_parameters.addOne(GenericParameter(arguments(i).getName(), provider))
+            provider_parameters.addOne(GenericParameter(arguments(i).getName(), Some(provider)))
         }
     }
 
@@ -428,36 +453,43 @@ object DefaultReflectionImporter {
 
 class DefaultMetadataImport(protected val module: ModuleDefinition) extends MetadataImporter {
 
-    def importType(`type`: TypeReference, context: ImportGenericContext): TypeReference =
-        if (`type`.isTypeSpecification())
+    def importType(`type`: TypeReference, context: ImportGenericContext): TypeReference = {
+        if (`type`.isTypeSpecification()) {
             return importTypeSpecification(`type`, context)
 
+        }
         val reference = TypeReference(`type`.nameSpace, `type`.name, module, importScope(`type`), `type`.isValueType)
 
         MetadataSystem.tryProcessPrimitiveTypeReference(reference)
 
-        if (`type`.isNested)
-            reference.declaringType = importType(`type`.declaringType, context)
+        if (`type`.isNested) {
+            reference.declaringType = importType(`type`.declaringType.get, context)
         
-        if (`type`.hasGenericParameters)
+        }
+        if (`type`.hasGenericParameters) {
             importGenericParameters(reference, `type`)
         
+        }
         reference
 
-    protected def importScope(`type`: TypeReference): MetadataScope =
-        importScope(`type`.scope)
+    }
+    protected def importScope(`type`: TypeReference): MetadataScope = {
+        importScope(`type`.scope.getOrElse(throw OperationNotSupportedException()))
 
-    protected def importScope(scope: MetadataScope) =
-        scope.metadataScopeType match
+    }
+    protected def importScope(scope: MetadataScope) = {
+        scope.metadataScopeType match {
             case MetadataScopeType.assemblyNameReference =>
                 importReference(scope.asInstanceOf[AssemblyNameReference])
             case MetadataScopeType.moduleDefinition =>
-                if scope == module then scope else importReference(scope.asInstanceOf[ModuleDefinition].assembly.name)
+                if scope == module then scope else importReference(scope.asInstanceOf[ModuleDefinition].assembly.flatMap(_.name).getOrElse(throw OperationNotSupportedException()))
             case MetadataScopeType.moduleReference => 
                 throw NotImplementedError()
             
-    def importReference(name: AssemblyNameReference) =
-        module.tryGetAssemblyNameReference(name) match
+        }
+    }
+    def importReference(name: AssemblyNameReference) = {
+        module.tryGetAssemblyNameReference(name) match {
             case Some(any) => any
             case None =>
                 val reference = AssemblyNameReference(name.name, name.version)
@@ -466,18 +498,22 @@ class DefaultMetadataImport(protected val module: ModuleDefinition) extends Meta
                 reference.isRetargetable = name.isRetargetable
                 reference.isWindowsRuntime = name.isWindowsRuntime
 
-                val pk_token =
-                    if name.publicKeyToken != null && name.publicKeyToken.length > 0
+                val pk_token = {
+                    if name.publicKeyToken.length > 0
                         then Array.ofDim[Byte](name.publicKeyToken.length)
                         else Array.emptyByteArray
-                if (pk_token.length > 0)
+                }
+                if (pk_token.length > 0) {
                     Array.copy(name.publicKeyToken, 0, pk_token, 0, pk_token.length)
+                }
                 reference.publicKeyToken = pk_token
                 module.assemblyReferences.addOne(reference)
                 reference
         
-    private def importTypeSpecification(`type`: TypeReference, context: ImportGenericContext): TypeReference =
-        `type`.etype match
+        }
+    }
+    private def importTypeSpecification(`type`: TypeReference, context: ImportGenericContext): TypeReference = {
+        `type`.etype match {
             case ElementType.szArray =>
                 val vector = `type`.asInstanceOf[ArrayType]
                 ArrayType(importType(vector.elementType, context))
@@ -500,11 +536,13 @@ class DefaultMetadataImport(protected val module: ModuleDefinition) extends Meta
                 imported_fnptr.explicitThis = fnptr.explicitThis
                 imported_fnptr.callingConvention = fnptr.callingConvention
                 imported_fnptr.returnType = importType(fnptr.returnType, context)
-                if (!fnptr.hasParameters)
+                if (!fnptr.hasParameters) {
                     imported_fnptr
-                else
+                }
+                else {
                     imported_fnptr.parameters.appendAll(fnptr.parameters.map((p) => ParameterDefinition(importType(p.parameterType, context))))
                     imported_fnptr
+                }
             case ElementType.cModOpt =>
                 val modopt = `type`.asInstanceOf[OptionalModifierType]
                 OptionalModifierType(importType(modopt.modifierType, context), importType(modopt.elementType, context))
@@ -514,14 +552,16 @@ class DefaultMetadataImport(protected val module: ModuleDefinition) extends Meta
             case ElementType.array =>
                 val array = `type`.asInstanceOf[ArrayType]
                 val imported_array = ArrayType(importType(array.elementType, context))
-                if (array.isVector)
+                if (array.isVector) {
                     imported_array
-                else
+                }
+                else {
                     val dimensions = array.dimensions
                     val imported_dimensions = imported_array.dimensions
                     imported_dimensions.clear()
                     imported_dimensions.appendAll(dimensions.map((d) => ArrayDimension(d.lowerBound, d.upperBound)))
                     imported_array
+                }
             case ElementType.genericInst =>
                 val instance = `type`.asInstanceOf[GenericInstanceType]
                 val element_type = importType(instance.elementType, context)
@@ -531,29 +571,37 @@ class DefaultMetadataImport(protected val module: ModuleDefinition) extends Meta
                 imported_instance
             case ElementType.`var` =>
                 val var_parameter = `type`.asInstanceOf[GenericParameter]
-                if (var_parameter.declaringType == null)
-                    throw OperationNotSupportedException()
-                context.typeParameter(var_parameter.declaringType.fullName, var_parameter.position)
+                var_parameter.declaringType match {
+                    case None => throw OperationNotSupportedException()
+                    case Some(dt) => context.typeParameter(dt.fullName, var_parameter.position)
+                }
             case ElementType.mVar =>
                 val mvar_parameter = `type`.asInstanceOf[GenericParameter]
-                if (mvar_parameter.declaringMethod == null)
-                    throw OperationNotSupportedException()
-                context.methodParameter(context.normalizeMethodName(mvar_parameter.declaringMethod), mvar_parameter.position)
+                mvar_parameter.declaringMethod match {
+                    case None => throw OperationNotSupportedException()
+                    case Some(dm) => context.methodParameter(context.normalizeMethodName(dm), mvar_parameter.position)
+                }
             case _ => throw OperationNotSupportedException(`type`.etype.toString())
     
-    private def importField(field: FieldReference, context: ImportGenericContext) =
-        val declaring_type = importType(field.declaringType, context)
+        }
+    }
+    private def importField(field: FieldReference, context: ImportGenericContext) = {
+        val declaring_type = importType(field.declaringType.getOrElse(throw OperationNotSupportedException()), context)
         context.push(declaring_type)
-        try
-            FieldReference(field.name, importType(field.fieldType, context), declaring_type)
-        finally
+        try {
+            FieldReference(field.name, importType(field.fieldType, context), Some(declaring_type))
+        }
+        finally {
             context.pop()
     
-    private def importMethod(method: MethodReference, context: ImportGenericContext): MethodReference =
-        if (method.isGenericInstance)
+        }
+    }
+    private def importMethod(method: MethodReference, context: ImportGenericContext): MethodReference = {
+        if (method.isGenericInstance) {
             importMethodSpecification(method, context)
-        else
-            val declaring_type = importType(method.declaringType, context)
+        }
+        else {
+            val declaring_type = method.declaringType.map(t => importType(t, context))
             val reference = MethodReference()
             reference.name = method.name
             reference.hasThis = method.hasThis
@@ -561,24 +609,32 @@ class DefaultMetadataImport(protected val module: ModuleDefinition) extends Meta
             reference.declaringType = declaring_type
             reference.callingConvention = method.callingConvention
 
-            if (method.hasGenericParameters)
+            if (method.hasGenericParameters) {
                 importGenericParameters(reference, method)
 
+            }
             context.push(reference)
-            try            
-                if (!method.hasParameters)
+            try             {
+                if (!method.hasParameters) {
                     reference
-                else
-                    reference._parameters = ParameterDefinitionCollection(reference)
-                    reference._parameters.addAll(method.parameters.map((p) => ParameterDefinition(importType(p.parameterType, context))))
+                }
+                else {
+                    reference._parameters = Some(ParameterDefinitionCollection(reference))
+                    reference._parameters.foreach(_.addAll(method.parameters.map((p) => ParameterDefinition(importType(p.parameterType, context)))))
                     reference
-            finally
+                }
+            }
+            finally {
                 context.pop()
 
-    private def importMethodSpecification(method: MethodReference, context: ImportGenericContext) =
-        if (!method.isGenericInstance)
+            }
+        }
+    }
+    private def importMethodSpecification(method: MethodReference, context: ImportGenericContext) = {
+        if (!method.isGenericInstance) {
             throw OperationNotSupportedException()
         
+        }
         val instance = method.asInstanceOf[GenericInstanceMethod]
         val element_method = importMethod(instance.elementMethod, context)
         val imported_instance = GenericInstanceMethod(element_method)
@@ -589,26 +645,32 @@ class DefaultMetadataImport(protected val module: ModuleDefinition) extends Meta
         imported_arguments.addAll(arguments.map((arg) => importType(arg, context)))
         imported_instance
 
-    def importReference(`type`: TypeReference, context: GenericParameterProvider): TypeReference =
+    }
+    def importReference(`type`: TypeReference, context: GenericParameterProvider): TypeReference = {
         checkType(`type`)
-        importType(`type`, ImportGenericContext.`for`(context))
+        importType(`type`, ImportGenericContext.`for`(context).getOrElse(throw OperationNotSupportedException()))
     
-    def importReference(field: FieldReference, context: GenericParameterProvider): FieldReference =
+    }
+    def importReference(field: FieldReference, context: GenericParameterProvider): FieldReference = {
         checkField(field)
-        importField(field, ImportGenericContext.`for`(context))
+        importField(field, ImportGenericContext.`for`(context).getOrElse(throw OperationNotSupportedException()))
     
-    def importReference(method: MethodReference, context: GenericParameterProvider): MethodReference =
+    }
+    def importReference(method: MethodReference, context: GenericParameterProvider): MethodReference = {
         checkMethod(method)
-        importMethod(method, ImportGenericContext.`for`(context))
+        importMethod(method, ImportGenericContext.`for`(context).getOrElse(throw OperationNotSupportedException()))
+    }
 }   
 
 object DefaultMetadataImport {
-    private def importGenericParameters(imported: GenericParameterProvider, original: GenericParameterProvider) =
+    private def importGenericParameters(imported: GenericParameterProvider, original: GenericParameterProvider) = {
         val parameters = original.genericParameters
         val imported_parameters = imported.genericParameters
-        for parameter <- parameters do
-            imported_parameters.addOne(GenericParameter(parameter.name, imported))
+        for parameter <- parameters do {
+            imported_parameters.addOne(GenericParameter(parameter.name, Some(imported)))
 
 
+        }
+    }
 }
 

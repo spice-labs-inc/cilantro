@@ -12,7 +12,6 @@
 
 package io.spicelabs.cilantro.metadata
 
-import io.spicelabs.cilantro.*
 import io.spicelabs.cilantro.PE.ByteBuffer
 
 // TODO - this is for writing.

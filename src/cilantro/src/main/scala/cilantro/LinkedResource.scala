@@ -12,13 +12,13 @@
 
 package io.spicelabs.cilantro
 
-class LinkedResource(name: String, flags: Int, private var _file: String = null) extends Resource(name, flags) {
+class LinkedResource(name: String, flags: Int, private var _file: Option[String] = None) extends Resource(name, flags) {
   var _hash: Array[Byte] = Array.emptyByteArray
 
   def hash = _hash
 
   def file = _file
-  def file_=(value: String) = _file = value
+  def file_=(value: String) = _file = Some(value)
 
   override def resourceType: ResourceType = ResourceType.linked
 }

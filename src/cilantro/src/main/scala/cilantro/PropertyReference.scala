@@ -21,8 +21,9 @@ abstract class PropertyReference(name: String, private var _property_type: TypeR
 
     def parameters: ArrayBuffer[ParameterDefinition]
 
-    override def resolveDefinition(): MemberDefinition =
+    override def resolveDefinition(): MemberDefinition = {
         this.resolve()
     
+    }
     def resolve(): MemberDefinition
 }

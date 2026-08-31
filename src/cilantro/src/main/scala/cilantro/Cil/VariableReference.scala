@@ -23,9 +23,12 @@ abstract class VariableReference(protected var _variable_type: TypeReference) {
 
     def resolve(): VariableDefinition
 
-    override def toString(): String =
-        if (index >= 0)
+    override def toString(): String = {
+        if (index >= 0) {
             s"V_$index"
-        else
+        }
+        else {
             ""
+        }
+    }
 }

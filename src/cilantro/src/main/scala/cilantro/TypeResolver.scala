@@ -16,13 +16,13 @@ import io.spicelabs.cilantro.AnyExtension.as
 import javax.naming.OperationNotSupportedException
 import io.spicelabs.cilantro.cil.VariableReference
 
-class TypeResolver(typeDefinitionContext: GenericInstanceType, methodDefinitionContext: GenericInstanceMethod) {
-    private val _typeDefinitionContext: GenericInstance = typeDefinitionContext
-    private val _methodDefinitionContext: GenericInstance = methodDefinitionContext
+class TypeResolver(typeDefinitionContext: Option[GenericInstanceType], methodDefinitionContext: Option[GenericInstanceMethod]) {
+    private val _typeDefinitionContext: Option[GenericInstance] = typeDefinitionContext
+    private val _methodDefinitionContext: Option[GenericInstance] = methodDefinitionContext
 
-    def this() = this(null, null)
-    def this(typeDefinitionContext: GenericInstanceType) = this(typeDefinitionContext, null)
-    def this(methodDefinitionContext: GenericInstanceMethod) = this(null, methodDefinitionContext)
+    def this() = this(None, None)
+    def this(typeDefinitionContext: GenericInstanceType) = this(Some(typeDefinitionContext), None)
+    def this(methodDefinitionContext: GenericInstanceMethod) = this(None, Some(methodDefinitionContext))
 
     def resolve(method: MethodReference): MethodReference = {
         var methodReference = method
@@ -30,28 +30,28 @@ class TypeResolver(typeDefinitionContext: GenericInstanceType, methodDefinitionC
             return methodReference
         }
 
-        val declaringType = resolve(method.declaringType)
+        val declaringType = method.declaringType.map(resolve)
 
-        val genericInstanceMethod = method.as[GenericInstanceMethod]
-        if (genericInstanceMethod != null) {
-            methodReference = MethodReference(method.name, method.returnType, declaringType)
-            methodReference.parameters.addAll(method.parameters.map(p => ParameterDefinition(p.name, p.attributes, p.parameterType)))
-            methodReference.genericParameters.addAll(method.genericParameters.map(gp => GenericParameter(gp.name, methodReference)))
-            methodReference.hasThis = method.hasThis
-            val m = GenericInstanceMethod(methodReference)
-            m.genericArguments.addAll(genericInstanceMethod.genericArguments.map(ga => resolve(ga)))
-            methodReference = m
-        } else {
-            methodReference = MethodReference(method.name, method.returnType, declaringType)
-            methodReference.genericParameters.addAll(method.genericParameters.map(gp => GenericParameter(gp.name, methodReference)))
-            methodReference.parameters.addAll(method.parameters.map(p => ParameterDefinition(p.name, p.attributes, p.parameterType)))
-            methodReference.hasThis = method.hasThis
+        method.as[GenericInstanceMethod] match {
+            case Some(genericInstanceMethod) =>
+                methodReference = MethodReference(method.name, method.returnType, declaringType)
+                methodReference.parameters.addAll(method.parameters.map(p => ParameterDefinition(p.name, p.attributes, p.parameterType)))
+                methodReference.genericParameters.addAll(method.genericParameters.map(gp => GenericParameter(gp.name, Some(methodReference))))
+                methodReference.hasThis = method.hasThis
+                val m = GenericInstanceMethod(methodReference)
+                m.genericArguments.addAll(genericInstanceMethod.genericArguments.map(ga => resolve(ga)))
+                methodReference = m
+            case None =>
+                methodReference = MethodReference(method.name, method.returnType, declaringType)
+                methodReference.genericParameters.addAll(method.genericParameters.map(gp => GenericParameter(gp.name, Some(methodReference))))
+                methodReference.parameters.addAll(method.parameters.map(p => ParameterDefinition(p.name, p.attributes, p.parameterType)))
+                methodReference.hasThis = method.hasThis
         }
         methodReference
     }
 
     def resolve(field: FieldReference): FieldReference = {
-        val declaringType = resolve(field.declaringType)
+        val declaringType = field.declaringType.map(resolve)
         if (declaringType == field.declaringType) {
             field
         } else {
@@ -84,64 +84,67 @@ class TypeResolver(typeDefinitionContext: GenericInstanceType, methodDefinitionC
             return typeReference
         }
 
-        if (_typeDefinitionContext != null && _typeDefinitionContext.genericArguments.contains(typeReference)) {
+        if (_typeDefinitionContext.exists(_.genericArguments.contains(typeReference))) {
             return typeReference
         }
 
-        if (_methodDefinitionContext != null && _methodDefinitionContext.genericArguments.contains(typeReference)) {
+        if (_methodDefinitionContext.exists(_.genericArguments.contains(typeReference))) {
             return typeReference
         }
 
 
-        val genericParameter = typeReference.as[GenericParameter]
-        if (genericParameter != null) {
-            if (_typeDefinitionContext != null && _typeDefinitionContext.genericArguments.contains(genericParameter)) {
-                return genericParameter
-            }
-            if (_methodDefinitionContext != null && _methodDefinitionContext.genericArguments.contains(genericParameter)) {
-                return genericParameter
-            }
-            return resolveGenericParameter(genericParameter)
+        typeReference.as[GenericParameter] match {
+            case Some(genericParameter) =>
+                if (_typeDefinitionContext.exists(_.genericArguments.contains(genericParameter))) {
+                    return genericParameter
+                }
+                if (_methodDefinitionContext.exists(_.genericArguments.contains(genericParameter))) {
+                    return genericParameter
+                }
+                return resolveGenericParameter(genericParameter)
+            case None => ()
         }
 
-        val arrayType = typeReference.as[ArrayType]
-        if (arrayType != null) {
-            return ArrayType(resolve(arrayType.elementType), arrayType.rank)
+        typeReference.as[ArrayType] match {
+            case Some(arrayType) => return ArrayType(resolve(arrayType.elementType), arrayType.rank)
+            case None => ()
         }
 
-        val pointerType = typeReference.as[PointerType]
-        if (pointerType != null) {
-            return PointerType(resolve(pointerType.elementType))
+        typeReference.as[PointerType] match {
+            case Some(pointerType) => return PointerType(resolve(pointerType.elementType))
+            case None => ()
         }
 
-        val byReferenceType = typeReference.as[ByReferenceType]
-        if (byReferenceType != null) {
-            return ByReferenceType(resolve(byReferenceType.elementType))
+        typeReference.as[ByReferenceType] match {
+            case Some(byReferenceType) => return ByReferenceType(resolve(byReferenceType.elementType))
+            case None => ()
         }
 
-        val pinnedType = typeReference.as[PinnedType]
-        if (pinnedType != null) {
-            return PinnedType(resolve(pinnedType.elementType))
+        typeReference.as[PinnedType] match {
+            case Some(pinnedType) => return PinnedType(resolve(pinnedType.elementType))
+            case None => ()
         }
 
-        val genericInstanceType = typeReference.as[GenericInstanceType]
-        if (genericInstanceType != null) {
-            val newGenericInstanceType = GenericInstanceType(genericInstanceType.elementType)
-            newGenericInstanceType.genericArguments.addAll(genericInstanceType.genericArguments.map(ga => resolve(ga)))
-            return newGenericInstanceType
+        typeReference.as[GenericInstanceType] match {
+            case Some(genericInstanceType) =>
+                val newGenericInstanceType = GenericInstanceType(genericInstanceType.elementType)
+                newGenericInstanceType.genericArguments.addAll(genericInstanceType.genericArguments.map(ga => resolve(ga)))
+                return newGenericInstanceType
+            case None => ()
         }
 
-        val requiredModType = typeReference.as[RequiredModifierType]
-        if (requiredModType != null) {
-            return resolve(requiredModType.elementType, includeTypeDefinitions)
+        typeReference.as[RequiredModifierType] match {
+            case Some(requiredModType) => return resolve(requiredModType.elementType, includeTypeDefinitions)
+            case None => ()
         }
 
         if (includeTypeDefinitions) {
-            val typeDefinition = typeReference.as[TypeDefinition]
-            if (typeDefinition != null && typeDefinition.hasGenericParameters) {
-                val newGenericInstanceType = GenericInstanceType(typeDefinition)
-                newGenericInstanceType.genericArguments.addAll(typeDefinition.genericParameters.map(gp => resolve(gp)))
-                return newGenericInstanceType
+            typeReference.as[TypeDefinition] match {
+                case Some(typeDefinition) if typeDefinition.hasGenericParameters =>
+                    val newGenericInstanceType = GenericInstanceType(typeDefinition)
+                    newGenericInstanceType.genericArguments.addAll(typeDefinition.genericParameters.map(gp => resolve(gp)))
+                    return newGenericInstanceType
+                case _ => ()
             }
         }
 
@@ -152,38 +155,38 @@ class TypeResolver(typeDefinitionContext: GenericInstanceType, methodDefinitionC
     }
 
     def nested(genericInstanceMethod: GenericInstanceMethod): TypeResolver = {
-        TypeResolver(_typeDefinitionContext.as[GenericInstanceType], genericInstanceMethod)
+        TypeResolver(_typeDefinitionContext.flatMap(_.as[GenericInstanceType]), Some(genericInstanceMethod))
     }
 
     private def resolveGenericParameter(genericParameter: GenericParameter): TypeReference = {
-        if (genericParameter.owner == null) {
+        if (genericParameter.owner.isEmpty) {
             return handleOwnerlessInvalidILCode(genericParameter)
         }
 
-        val memberReference = genericParameter.owner.as[MemberReference]
-        if (memberReference == null)
+        val memberReference = genericParameter.owner.flatMap(_.as[MemberReference])
+        if (memberReference.isEmpty) {
             throw OperationNotSupportedException()
         
+        }
         if (genericParameter.`type` == GenericParameterType.`type`) {
-            return _typeDefinitionContext.genericArguments(genericParameter.position)
+            return _typeDefinitionContext.map(_.genericArguments(genericParameter.position)).getOrElse(genericParameter)
         } else {
-            if (_methodDefinitionContext != null) {
-                _methodDefinitionContext.genericArguments(genericParameter.position)
-            } else {
-                genericParameter
+            _methodDefinitionContext match {
+                case Some(mdc) => mdc.genericArguments(genericParameter.position)
+                case None => genericParameter
             }
         }
     }
 
     private def handleOwnerlessInvalidILCode(genericParameter: GenericParameter): TypeReference = {
-        if (genericParameter.`type` == GenericParameterType.method && (_typeDefinitionContext != null && genericParameter.position < _typeDefinitionContext.genericArguments.length)) {
-            return _typeDefinitionContext.genericArguments(genericParameter.position)
+        if (genericParameter.`type` == GenericParameterType.method && _typeDefinitionContext.exists(tdc => genericParameter.position < tdc.genericArguments.length)) {
+            return _typeDefinitionContext.get.genericArguments(genericParameter.position)
         }
-        genericParameter.module.typeSystem.`object`
+        genericParameter.module.map(_.typeSystem.`object`).getOrElse(throw OperationNotSupportedException())
     }
 
     private def isDummy() = {
-        _typeDefinitionContext == null && _methodDefinitionContext == null
+        _typeDefinitionContext.isEmpty && _methodDefinitionContext.isEmpty
     }
 }
 

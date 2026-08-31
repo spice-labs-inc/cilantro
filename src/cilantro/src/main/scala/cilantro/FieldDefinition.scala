@@ -13,118 +13,152 @@
 package io.spicelabs.cilantro
 
 import scala.collection.mutable.ArrayBuffer
+import scala.util.boundary
 import javax.naming.OperationNotSupportedException
 
 class FieldDefinition(name: String, private var _attributes: Char, fieldType: TypeReference)
     extends FieldReference(name, fieldType) with MemberDefinition with ConstantProvider /* with MarshalInfoProvider */ {
 
-        private var _custom_attributes: ArrayBuffer[CustomAttribute] = null
+        private var _custom_attributes: Option[ArrayBuffer[CustomAttribute]] = None
 
         private var _offset: Int = MetadataConsts.notResolvedMarker
         var _rva: Int = MetadataConsts.notResolvedMarker
 
-        private var _initial_value: Array[Byte] = null
+        private var _initial_value: Option[Array[Byte]] = None
 
         private var _constant: Any = ConstantProvider.notResolved
 
         // TODO
         // private var _marshal_info: MarshalInfo = null
 
-        private def resolveLayout(): Unit =
-            if (_offset != MetadataConsts.notResolvedMarker)
+        private def resolveLayout(): Unit = {
+            if (_offset != MetadataConsts.notResolvedMarker) {
                 return ()
             
-            if (!hasImage)
+            }
+            if (!hasImage) {
                 _offset = MetadataConsts.noDataMarker
                 return ()
             
-            this.module.syncRoot.synchronized {
-                if (_offset != MetadataConsts.notResolvedMarker)
-                    return ()
-                _offset = module.read(this, (field, reader) => reader.readFieldLayout(field))
+            }
+            boundary {
+                this.module.foreach { m => m.syncRoot.synchronized {
+                    if (_offset != MetadataConsts.notResolvedMarker) {
+                        boundary.break()
+                    }
+                    _offset = m.read(this, (field, reader) => reader.readFieldLayout(field))
+                } }
             }
         
 
-        def hasLayoutInfo =
-            if (_offset >=0)
+        }
+        def hasLayoutInfo = {
+            if (_offset >=0) {
                 true
-            else
+            }
+            else {
                 resolveLayout()
                 _offset >= 0
         
-        def offset =
-            if (_offset >= 0)
+            }
+        }
+        def offset = {
+            if (_offset >= 0) {
                 _offset
-            else
+            }
+            else {
                 resolveLayout()
                 if _offset >= 0 then _offset else -1
+            }
+        }
         def offset_=(value: Int) = _offset = value
 
-        def windowsRuntimeProjection = projection.asInstanceOf[FieldDefinitionProjection]
-        def windowsRuntimeProjection_=(value: FieldDefinitionProjection) = projection = value
+        def windowsRuntimeProjection = projection.map(_.asInstanceOf[FieldDefinitionProjection])
+        def windowsRuntimeProjection_=(value: FieldDefinitionProjection) = projection = Some(value)
 
-        private def resolveRVA(): Unit =
-            if (_rva != MetadataConsts.notResolvedMarker)
+        private def resolveRVA(): Unit = {
+            if (_rva != MetadataConsts.notResolvedMarker) {
                 return ()
             
-            if (!hasImage)
+            }
+            if (!hasImage) {
                 return ()
             
-            module.syncRoot.synchronized {
-                if (_rva != MetadataConsts.notResolvedMarker)
-                    return ()
-                // TODO
-                // _rva = module.read(this, (field, reader) => readFieldRVA(field))
+            }
+            boundary {
+                module.foreach { m => m.syncRoot.synchronized {
+                    if (_rva != MetadataConsts.notResolvedMarker) {
+                        boundary.break()
+                    // TODO
+                    // _rva = module.read(this, (field, reader) => readFieldRVA(field))
+                    }
+                } }
             }
 
-        def RVA =
-            if (_rva > 0)
+        }
+        def RVA = {
+            if (_rva > 0) {
                 _rva
+            }
             resolveRVA()
             if _rva > 0 then _rva else 0
         
 
-        def initialValue: Array[Byte] =
-            if (_initial_value != null)
-                _initial_value
-            
-            resolveRVA()
+        }
+        def initialValue: Array[Byte] = {
+            _initial_value match {
+                case Some(v) => v
 
-            if (_initial_value == null)
-                _initial_value = Array.emptyByteArray
-            _initial_value
+                case None =>
+                    resolveRVA()
+                    val v = Array.emptyByteArray
+                    _initial_value = Some(v)
+                    v
+            }
 
-        def initialValue_=(value: Array[Byte]) =
-            _initial_value = value
-            hasFieldRVA = _initial_value != null && _initial_value.length > 0
+        }
+        def initialValue_=(value: Array[Byte]) = {
+            _initial_value = Some(value)
+            hasFieldRVA = _initial_value.exists(_.length > 0)
 
+        }
         def attributes = _attributes
-        def attributes_=(value: Char) =
-            if (isWindowsRuntimeProjection && value != attributes)
+        def attributes_=(value: Char) = {
+            if (isWindowsRuntimeProjection && value != attributes) {
                 throw OperationNotSupportedException()
+            }
             _attributes = value
 
-        def hasConstant =
-            _constant = null // TODO this.resolveConstant(_constant, module)
+        }
+        def hasConstant = {
+            _constant = resolveConstant(_constant, module)
             _constant != ConstantProvider.noValue
-        def hasConstant_=(value: Boolean) =
+        }
+        def hasConstant_=(value: Boolean) = {
             if (!value) _constant = ConstantProvider.noValue
 
-        override def constant = if hasConstant then _constant else null
-        override def constant_=(value: Any) = _constant = value
+        }
+        def constant = if hasConstant then _constant else ConstantProvider.noValue
+        def constant_=(value: Any) = _constant = value
 
-        def hasCustomAttributes =
-            if (_custom_attributes != null)
-                _custom_attributes.length > 0
-            this.getHasCustomAttributes(module)
+        def hasCustomAttributes = {
+            _custom_attributes match {
+                case Some(a) => a.length > 0
+                case None => this.getHasCustomAttributes(module)
+            }
 
-        def customAttributes =
-            if (_custom_attributes != null)
-                _custom_attributes
-            else
-                _custom_attributes = getCustomAttributes(_custom_attributes, module)
-                _custom_attributes
+        }
+        def customAttributes = {
+            _custom_attributes match {
+                case Some(a) => a
 
+                case None =>
+                    val loaded = getCustomAttributes(ArrayBuffer.empty[CustomAttribute], module)
+                    _custom_attributes = Some(loaded)
+                    loaded
+
+            }
+        }
         // TODO        
         // def hasMarshalInfo =
         //     if (_marshalInfo != null)

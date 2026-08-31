@@ -28,7 +28,6 @@ import io.spicelabs.cilantro.metadata.StringHeap
 import io.spicelabs.cilantro.metadata.BlobHeap
 import io.spicelabs.cilantro.metadata.UserStringHeap
 import io.spicelabs.cilantro.metadata.PdbHeap
-import io.spicelabs.cilantro.MetadataConsts.tableCount
 import io.spicelabs.cilantro.MetadataConsts
 import io.spicelabs.cilantro.metadata.Table
 import io.spicelabs.cilantro.metadata.Heap
@@ -42,15 +41,16 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
 
     val image = makeImage(stream, file_name)
 
-    private var cli: DataDirectory = null
-    private var metadata: DataDirectory = null
+    private var cli: Option[DataDirectory] = None
+    private var metadata: Option[DataDirectory] = None
     private var table_heap_offset = 0
     private var pdb_heap_offset = 0
 
-    private def moveTo(directory: DataDirectory) = position = image.resolveVirtualAddress(directory.virtualAddress)
+    private def moveTo(directory: DataDirectory) =
+        position = image.resolveVirtualAddress(directory.virtualAddress).getOrElse(throw new DataFormatException())
     
-    private def readImage(): Unit =
-        if (fileInputStream.getChannel().size() < 128)
+    private def readImage(): Unit = {
+        if (fileInputStream.getChannel().size() < 128) {
             throw new DataFormatException()
 
         // - DOSHeader
@@ -60,19 +60,22 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
         // Lfanew               4
         // End                  64
 
-        if (readUInt16() != 0x5a4d)
+        }
+        if (readUInt16() != 0x5a4d) {
             throw DataFormatException()
         
+        }
         advance(58)
 
         moveTo(readInt32())
 
-        if (readInt32() != 0x00004550)
+        if (readInt32() != 0x00004550) {
             throw DataFormatException()
         
         // - PEFileHeader
 
         // Machine              2
+        }
         image.architecture = readArchitecture()
 
         // NumberOfSections     2
@@ -98,9 +101,10 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
         image.kind = getModuleKind(characteristics, subsystem)
         image.dllCharacteristics = dll_characteristics
 
+    }
     private def readArchitecture() = TargetArchitecture.fromOrdinalValue(readUInt16().toInt)
 
-    private def readOptionalHeaders(): (Char, Char) =
+    private def readOptionalHeaders(): (Char, Char) = {
         // - PEOptionalHeader
         //   - StandardFileHeader
         // Magic                2
@@ -158,16 +162,21 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
 
         // ResourceTable        8
 
-        image.win32Resources = readDataDirectory()
+        image.win32Resources = Some(readDataDirectory())
 
         // ExceptionTable       8
-        // CertificateTable     8
-        // BaseRelocationTable  8
+        advance(8)
 
-        advance(24)
+        // CertificateTable     8 — the Authenticode WIN_CERTIFICATE table
+        // (plan 13, C5-03): parsed instead of skipped; the table itself
+        // is read lazily through readCertificateEntries.
+        image.securityDirectory = Some(readDataDirectory())
+
+        // BaseRelocationTable  8
+        advance(8)
 
         // Debug
-        image.debug = readDataDirectory()
+        image.debug = Some(readDataDirectory())
 
         // Copyright            8
         // GlobalPtr            8
@@ -179,58 +188,76 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
         advance(56)
 
         // CLIHeader            8
-        cli = readDataDirectory()
+        cli = Some(readDataDirectory())
         
-        if (cli.isZero)
+        if (cli.exists(_.isZero)) {
             throw DataFormatException()
         
         // Reserved             8
+        }
         advance(8)
 
         (subsystem, dll_characteristics)
 
-    private def readAlignedString(length: Int) =
+    }
+    private def readAlignedString(length: Int) = {
         var read = 0
         val buffer = Array.ofDim[Char](length)
-        boundary:
-            while read < length do
+        boundary {
+            while read < length do {
                 val current = readByte()
                 if (current == 0) break()
                 buffer(read) = current.toChar
                 read += 1
+            }
+        }
         advance (-1 + ((read + 4) & ~3) - read)
 
         String(buffer, 0, read)
 
-    private def readZeroTerminatedString(length: Int) =
+    }
+    private def readZeroTerminatedString(length: Int) = {
         var read = 0
         val buffer = Array.ofDim[Char](length)
         val bytes = readBytes(length)
-        boundary:
-            while read < length do
+        boundary {
+            while read < length do {
                 val current = bytes(read)
                 if (current == 0) break()
 
                 buffer(read) = current.toChar
                 read += 1
+            }
+        }
         String(buffer, 0, read)
 
-    private def readSections(count: Char) =
+    }
+    private def readSections(count: Char) = {
+        if (count > ImageReader.MaxSections) {
+            throw DataFormatException()
+        
+        }
         val sections = Array.ofDim[Section](count)
         
-        for i <- 0 until count do
+        for i <- 0 until count do {
             val section = Section()
 
             // Name
-            section.name = readZeroTerminatedString(8)
+            section.name = Some(readZeroTerminatedString(8))
 
             // VirtualSize      4
-            advance(4)
+            val virtualSize = readInt32()
+            if (virtualSize > ImageReader.MaxSectionSize) {
+                throw DataFormatException()
+            }
 
             // VirtualAddress   4
             section.virtualAddress = readInt32()
             // SizeOfRawData    4
             section.sizeOfRawData = readInt32()
+            if (section.sizeOfRawData > ImageReader.MaxSectionSize) {
+                throw DataFormatException()
+            }
             // PointerToRawData 4
             section.pointerToRawData = readInt32()
 
@@ -242,10 +269,12 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
             advance(16)
             sections(i) = section
         
+        }
         image.sections = sections
     
-    private def readCLIHeader() =
-        moveTo(cli)
+    }
+    private def readCLIHeader() = {
+        cli.foreach(moveTo)
 
         // - CLIHeader
 
@@ -255,62 +284,70 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
         advance(8)
 
         // Metadata                 8
-        metadata = readDataDirectory()
+        metadata = Some(readDataDirectory())
         // Flags                    4
         image.attributes = readInt32()
         // EntryPointToken          4
         image.entryPointToken = readInt32()
         // Resources                8
-        image.resources = readDataDirectory()
+        image.resources = Some(readDataDirectory())
         // StrongNameSignature      8
-        image.strongName = readDataDirectory()
+        image.strongName = Some(readDataDirectory())
         // CodeManagerTable         8
         // VTableFixups             8
         // ExportAddressTableJumps  8
         // ManagedNativeHeader      8
 
-    private def readMetadata() =
-        moveTo(metadata)
-        if (readInt32() != 0x424a5342)
+    }
+    private def readMetadata() = {
+        metadata.foreach(moveTo)
+        if (readInt32() != 0x424a5342) {
             throw DataFormatException()
 
         // MajorVersion         2
         // MinorVersion         2
         // Reserved             4
+        }
         advance(8)
 
-        image.runtimeVersion = readZeroTerminatedString(readInt32())
+        image.runtimeVersion = Some(readZeroTerminatedString(readInt32()))
 
         // Flags                2
         advance(2)
 
         val streams = readUInt16()
 
-        val section = image.getSectionAtVirtualAddress(metadata.virtualAddress) match
+        val section = image.getSectionAtVirtualAddress(metadata.map(_.virtualAddress).getOrElse(0)) match {
             case Some(a) => a
             case None => throw new DataFormatException()
         
-        image.metadataSection = section
+        }
+        image.metadataSection = Some(section)
 
-        for i <- 0 until streams do
+        for i <- 0 until streams do {
             readMetadataStream(section)
         
-        if (image.pdbHeap != null)
+        }
+        if (image.pdbHeap.isDefined) {
             readPdbHeap()
         
-        if (image.tableHeap != null)
+        }
+        if (image.tableHeap.isDefined) {
             readTableHeap()
 
-    private def readDebugHeader(): Unit =
-        if (image.debug.isZero)
-            image.debugHeader = ImageDebugHeader(Array.empty[ImageDebugHeaderEntry])
+        }
+    }
+    private def readDebugHeader(): Unit = {
+        if (image.debug.exists(_.isZero)) {
+            image.debugHeader = Some(ImageDebugHeader(Array.empty[ImageDebugHeaderEntry]))
             return ()
         
-        moveTo(image.debug)
+        }
+        image.debug.foreach(moveTo)
 
-        var entries = Array.ofDim[ImageDebugHeaderEntry](image.debug.size / ImageDebugDirectory.size)
+        var entries = Array.ofDim[ImageDebugHeaderEntry](image.debug.map(_.size).getOrElse(0) / ImageDebugDirectory.size)
         
-        for i <- 0 until entries.length do
+        for i <- 0 until entries.length do {
             var directory = ImageDebugDirectory()
             directory.characteristics = readInt32()
             directory.timeDataStamp = readInt32()
@@ -321,53 +358,70 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
             directory.addressOfRawData = readInt32()
             directory.pointerToRawData = readInt32()
 
-            if (directory.pointerToRawData == 0 || directory.sizeOfData < 0)
+            if (directory.pointerToRawData == 0 || directory.sizeOfData < 0) {
                 entries(i) = ImageDebugHeaderEntry(directory, Array.emptyByteArray)
-            else
+            }
+            else {
                 val position = this.position
 
-                try
+                try {
                     moveTo(directory.pointerToRawData)
                     val data = readBytes(directory.sizeOfData)
                     entries(i) = ImageDebugHeaderEntry(directory, data)
-                finally
+                }
+                finally {
                     this.position = position
 
-        image.debugHeader = ImageDebugHeader(entries)
+                }
+            }
+        }
+        image.debugHeader = Some(ImageDebugHeader(entries))
 
-    private def readMetadataStream(section: Section) =
+    }
+    private def readMetadataStream(section: Section) = {
         // Offset       4
-        val offset = metadata.virtualAddress - section.virtualAddress + readInt32()
+        val offset = metadata.map(_.virtualAddress).getOrElse(0) - section.virtualAddress + readInt32()
 
         // Size         4
         val size = readInt32()
 
-        val data = readHeapData(offset, size)
-
         val name = readAlignedString(16)
-        name match
-            case "#~" | "#-" =>
-                image.tableHeap = TableHeap(data)
-                table_heap_offset = offset
-            case "#Strings" => image.stringHeap = StringHeap(data)
-            case "#Blob" => image.blobHeap = BlobHeap(data)
-            case "#GUID" => image.guidHeap = GuidHeap(data)
-            case "#US" => image.userStringHeap = UserStringHeap(data)
-            case "#Pdb" =>
-                image.pdbHeap = PdbHeap(data)
-                pdb_heap_offset = offset
+        if (name != "#~" && name != "#-" && size > ImageReader.MaxHeapSize) {
+            throw DataFormatException()
+        }
+        readHeapData(offset, size).foreach { data =>
+            name match {
+                case "#~" | "#-" =>
+                    image.tableHeap = Some(TableHeap(data))
+                    table_heap_offset = offset
+                case "#Strings" => image.stringHeap = Some(StringHeap(data))
+                case "#Blob" => image.blobHeap = Some(BlobHeap(data))
+                case "#GUID" => image.guidHeap = Some(GuidHeap(data))
+                case "#US" => image.userStringHeap = Some(UserStringHeap(data))
+                case "#Pdb" =>
+                    image.pdbHeap = Some(PdbHeap(data))
+                    pdb_heap_offset = offset
+            }
+        }
+    }
+    private def readHeapData(offset: Int, size: Int) = {
+        for {
+            metadataSection <- image.metadataSection
+        } yield {
+            val position = this.position
+            moveTo(offset + metadataSection.pointerToRawData)
+            val data = readBytes(size)
+            this.position = position
+            data
+        }
 
-    private def readHeapData(offset: Int, size: Int) =
-        val position = this.position
-        moveTo(offset + image.metadataSection.pointerToRawData)
-        val data = readBytes(size)
-        this.position = position
-        data
-
-    private def readTableHeap() =
-        val heap = image.tableHeap
-
-        moveTo(table_heap_offset + image.metadataSection.pointerToRawData)
+    }
+    private def readTableHeap() = {
+        for {
+            heap <- image.tableHeap
+            metadataSection <- image.metadataSection
+        } {
+        moveTo(table_heap_offset + metadataSection.pointerToRawData)
 
         // Reserved         4
         // MajorVersion     1
@@ -386,49 +440,65 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
         // Sorted           8
         heap.sorted = readInt64()
 
-        if (image.pdbHeap != null)
-            for i <- 0 until MetadataConsts.tableCount do
-                Table.fromOrdinalValueMaybe(i) match
+        image.pdbHeap.foreach { pdbHeap =>
+            for i <- 0 until MetadataConsts.tableCount do {
+                Table.fromOrdinalValueMaybe(i) match {
                     case Some(table) =>
-                        if (image.pdbHeap.hasTable(table))
-                            heap.tables(i).length = image.pdbHeap.typeSystemTableRows(i)
+                        if (pdbHeap.hasTable(table)) {
+                            heap.tables(i).length = pdbHeap.typeSystemTableRows(i)
+                        }
                     case None => { }
         
-        for i <- 0 until MetadataConsts.tableCount do
-            Table.fromOrdinalValueMaybe(i) match
+                }
+            }
+        }
+        for i <- 0 until MetadataConsts.tableCount do {
+            Table.fromOrdinalValueMaybe(i) match {
                 case Some(table) =>            
-                    if (heap.hasTable(table))
-                        heap.tables(i).length = readInt32()
+                    if (heap.hasTable(table)) {
+                        val rows = readInt32()
+                        if (rows > ImageReader.MaxTableRows) {
+                            throw DataFormatException()
+                        }
+                        heap.tables(i).length = rows
+                    }
                 case None => { }
 
-        setIndexSize(image.stringHeap, sizes, 0x1)
-        setIndexSize(image.guidHeap, sizes, 0x2)
-        setIndexSize(image.blobHeap, sizes, 0x4)
+            }
+        }
+        image.stringHeap.foreach(setIndexSize(_, sizes, 0x1))
+        image.guidHeap.foreach(setIndexSize(_, sizes, 0x2))
+        image.blobHeap.foreach(setIndexSize(_, sizes, 0x4))
 
         computeTableInformations()
 
-    private def getTableIndexSize(table: Table) =
+        }
+    }
+    private def getTableIndexSize(table: Table) = {
         image.getTableIndexSize(table)
 
-    private def getCodedIndexSize(index: CodedIndex) =
+    }
+    private def getCodedIndexSize(index: CodedIndex) = {
         image.getCodedIndexSize(index)
 
-    private def computeTableInformations() =
-        var offset = (position - table_heap_offset - image.metadataSection.pointerToRawData).toInt // header
+    }
+    private def computeTableInformations() = {
+        val metadataSection = image.metadataSection
+        var offset = (position - table_heap_offset - metadataSection.map(_.pointerToRawData).getOrElse(0)).toInt // header
 
-        val stridx_size = if image.stringHeap != null then image.stringHeap.indexSize else 2
-        val guididx_size = if image.guidHeap != null then image.guidHeap.indexSize else 2
-        val blobidx_size = if image.blobHeap != null then image.blobHeap.indexSize else 2
+        val stridx_size = image.stringHeap.map(_.indexSize).getOrElse(2)
+        val guididx_size = image.guidHeap.map(_.indexSize).getOrElse(2)
+        val blobidx_size = image.blobHeap.map(_.indexSize).getOrElse(2)
 
-        val heap = image.tableHeap
+        image.tableHeap.foreach { heap =>
         val tables = heap.tables
 
-        for i <- 0 until MetadataConsts.tableCount do
+        for i <- 0 until MetadataConsts.tableCount do {
             val tableOpt = Table.fromOrdinalValueMaybe(i)
 
-            if (heap.hasTable(tableOpt))
+            if (heap.hasTable(tableOpt)) {
                 val table = tableOpt.get
-                val size = table match
+                val size = table match {
                     case Table.module => 2 + stridx_size + (guididx_size * 3)
                     case Table.typeRef =>
                         getCodedIndexSize(CodedIndex.resolutionScope) + (stridx_size * 2)
@@ -490,63 +560,88 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
                     case Table.importScope => getTableIndexSize(Table.importScope) + blobidx_size
                     case Table.stateMachineMethod => getTableIndexSize(Table.method) + getTableIndexSize(Table.method)
                     case Table.customDebugInformation => getCodedIndexSize(CodedIndex.hasCustomDebugInformation) + guididx_size + blobidx_size
-                    case null => throw UnsupportedOperationException()
-                
+                }
                 tables(i).rowSize = size
                 tables(i).offset = offset
 
-                offset += size * tables(i).length
+                // plan 04: rows x rowSize must be computed in 64-bit and
+                // checked — a hostile row-count combination must not wrap
+                // the offset arithmetic.
+                val tableBytes = size.toLong * tables(i).length
+                if (offset.toLong + tableBytes > Int.MaxValue) {
+                    throw DataFormatException()
+                }
+                offset += tableBytes.toInt
 
-    private def readPdbHeap() =
-        val heap = image.pdbHeap
-        val buffer = ByteBuffer(heap.data)
+            }
+        }
+        }
+    }
+    private def readPdbHeap() = {
+        image.pdbHeap.foreach { heap =>
+            val buffer = ByteBuffer(heap.data)
 
-        heap.id = buffer.readBytes(20)
-        heap.entryPoint = buffer.readInt32()
-        heap.typeSystemTables = buffer.readInt64()
-        heap.typeSystemTableRows = Array.ofDim[Int](MetadataConsts.tableCount)
+            heap.id = buffer.readBytes(20)
+            heap.entryPoint = buffer.readInt32()
+            heap.typeSystemTables = buffer.readInt64()
+            heap.typeSystemTableRows = Array.ofDim[Int](MetadataConsts.tableCount)
 
-        for i <- 0 until MetadataConsts.tableCount do
-            val table = Table.fromOrdinalValueMaybe(i)
-            if (heap.hasTable(table))
-                heap.typeSystemTableRows(i) = buffer.readInt32()
+            for i <- 0 until MetadataConsts.tableCount do {
+                val table = Table.fromOrdinalValueMaybe(i)
+                if (heap.hasTable(table)) {
+                    heap.typeSystemTableRows(i) = buffer.readInt32()
 
+                }
+            }
+        }
+    }
 }
 
 object ImageReader {
-    private def makeImage(stream: Disposable[FileInputStream], file_name: String) = 
+    val MaxSections = 96
+    val MaxSectionSize = 512 * 1024 * 1024
+    val MaxTableRows = 10_000_000
+    val MaxHeapSize = 256 * 1024 * 1024
+
+    private def makeImage(stream: Disposable[FileInputStream], file_name: String) =  {
         val image = Image()
-        image.stream = stream
-        image.fileName = file_name
+        image.stream = Some(stream)
+        image.fileName = Some(file_name)
 
         image
     
-    private def getModuleKind(characteristics: Char, subsystem: Char) =
-        if ((characteristics & 0x2000) != 0)
+    }
+    private def getModuleKind(characteristics: Char, subsystem: Char) = {
+        if ((characteristics & 0x2000) != 0) {
             ModuleKind.dll
-        else if (subsystem == 0x02 || subsystem == 0x9)
+        }
+        else if (subsystem == 0x02 || subsystem == 0x9) {
             ModuleKind.windows
+        }
         else ModuleKind.console
 
-    private def setIndexSize(heap: Heap, sizes: Int, flag: Int) =
-        if (heap != null)
-            heap.indexSize = if (sizes & flag) > 0 then 4 else 2
-
-    def readImage(stream: Disposable[FileInputStream], file_name: String) =
-        try
+    }
+    private def setIndexSize(heap: Heap, sizes: Int, flag: Int) = {
+        heap.indexSize = if (sizes & flag) > 0 then 4 else 2
+    }
+    def readImage(stream: Disposable[FileInputStream], file_name: String) = {
+        try {
             val reader = ImageReader(stream, file_name)
             reader.readImage()
             reader.image
-        catch
+        }
+        catch {
             case err: IOException =>
                 throw DataFormatException(file_name)
             case others: Exception => {
                 throw others
             }
+        }
         finally { }
 
-    def readPortablePdb(stream: Disposable[FileInputStream], file_name: String): (Image, Int) =
-        try 
+    }
+    def readPortablePdb(stream: Disposable[FileInputStream], file_name: String): (Image, Int) = {
+        try  {
             val reader = ImageReader(stream, file_name)
             val length = stream.value.getChannel().size().toInt
             val section = Section()
@@ -556,10 +651,13 @@ object ImageReader {
             section.virtualSize = 0
             reader.image.sections = Array[Section](section)
 
-            reader.metadata = DataDirectory(0, length)
+            reader.metadata = Some(DataDirectory(0, length))
             reader.readMetadata()
             (reader.image, reader.pdb_heap_offset)
-        catch
+        }
+        catch {
             case err: IOException => throw DataFormatException(file_name)
 
+        }
+    }
 }

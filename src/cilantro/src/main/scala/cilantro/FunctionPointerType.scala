@@ -15,7 +15,7 @@ package io.spicelabs.cilantro
 import io.spicelabs.cilantro.metadata.ElementType
 import javax.naming.OperationNotSupportedException
 
-sealed class FunctionPointerType extends TypeSpecification(null) with MethodSignature {
+sealed class FunctionPointerType extends TypeSpecification(TypeReference("", "")) with MethodSignature {
     private val _function = MethodReference()
     _function.name = "method"
     this.etype = ElementType.fnPtr
@@ -52,7 +52,7 @@ sealed class FunctionPointerType extends TypeSpecification(null) with MethodSign
 
     override def containsGenericParameter = _function.containsGenericParameter
 
-    override def fullName =
+    override def fullName = {
         val signature = StringBuilder()
         signature.append(_function.name)
         signature.append(" ")
@@ -60,4 +60,5 @@ sealed class FunctionPointerType extends TypeSpecification(null) with MethodSign
         signature.append(" *")
         methodSignatureFullName(signature)
         signature.toString()
+    }
 }

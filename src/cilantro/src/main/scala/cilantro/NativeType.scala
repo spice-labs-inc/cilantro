@@ -53,10 +53,13 @@ enum NativeType(val value: Int) {
 }
 
 object NativeType {
-  def fromOrdinalValue(value: Int): NativeType =
-    NativeType.values.find(x => {x.value == value}) match
+  def fromOrdinalValue(value: Int): NativeType = {
+    NativeType.values.find(x => {x.value == value}) match {
       case Some(result) => result
       case None => throw IllegalArgumentException(s"value $value not found in NativeType")
-  def fromOrdinalValue(value: Byte): NativeType =
+    }
+  }
+  def fromOrdinalValue(value: Byte): NativeType = {
     fromOrdinalValue(value.toInt & 0xff)
+  }
 }

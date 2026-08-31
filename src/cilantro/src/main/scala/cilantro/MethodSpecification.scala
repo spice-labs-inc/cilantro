@@ -33,8 +33,9 @@ abstract class MethodSpecification(val _method: MethodReference) extends MethodR
     override def methodReturnType = _method.methodReturnType
     override def methodReturnType_=(value: MethodReturnType) = throw OperationNotSupportedException()
 
-    override def declaringType: TypeReference = _method.declaringType
+    override def declaringType: Option[TypeReference] = _method.declaringType
     override def declaringType_=(value: TypeReference): Unit = throw OperationNotSupportedException()
+    override def declaringType_=(value: Option[TypeReference]): Unit = throw OperationNotSupportedException()
 
     override def hasParameters: Boolean = _method.hasParameters
 

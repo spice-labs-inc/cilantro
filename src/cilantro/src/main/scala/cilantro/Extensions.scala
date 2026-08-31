@@ -11,6 +11,6 @@ package io.spicelabs.cilantro
 
 object AnyExtension {
     extension (a: Any) {
-        inline def as[T >: Null]: T = if a.isInstanceOf[T] then a.asInstanceOf[T] else null.asInstanceOf[T]
+        inline def as[T]: Option[T] = if a.isInstanceOf[T] then Some(a.asInstanceOf[T]) else None
     }
 }

@@ -18,12 +18,16 @@ trait CustomAttributeProvider extends MetadataTokenProvider {
     def customAttributes: ArrayBuffer[CustomAttribute]
     def hasCustomAttributes: Boolean
 
-    def getHasCustomAttributes(module: ModuleDefinition) =
-        module.hasImage && module.read(this, (provider, reader) => reader.hasCustomAttributes(provider))
+    def getHasCustomAttributes(module: Option[ModuleDefinition]) = {
+        module.exists(m => m.hasImage && m.read(this, (provider, reader) => reader.hasCustomAttributes(provider)))
 
-    def getCustomAttributes(variable: ArrayBuffer[CustomAttribute], module: ModuleDefinition) =
-        if (module.hasImage)
-            module.read(variable, this, (provider, reader) => reader.readCustomAttributes(provider))
-        else
-            ArrayBuffer.empty[CustomAttribute]
+    }
+    def getCustomAttributes(variable: ArrayBuffer[CustomAttribute], module: Option[ModuleDefinition]) = {
+        module match {
+            case Some(m) if m.hasImage =>
+                m.read(variable, this, (provider, reader) => reader.readCustomAttributes(provider))
+            case _ =>
+                ArrayBuffer.empty[CustomAttribute]
+        }
+    }
 }

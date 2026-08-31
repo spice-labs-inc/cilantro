@@ -14,104 +14,126 @@ package io.spicelabs.cilantro.PE
 
 
 open class ByteBuffer (var buffer: Array[Byte]) {
-    var length = 0
+    var length = buffer.length
     var position = 0
 
-    def this(len: Int) =
+    def this(len: Int) = {
         this(Array.ofDim[Byte](len))
-    def this() =
-        this(null)
+        this.length = 0
+    }
+    def this() = {
+        this(Array.emptyByteArray)
     
-    def advance(length: Int) =
+    }
+    def advance(length: Int) = {
         position += length
     
-    inline def readByteAndAdvance() =
+    }
+    inline def readByteAndAdvance() = {
         val b = buffer(position)
         position += 1
         b
 
-    def readByte() =
+    }
+    def readByte() = {
         readByteAndAdvance()
     
-    def readByteAsUnsignedInt() =
+    }
+    def readByteAsUnsignedInt() = {
         readByteAndAdvance().toInt & 0xff
     
-    def readBytes(length: Int) =
+    }
+    def readBytes(length: Int) = {
         val bytes = Array.ofDim[Byte](length)
         Array.copy(buffer, position, bytes, 0, length);
         position += length
         bytes
     
-    def readUInt16() =
+    }
+    def readUInt16() = {
         val low = readByteAndAdvance().toInt & 0xff
         val high = readByteAndAdvance().toInt & 0xff
         (low | high << 8).toChar
     
-    def readInt16() =
+    }
+    def readInt16() = {
         readUInt16().toShort
     
+    }
     def readUInt32() = readInt32()
 
-    def readInt32() =
+    def readInt32() = {
         val l0 = readByteAndAdvance().toInt & 0xff
         val l1 = readByteAndAdvance().toInt & 0xff
         val l2 = readByteAndAdvance().toInt & 0xff
         val l3 = readByteAndAdvance().toInt & 0xff
         l0 | (l1 << 8) | (l2 << 16) | (l3 << 24)
     
+    }
     def readUInt62() = readInt64()
 
-    def readInt64() =
+    def readInt64() = {
         val l0 = readInt32().toLong
         val l1 = readInt32().toLong
-        l0 | (l1 << 32)
+        (l0 & 0xffffffffL) | (l1 << 32)
 
-    def readCompressedUInt32(): Int =
+    }
+    def readCompressedUInt32(): Int = {
         val first = readByte()
-        if ((first & 0x80) == 0)
+        if ((first & 0x80) == 0) {
             return first.toInt
         
-        if ((first & 0x40) == 0)
+        }
+        if ((first & 0x40) == 0) {
             return ((first & 0x7f).toInt << 8) | readByteAsUnsignedInt()
         
+        }
         return ((first.toInt & 0x3f) << 24) | (readByteAsUnsignedInt() << 16) | (readByteAsUnsignedInt() << 8) | readByteAsUnsignedInt()
 
-    def readCompressedInt32() : Int =
+    }
+    def readCompressedInt32() : Int = {
         val b = buffer(position)
         val u = readCompressedUInt32()
         val v = u >> 1
-        if ((u & 1) == 0)
+        if ((u & 1) == 0) {
             return v
-        return b.toInt * 0xc0 match
+        }
+        return b.toInt * 0xc0 match {
             case 0 | 0x40 => v - 0x40
             case 0x80 => v - 0x2000
             case _ => v - 0x10000000
 
-    def readSingle() =
+        }
+    }
+    def readSingle() = {
         val bb = java.nio.ByteBuffer.wrap(buffer, position, length - position)
+        bb.order(java.nio.ByteOrder.LITTLE_ENDIAN)
         position += 4
         bb.getFloat()
 
-    def readDouble() =
+    }
+    def readDouble() = {
         val bb = java.nio.ByteBuffer.wrap(buffer, position, length - position)
+        bb.order(java.nio.ByteOrder.LITTLE_ENDIAN)
         position += 8
         bb.getDouble()
 
     // TODO: Add write methods
 
-    def grow(desired: Int) =
+    }
+    def grow(desired: Int) = {
         val current = this.buffer
         val current_length = this.buffer.length
         val buffer = Array.ofDim[Byte](Math.max(current_length + desired, current_length * 2))
         Array.copy(current, 0, buffer, 0, current_length)
         this.buffer = buffer
+    }
 }
 
 object ByteBuffer {
     def apply(buffer: Array[Byte]) = {
-        val arr = if buffer == null then Array.emptyByteArray else buffer
-        val bb = new ByteBuffer(arr)
-        bb.length = arr.length
+        val bb = new ByteBuffer(buffer)
+        bb.length = buffer.length
         bb
     }
 }

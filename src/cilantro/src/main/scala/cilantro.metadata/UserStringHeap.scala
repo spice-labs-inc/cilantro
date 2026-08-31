@@ -12,18 +12,23 @@
 
 package io.spicelabs.cilantro.metadata
 
-import io.spicelabs.cilantro.readCompressedInt32
+import io.spicelabs.cilantro.readCompressedUInt32
 
 class UserStringHeap(data: Array[Byte]) extends StringHeap(data) {
-  protected override def readStringAt(index: Int) =
-    val (len, start) = data.readCompressedInt32(index)
+  protected override def readStringAt(index: Int) = {
+    // Cecil reads the #US length as an UNSIGNED compressed integer; the
+    // trailing bit is a terminator flag, not part of the length.
+    val (len, start) = data.readCompressedUInt32(index)
     val length = len & ~1
 
     val chars = Array.ofDim[Char](length / 2)
 
     var j = 0
-    for i <- start until start + length by 2 do
-        chars(j) = (data(i).toInt | ((data(i + 1).toInt & 0xff) << 8)).toChar
+    for i <- start until start + length by 2 do {
+        chars(j) = ((data(i).toInt & 0xff) | ((data(i + 1).toInt & 0xff) << 8)).toChar
+        j += 1
     
+    }
     String(chars)
+  }
 }

@@ -25,8 +25,8 @@ sealed class ExportedType(namespace: String, __name: String, module: ModuleDefin
     private var _scope: MetadataScope = __scope
     private var _module: ModuleDefinition = module
     private var _identifier = 0
-    private var _declaring_type: ExportedType = null
-    var _token: MetadataToken = null
+    private var _declaring_type: Option[ExportedType] = None
+    var _token: Option[MetadataToken] = None
     var _reentrancyGuard = false
 
     def nameSpace = _namespace
@@ -38,18 +38,21 @@ sealed class ExportedType(namespace: String, __name: String, module: ModuleDefin
     def attributes = _attributes
     def attributes_=(value: Int) = _attributes = value
 
-    def scope: MetadataScope = if _declaring_type != null then _declaring_type.scope else _scope
-    def scope_=(value: MetadataScope): Unit =
-        if (_declaring_type != null)
-            _declaring_type.scope = value
-        else
+    def scope: Option[MetadataScope] = if _declaring_type.isDefined then _declaring_type.flatMap(_.scope) else Some(_scope)
+    def scope_=(value: MetadataScope): Unit = {
+        if (_declaring_type.isDefined) {
+            _declaring_type.foreach(_.scope = value)
+        }
+        else {
             _scope = value
     
-    def declaringType = _declaring_type
-    def declaringType_=(value: ExportedType) = _declaring_type = value
+        }
+    }
+    def declaringType: Option[ExportedType] = _declaring_type
+    def declaringType_=(value: ExportedType) = _declaring_type = Some(value)
 
-    override def metadataToken: MetadataToken = _token
-    override def metadataToken_=(value: MetadataToken): Unit = _token = value
+    override def metadataToken: Option[MetadataToken] = _token
+    override def metadataToken_=(value: MetadataToken): Unit = _token = Some(value)
 
     def identifier = _identifier
     def identifier_=(value: Int) = _identifier = value
@@ -126,28 +129,36 @@ sealed class ExportedType(namespace: String, __name: String, module: ModuleDefin
     def isForwarder = getAttributes(_attributes, TypeAttributes.forwarder.value)
     def isForwarder_=(value: Boolean) = _attributes = setAttributes(_attributes, TypeAttributes.forwarder.value, value)
 
-    def fullName:String =
-        val fullname = if (nameSpace == null || nameSpace.length() == 0) then _name else nameSpace + '.' + nameSpace
+    def fullName:String = {
+        val fullname = if (nameSpace.length() == 0) then _name else nameSpace + '.' + nameSpace
 
-        if (_declaring_type != null)
-            _declaring_type.fullName + "/" + fullname
-        else
+        if (_declaring_type.isDefined) {
+            _declaring_type.map(_.fullName).getOrElse("") + "/" + fullname
+        }
+        else {
             fullname
     
+        }
+    }
     override def toString(): String = fullName
 
-    def resolve(): TypeDefinition =
-        if (_reentrancyGuard)
+    def resolve(): TypeDefinition = {
+        if (_reentrancyGuard) {
             throw OperationNotSupportedException(s"Circularity when resolving exported type: '$this'")
+        }
         _reentrancyGuard = true
-        try
+        try {
             _module.resolve(createReference())
-        finally
+        }
+        finally {
             _reentrancyGuard = false
 
-    def createReference(): TypeReference =
-        val typeref = TypeReference(nameSpace, _name, _module, scope)
-        typeref.declaringType = if _declaring_type != null then _declaring_type.createReference() else null
+        }
+    }
+    def createReference(): TypeReference = {
+        val typeref = TypeReference(nameSpace, _name, _module, scope.getOrElse(throw OperationNotSupportedException()))
+        _declaring_type.foreach(dt => typeref.declaringType = dt.createReference())
         typeref
 
+    }
 }

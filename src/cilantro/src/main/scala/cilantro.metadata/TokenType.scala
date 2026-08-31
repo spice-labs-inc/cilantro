@@ -50,8 +50,10 @@ enum TokenType(val value: Int) {
 }
 
 object TokenType {
-  def fromOrdinalValue(value: Int) =
-    TokenType.values.find(x => {x.value == value}) match
+  def fromOrdinalValue(value: Int) = {
+    TokenType.values.find(x => {x.value == value}) match {
       case Some(result) => result
       case None => throw IllegalArgumentException(s"value $value not found in TokenType")  
+    }
+  }
 }

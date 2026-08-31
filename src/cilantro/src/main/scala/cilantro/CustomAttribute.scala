@@ -22,8 +22,9 @@ class CustomAttributeArgument(private val _type: TypeReference, private val _val
 }
 
 object CustomAttributeArgument {
-    def apply(`type`: TypeReference, value: Any) = 
+    def apply(`type`: TypeReference, value: Any) =  {
         new CustomAttributeArgument(checkType(`type`), value)
+    }
 }
 
 class CustomAttributeNamedArgument(private val _name: String, private val _argument: CustomAttributeArgument)
@@ -33,12 +34,13 @@ class CustomAttributeNamedArgument(private val _name: String, private val _argum
 }
 
 object CustomAttributeNamedArgument {
-    def apply(name: String, argument: CustomAttributeArgument) =
+    def apply(name: String, argument: CustomAttributeArgument) = {
         new CustomAttributeNamedArgument(checkName(name), argument)
+    }
 }
 
 trait CustomAttributeTrait {
-    def attributeType: TypeReference
+    def attributeType: Option[TypeReference]
     def hasFields: Boolean
     def hasProperties: Boolean
     def hasConstructorArguments: Boolean
@@ -49,10 +51,10 @@ trait CustomAttributeTrait {
 
 sealed class CustomAttribute(var _signature: Int, private var _constructor: MethodReference, var _blob:Array[Byte], private var _resolved: Boolean) extends CustomAttributeTrait {
     
-    var _projection: CustomAttributeValueProjection = null
-    var _arguments: ArrayBuffer[CustomAttributeArgument] = null
-    var _fields: ArrayBuffer[CustomAttributeNamedArgument] = null
-    var _properties: ArrayBuffer[CustomAttributeNamedArgument] = null
+    var _projection: Option[CustomAttributeValueProjection] = None
+    var _arguments: Option[ArrayBuffer[CustomAttributeArgument]] = None
+    var _fields: Option[ArrayBuffer[CustomAttributeNamedArgument]] = None
+    var _properties: Option[ArrayBuffer[CustomAttributeNamedArgument]] = None
 
     def constructor = _constructor
     def constructor_(value: MethodReference) = _constructor = value
@@ -61,91 +63,118 @@ sealed class CustomAttribute(var _signature: Int, private var _constructor: Meth
 
     def isResolved = _resolved
 
-    def hasConstructorArguments =
+    def hasConstructorArguments = {
         resolve()
-        _arguments != null && !_arguments.isEmpty
+        _arguments.exists(!_.isEmpty)
 
-    def constructorArguments : ArrayBuffer[CustomAttributeArgument] =
-        resolve()
-
-        if (_arguments == null)
-            _arguments = ArrayBuffer.empty[CustomAttributeArgument]
-
-        _arguments
-
-    def hasFields =
-        resolve()
-        _fields != null && !fields.isEmpty
-
-    def fields = 
+    }
+    def constructorArguments : ArrayBuffer[CustomAttributeArgument] = {
         resolve()
 
-        if (_fields == null)
-            _fields = ArrayBuffer.empty[CustomAttributeNamedArgument]
+        _arguments match {
+            case Some(args) => args
+            case None =>
+                val args = ArrayBuffer.empty[CustomAttributeArgument]
+                _arguments = Some(args)
+                args
+        }
 
-        _fields
-
-    def hasProperties =
+    }
+    def hasFields = {
         resolve()
-        _properties != null && !_properties.isEmpty
+        _fields.exists(!_.isEmpty)
 
-    def properties =
+    }
+    def fields =  {
         resolve()
 
-        if (_properties == null)
-            _properties = ArrayBuffer.empty[CustomAttributeNamedArgument]
-        
-        _properties
+        _fields match {
+            case Some(f) => f
+            case None =>
+                val f = ArrayBuffer.empty[CustomAttributeNamedArgument]
+                _fields = Some(f)
+                f
+        }
+
+    }
+    def hasProperties = {
+        resolve()
+        _properties.exists(!_.isEmpty)
+
+    }
+    def properties = {
+        resolve()
+
+        _properties match {
+            case Some(p) => p
+            case None =>
+                val p = ArrayBuffer.empty[CustomAttributeNamedArgument]
+                _properties = Some(p)
+                p
+        }
     
-    def hasImage =
-        constructor != null && constructor.hasImage
+    }
+    def hasImage = {
+        constructor.hasImage
     
+    }
     def module = constructor.module
 
-    def this(signature: Int, constructor: MethodReference) =
-        this(signature, constructor, null, false)
+    def this(signature: Int, constructor: MethodReference) = {
+        this(signature, constructor, Array.emptyByteArray, false)
 
-    def this(constructor: MethodReference) =
-        this(0, constructor, null, true)
+    }
+    def this(constructor: MethodReference) = {
+        this(0, constructor, Array.emptyByteArray, true)
 
-    def this(constructor: MethodReference, blob: Array[Byte]) =
+    }
+    def this(constructor: MethodReference, blob: Array[Byte]) = {
         this(0, constructor, blob, false)
 
-    def getBlob(): Array[Byte] =
-        if (_blob != null)
+    }
+    def getBlob(): Array[Byte] = {
+        if (_blob.length > 0) {
             _blob
-        if (!hasImage)
+        }
+        if (!hasImage) {
             throw OperationNotSupportedException();
-        _blob = module.read(_blob, this, (attribute, reader) => reader.readCustomAttributeBlob(attribute._signature))
+        }
+        module.foreach { m =>
+            _blob = m.read(_blob, this, (attribute, reader) => reader.readCustomAttributeBlob(attribute._signature))
+        }
         _blob
 
-    private def resolve() : Unit =
-        if (_resolved || !hasImage)
+    }
+    private def resolve() : Unit = {
+        if (_resolved || !hasImage) {
             return ()
         
-        module.syncRoot.synchronized {
-            if (_resolved)
+        }
+        module.foreach { m => m.syncRoot.synchronized {
+            if (_resolved) {
                 ()
-            else 
-                module.read(this, (attribute, reader) => {
-                    try
+            }
+            else  {
+                m.read(this, (attribute, reader) => {
+                    try {
                         reader.readCustomAttributesSignature(attribute)
                         _resolved = true
                         ()
-                    catch
+                    }
+                    catch {
                         case r: ResolutionException =>
-                            if (_arguments != null)
-                                _arguments.clear()
-                            if (_fields != null)
-                                _fields.clear()
-                            if (_properties != null)
-                                _properties.clear()
+                            _arguments.foreach(_.clear())
+                            _fields.foreach(_.clear())
+                            _properties.foreach(_.clear())
                             _resolved = false
                             ()
                         case _ => ()
 
+                    }
                 })
-        }
+            }
+        } }
 
         ()
+    }
 }

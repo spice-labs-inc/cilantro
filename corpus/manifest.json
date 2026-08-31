@@ -1,0 +1,1440 @@
+{
+  "schemaVersion": 1,
+  "generator": "scripts/GoldenDumper fetch",
+  "packages": [
+    {
+      "id": "Newtonsoft.Json",
+      "version": "12.0.3",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/newtonsoft.json/12.0.3/newtonsoft.json.12.0.3.nupkg",
+      "nupkgSha256": "3d21caf909f9db2b5d13249d6728c2506c55e72e2123fbe2af65a056c0a0bf9d",
+      "tags": [
+        "oldTFM",
+        "net20",
+        "net35",
+        "net40",
+        "net45",
+        "async"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/Newtonsoft.Json/12.0.3/net35/Newtonsoft.Json.dll",
+          "tfm": "net35",
+          "sha256": "7beb6a951b92af14322a382cf105fff8d0dc63518b33556b98e09daca0cb6d07",
+          "sizeBytes": 505776
+        },
+        {
+          "path": "bin/Newtonsoft.Json/12.0.3/net40/Newtonsoft.Json.dll",
+          "tfm": "net40",
+          "sha256": "f1f01b3474b92d6e1c3d6adfae74ee0ea0eba6e9935565fe2317686d80a2e886",
+          "sizeBytes": 574376
+        },
+        {
+          "path": "bin/Newtonsoft.Json/12.0.3/net45/Newtonsoft.Json.dll",
+          "tfm": "net45",
+          "sha256": "7f912b28a07c226e0be3acfb2f57f050538aba0100fa1f0bf2c39f1a1f1da814",
+          "sizeBytes": 700336
+        },
+        {
+          "path": "bin/Newtonsoft.Json/12.0.3/portable-net45\u002Bwin8\u002Bwp8\u002Bwpa81/Newtonsoft.Json.dll",
+          "tfm": "portable-net45\u002Bwin8\u002Bwp8\u002Bwpa81",
+          "sha256": "bfa3658d682a2fc64456bc3df44129db122f5be256d930c06c39474b7d108972",
+          "sizeBytes": 668584
+        },
+        {
+          "path": "bin/Newtonsoft.Json/12.0.3/netstandard1.0/Newtonsoft.Json.dll",
+          "tfm": "netstandard1.0",
+          "sha256": "90bcd0b2d3a190a885218d44edb6434a431b0c85ba992ba753657f3319bef06f",
+          "sizeBytes": 669104
+        },
+        {
+          "path": "bin/Newtonsoft.Json/12.0.3/net20/Newtonsoft.Json.dll",
+          "tfm": "net20",
+          "sha256": "500eb5560aae4d3a4d7dc4c61a880906ed0231f1a636113f74778b86eaf979b1",
+          "sizeBytes": 570792
+        },
+        {
+          "path": "bin/Newtonsoft.Json/12.0.3/portable-net40\u002Bsl5\u002Bwin8\u002Bwp8\u002Bwpa81/Newtonsoft.Json.dll",
+          "tfm": "portable-net40\u002Bsl5\u002Bwin8\u002Bwp8\u002Bwpa81",
+          "sha256": "b2ecad4214e4f033387284edfa345dbf119be82193ba14f5373d1532d13adafc",
+          "sizeBytes": 468912
+        },
+        {
+          "path": "bin/Newtonsoft.Json/12.0.3/netstandard1.3/Newtonsoft.Json.dll",
+          "tfm": "netstandard1.3",
+          "sha256": "7fb7842edcf315f09b9bd3d3664454148562f09d5cbfb1f2e64de914dc4c8a60",
+          "sizeBytes": 688040
+        },
+        {
+          "path": "bin/Newtonsoft.Json/12.0.3/netstandard2.0/Newtonsoft.Json.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "99177a4cbe03625768d64a3d73392310372888f74c3eb271cf775e93057a38e6",
+          "sizeBytes": 693680
+        }
+      ]
+    },
+    {
+      "id": "Newtonsoft.Json",
+      "version": "13.0.3",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/newtonsoft.json/13.0.3/newtonsoft.json.13.0.3.nupkg",
+      "nupkgSha256": "872fc189e638ab1056555b03aaa38f68bcb54286e221aa646eb1129babf63c77",
+      "tags": [
+        "net45",
+        "netstandard2.0",
+        "net6.0",
+        "async"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/Newtonsoft.Json/13.0.3/net35/Newtonsoft.Json.dll",
+          "tfm": "net35",
+          "sha256": "c69b18993d8236e5dfe3f0580a4392e7bc0b5f525911737318117c91d43b3ea5",
+          "sizeBytes": 515856
+        },
+        {
+          "path": "bin/Newtonsoft.Json/13.0.3/net40/Newtonsoft.Json.dll",
+          "tfm": "net40",
+          "sha256": "e6d1371d1aa774d155e9a4a89da32b87fd4928650f4d76a1cf68c8c88283693c",
+          "sizeBytes": 584976
+        },
+        {
+          "path": "bin/Newtonsoft.Json/13.0.3/net6.0/Newtonsoft.Json.dll",
+          "tfm": "net6.0",
+          "sha256": "22c649f75fce5be7c7ccda8880473b634ef69ecf33f5d1ab8ad892caf47d5a07",
+          "sizeBytes": 712464
+        },
+        {
+          "path": "bin/Newtonsoft.Json/13.0.3/net45/Newtonsoft.Json.dll",
+          "tfm": "net45",
+          "sha256": "e1e27af7b07eeedf5ce71a9255f0422816a6fc5849a483c6714e1b472044fa9d",
+          "sizeBytes": 711952
+        },
+        {
+          "path": "bin/Newtonsoft.Json/13.0.3/netstandard1.0/Newtonsoft.Json.dll",
+          "tfm": "netstandard1.0",
+          "sha256": "84623a0be7dd76da1c01b981c4d4d140c28bc2b9246131d2ce0e46f146961ea4",
+          "sizeBytes": 680720
+        },
+        {
+          "path": "bin/Newtonsoft.Json/13.0.3/net20/Newtonsoft.Json.dll",
+          "tfm": "net20",
+          "sha256": "0f89b82c6b76816b17286951ba83201c71b6611f3e75e907552247dfc72034f2",
+          "sizeBytes": 580880
+        },
+        {
+          "path": "bin/Newtonsoft.Json/13.0.3/netstandard1.3/Newtonsoft.Json.dll",
+          "tfm": "netstandard1.3",
+          "sha256": "4e0a14373fb1f73c7161c7656cfae219ed760d8af93a20319d30b03500aff07b",
+          "sizeBytes": 699664
+        },
+        {
+          "path": "bin/Newtonsoft.Json/13.0.3/netstandard2.0/Newtonsoft.Json.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "8c1dd5c184b4e2e7ead06971ff3ebcb46783be972292d1deb1061744369b4d80",
+          "sizeBytes": 705296
+        }
+      ]
+    },
+    {
+      "id": "Castle.Core",
+      "version": "4.4.1",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/castle.core/4.4.1/castle.core.4.4.1.nupkg",
+      "nupkgSha256": "278352f29f4aa9bb8b97a24c98dc29b6c7dc707dfb4df84084fc17da6550b28d",
+      "tags": [
+        "net35",
+        "net40",
+        "net45",
+        "netstandard2.0",
+        "ilGen"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/Castle.Core/4.4.1/net35/Castle.Core.dll",
+          "tfm": "net35",
+          "sha256": "58ca33968be498196c24f173fd8352b473d1cfcef8f34f894b4c01a0d2f4f544",
+          "sizeBytes": 439296
+        },
+        {
+          "path": "bin/Castle.Core/4.4.1/net40/Castle.Core.dll",
+          "tfm": "net40",
+          "sha256": "ef6a5b6fc6b14435d60b54218a2a42ce9d301adbabeb625516d304dc46944b31",
+          "sizeBytes": 442880
+        },
+        {
+          "path": "bin/Castle.Core/4.4.1/netstandard1.5/Castle.Core.dll",
+          "tfm": "netstandard1.5",
+          "sha256": "557e4b582a4b57f0f4830a3ddeedd721c468935f6517eaa7e8cafe2a4a3c7636",
+          "sizeBytes": 279040
+        },
+        {
+          "path": "bin/Castle.Core/4.4.1/net45/Castle.Core.dll",
+          "tfm": "net45",
+          "sha256": "9b555bc6f25753f1de58bd5a12c26d21a034914d9b8d56aee7c4fdb6365f11d2",
+          "sizeBytes": 442368
+        },
+        {
+          "path": "bin/Castle.Core/4.4.1/netstandard1.3/Castle.Core.dll",
+          "tfm": "netstandard1.3",
+          "sha256": "4bd38bfa5ac05c654bfe1fcc7216954a6b5ac04ee89ccc15e83f38e2b1825c58",
+          "sizeBytes": 279040
+        }
+      ]
+    },
+    {
+      "id": "Autofac",
+      "version": "3.5.2",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/autofac/3.5.2/autofac.3.5.2.nupkg",
+      "nupkgSha256": "833b1d5e6628ecc25338ee1df9584a6ddd85ccfa3ce7e4c7fcd0b07c12a66767",
+      "tags": [
+        "net40",
+        "net45"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/Autofac/3.5.2/net40/Autofac.dll",
+          "tfm": "net40",
+          "sha256": "bc7aee31320d3ad569fd26548f4ea748d2d60d995c91b9824cb1ed31c5141e8f",
+          "sizeBytes": 203264
+        },
+        {
+          "path": "bin/Autofac/3.5.2/portable-net4%2Bsl5%2Bnetcore45%2Bwpa81%2Bwp8%2BMonoAndroid1%2BMonoTouch1/Autofac.dll",
+          "tfm": "portable-net4%2Bsl5%2Bnetcore45%2Bwpa81%2Bwp8%2BMonoAndroid1%2BMonoTouch1",
+          "sha256": "bc7aee31320d3ad569fd26548f4ea748d2d60d995c91b9824cb1ed31c5141e8f",
+          "sizeBytes": 203264
+        }
+      ]
+    },
+    {
+      "id": "log4net",
+      "version": "2.0.15",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/log4net/2.0.15/log4net.2.0.15.nupkg",
+      "nupkgSha256": "cb8e04be35bb645442277c4b6be006056f35648d59ca4384a52554f041cb01c7",
+      "tags": [
+        "net45",
+        "netstandard2.0"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/log4net/2.0.15/net35/log4net.dll",
+          "tfm": "net35",
+          "sha256": "64a992a2b6486dc8b27ebb715668f4bbb6752b06aea90172457c5dfb6b2a863f",
+          "sizeBytes": 270336
+        },
+        {
+          "path": "bin/log4net/2.0.15/net40/log4net.dll",
+          "tfm": "net40",
+          "sha256": "dd8dc8ba503a95e0de315bcbad5d35a3fc363a361f250f96e47771b9f625550e",
+          "sizeBytes": 270336
+        },
+        {
+          "path": "bin/log4net/2.0.15/net45/log4net.dll",
+          "tfm": "net45",
+          "sha256": "1d45a6afa38f0b10814063f2a42e6efce45752853667650e765844b8566b3332",
+          "sizeBytes": 270336
+        },
+        {
+          "path": "bin/log4net/2.0.15/net20/log4net.dll",
+          "tfm": "net20",
+          "sha256": "6b460834eb31126fb8ded0cf31867851fed55aefe53bebc23a86e8b2f0d228e4",
+          "sizeBytes": 262144
+        },
+        {
+          "path": "bin/log4net/2.0.15/netstandard1.3/log4net.dll",
+          "tfm": "netstandard1.3",
+          "sha256": "a4e30e9ebf5b6178eb285b7dc00c341449807bc6db3c27946c22e981084537b8",
+          "sizeBytes": 245760
+        },
+        {
+          "path": "bin/log4net/2.0.15/netstandard2.0/log4net.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "826bc88829ccb83b9e00ffc6a1abeefe72c3db607e069a8bf1ce4a114d86d5bc",
+          "sizeBytes": 258048
+        },
+        {
+          "path": "bin/log4net/2.0.15/net40-client/log4net.dll",
+          "tfm": "net40-client",
+          "sha256": "f1f3966dfdb566e6ae7c44d93da2fe5adff4cf157e358c66cb8513289c163eb0",
+          "sizeBytes": 270336
+        }
+      ]
+    },
+    {
+      "id": "NLog",
+      "version": "3.2.1",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/nlog/3.2.1/nlog.3.2.1.nupkg",
+      "nupkgSha256": "e16a95abcd5b9e1e1d9396b6bf66919f4c8b1ee7c6ca7a44de0c3d8718badcd4",
+      "tags": [
+        "net35",
+        "net40",
+        "net45"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/NLog/3.2.1/net35/NLog.dll",
+          "tfm": "net35",
+          "sha256": "0212b7981cff6df0fc6d8063a31d16b3152ba5ef3e78ea68dd3e269188a56faa",
+          "sizeBytes": 413696
+        },
+        {
+          "path": "bin/NLog/3.2.1/net40/NLog.dll",
+          "tfm": "net40",
+          "sha256": "4c139a16b6b161b1dee4d83865fc5e67fe247a99aa8e5b6471e5711ac6b623eb",
+          "sizeBytes": 416256
+        },
+        {
+          "path": "bin/NLog/3.2.1/net45/NLog.dll",
+          "tfm": "net45",
+          "sha256": "cb2f9fa3c5bdd144e017f2f27c64e663a3b15631fe5dbb623089c7e2b3f9a84f",
+          "sizeBytes": 420352
+        },
+        {
+          "path": "bin/NLog/3.2.1/sl5/NLog.dll",
+          "tfm": "sl5",
+          "sha256": "cb3062b0b9faefccad61347cf95c4d418f5289ec5658d87942cced95880d5ef8",
+          "sizeBytes": 242176
+        },
+        {
+          "path": "bin/NLog/3.2.1/sl4/NLog.dll",
+          "tfm": "sl4",
+          "sha256": "b27f3714096403a33c4960e0d634d6f5929ffbb546debc88c42380dd6c754f0c",
+          "sizeBytes": 242176
+        }
+      ]
+    },
+    {
+      "id": "EntityFramework",
+      "version": "6.4.4",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/entityframework/6.4.4/entityframework.6.4.4.nupkg",
+      "nupkgSha256": "0a603c6434f76660406f3210453d201fe2521b6ae875601f68f4b13ab9212ddc",
+      "tags": [
+        "net40",
+        "net45"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/EntityFramework/6.4.4/net40/EntityFramework.dll",
+          "tfm": "net40",
+          "sha256": "7e60999a5741b9b041d3a8d9bad1c952e4cce8216142327ab413b1ddca70a4c5",
+          "sizeBytes": 4773480
+        },
+        {
+          "path": "bin/EntityFramework/6.4.4/net40/EntityFramework.SqlServer.dll",
+          "tfm": "net40",
+          "sha256": "4583f9d1e62c90e3bc41d9feacca8152e3bb067b767e806872772ea9a55803e9",
+          "sizeBytes": 586632
+        },
+        {
+          "path": "bin/EntityFramework/6.4.4/net45/EntityFramework.dll",
+          "tfm": "net45",
+          "sha256": "ff42bca704605e187abb45523868b15128d6af1c28ad40a4579d507d34a953b2",
+          "sizeBytes": 4991352
+        },
+        {
+          "path": "bin/EntityFramework/6.4.4/net45/EntityFramework.SqlServer.dll",
+          "tfm": "net45",
+          "sha256": "a960dd4d2f0f37b3c09ffb9567c32426b8791310d7eb935c04c819c3d46bd49e",
+          "sizeBytes": 591752
+        },
+        {
+          "path": "bin/EntityFramework/6.4.4/netstandard2.1/EntityFramework.dll",
+          "tfm": "netstandard2.1",
+          "sha256": "eadbac604efe1ea0272d1285f48e358541978aa1d198ef0420b0e522c793b8b4",
+          "sizeBytes": 4977744
+        },
+        {
+          "path": "bin/EntityFramework/6.4.4/netstandard2.1/EntityFramework.SqlServer.dll",
+          "tfm": "netstandard2.1",
+          "sha256": "be2bcdc9c0ff4a2865c8e5296f6a3c87c22411ff268e5eff30fdcf5f8b2561e2",
+          "sizeBytes": 591440
+        }
+      ]
+    },
+    {
+      "id": "RabbitMQ.Client",
+      "version": "6.8.1",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/rabbitmq.client/6.8.1/rabbitmq.client.6.8.1.nupkg",
+      "nupkgSha256": "298720d3a46eed98064fa30f011f0dcfc11bd69efa038ae88d0f783fc410e562",
+      "tags": [
+        "net452",
+        "netstandard2.0"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/RabbitMQ.Client/6.8.1/net462/RabbitMQ.Client.dll",
+          "tfm": "net462",
+          "sha256": "06a87bef87882285d13611addcbd7accbb204a41c39903f53fffc894a4117e3a",
+          "sizeBytes": 293888
+        },
+        {
+          "path": "bin/RabbitMQ.Client/6.8.1/netstandard2.0/RabbitMQ.Client.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "b6cec5b7ca9baebcbb927968bfb8ed2ee1c3b9e08d19b58c17547bec016bc4b7",
+          "sizeBytes": 291328
+        }
+      ]
+    },
+    {
+      "id": "Dapper",
+      "version": "2.0.123",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/dapper/2.0.123/dapper.2.0.123.nupkg",
+      "nupkgSha256": "21cde9307b6ae6317de2d3e2f25e4c1431b22e71196287dcab16c7e720cb1d96",
+      "tags": [
+        "net461",
+        "netstandard2.0"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/Dapper/2.0.123/net461/Dapper.dll",
+          "tfm": "net461",
+          "sha256": "9027cd678ac8ff74f2321516528992d1883887ed749e8f6ecad7276dd55cef31",
+          "sizeBytes": 196096
+        },
+        {
+          "path": "bin/Dapper/2.0.123/net5.0/Dapper.dll",
+          "tfm": "net5.0",
+          "sha256": "a8304549d7a166747839f1b9342cd3201cadf2afbc727d3cb4e2d1344c246145",
+          "sizeBytes": 202752
+        },
+        {
+          "path": "bin/Dapper/2.0.123/netstandard2.0/Dapper.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "9f4c7304ae7ac50d2e5563739c650295d7643bc2a7af861d2360b738a76fa856",
+          "sizeBytes": 199168
+        }
+      ]
+    },
+    {
+      "id": "AutoMapper",
+      "version": "12.0.1",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/automapper/12.0.1/automapper.12.0.1.nupkg",
+      "nupkgSha256": "6b7c0249a39797ee51296362d5d7516cd5a43b37e8745014a24a8fc908951c68",
+      "tags": [
+        "netstandard2.1",
+        "net6.0"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/AutoMapper/12.0.1/netstandard2.1/AutoMapper.dll",
+          "tfm": "netstandard2.1",
+          "sha256": "20f2c40a3873028e496a956eb8007f653e4e1b089245910ac6d63b10c3421f7f",
+          "sizeBytes": 263680
+        }
+      ]
+    },
+    {
+      "id": "Polly",
+      "version": "7.2.4",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/polly/7.2.4/polly.7.2.4.nupkg",
+      "nupkgSha256": "c10bcadd799096997223f76e56484cfa24618a41812f0ad0f1ca5c1494887053",
+      "tags": [
+        "netstandard2.0",
+        "netstandard1.0"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/Polly/7.2.4/net472/Polly.dll",
+          "tfm": "net472",
+          "sha256": "fc859b5e11d4d9ad76a767381438969062ff7780c495f5fe30b12b13b97eb283",
+          "sizeBytes": 287984
+        },
+        {
+          "path": "bin/Polly/7.2.4/net461/Polly.dll",
+          "tfm": "net461",
+          "sha256": "6f2ce2af34e6ce0946623608e03040119f46e30887d0132dca2670e3fd709bb3",
+          "sizeBytes": 287984
+        },
+        {
+          "path": "bin/Polly/7.2.4/netstandard1.1/Polly.dll",
+          "tfm": "netstandard1.1",
+          "sha256": "988399d0890eae347de2e1e9d2734513e2fd696d84839eeffd1a1a3f84863c61",
+          "sizeBytes": 287984
+        },
+        {
+          "path": "bin/Polly/7.2.4/netstandard2.0/Polly.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "4fb8ff4f77b031f4ed51aadb0e494ef62c9f4f0a8382b972d34a9999707073dc",
+          "sizeBytes": 287984
+        }
+      ]
+    },
+    {
+      "id": "RestSharp",
+      "version": "106.15.0",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/restsharp/106.15.0/restsharp.106.15.0.nupkg",
+      "nupkgSha256": "f140a15f1cfb010990a68a334817f007a3559addbeb8970df131fb46d55f4fbc",
+      "tags": [
+        "net45",
+        "netstandard2.0"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/RestSharp/106.15.0/net452/RestSharp.dll",
+          "tfm": "net452",
+          "sha256": "37bf2a8815e1833153ff92d0bec3a1405f5c5f146884d0563a96bacd1b0074f9",
+          "sizeBytes": 190464
+        },
+        {
+          "path": "bin/RestSharp/106.15.0/netstandard2.0/RestSharp.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "44d7ef808bdf27da453059afe5dd132f061e302bb34b1bff3c79b74249c52640",
+          "sizeBytes": 190464
+        }
+      ]
+    },
+    {
+      "id": "Serilog",
+      "version": "2.12.0",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/serilog/2.12.0/serilog.2.12.0.nupkg",
+      "nupkgSha256": "243fae77e085a0b19d6066ac4d6293c71e4f623d96e6906fda53326c12bb1d53",
+      "tags": [
+        "net45",
+        "net46",
+        "net47",
+        "netstandard2.0"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/Serilog/2.12.0/net47/Serilog.dll",
+          "tfm": "net47",
+          "sha256": "5c2f34412502f6c5a5aa9226b71f4809aa73bf90f46c79faeb97172955178b26",
+          "sizeBytes": 136704
+        },
+        {
+          "path": "bin/Serilog/2.12.0/net6.0/Serilog.dll",
+          "tfm": "net6.0",
+          "sha256": "f9aa9b3499845f132cb67d739ee5eea05372d19b11d98c04aacbf805f5d3e0d4",
+          "sizeBytes": 141824
+        },
+        {
+          "path": "bin/Serilog/2.12.0/net45/Serilog.dll",
+          "tfm": "net45",
+          "sha256": "409ee237572956059d4ba0ee26ca7d7689052c3f68aecd47e1565457b4d54b32",
+          "sizeBytes": 137728
+        },
+        {
+          "path": "bin/Serilog/2.12.0/net46/Serilog.dll",
+          "tfm": "net46",
+          "sha256": "764dc26fb2860821a6d064c0c7f42481358ef75333e1f6a7cfb692112a3e7d96",
+          "sizeBytes": 137216
+        },
+        {
+          "path": "bin/Serilog/2.12.0/netstandard1.0/Serilog.dll",
+          "tfm": "netstandard1.0",
+          "sha256": "c54c25f243800b0213278e6822e1d19645ddf4c0b0dba2446d0e13bc2d629a82",
+          "sizeBytes": 137216
+        },
+        {
+          "path": "bin/Serilog/2.12.0/net5.0/Serilog.dll",
+          "tfm": "net5.0",
+          "sha256": "b53d4891f565b860e43e987301dcbd91a7d42b6393c8a8300fb624f01650442c",
+          "sizeBytes": 141312
+        },
+        {
+          "path": "bin/Serilog/2.12.0/netstandard2.1/Serilog.dll",
+          "tfm": "netstandard2.1",
+          "sha256": "1dd76268e8c141393b7ad8d3a1bd2604311c448de19f917eefae5f8b351b7ae7",
+          "sizeBytes": 141824
+        },
+        {
+          "path": "bin/Serilog/2.12.0/netstandard1.3/Serilog.dll",
+          "tfm": "netstandard1.3",
+          "sha256": "f7c295b1bc3994aed2289027d6552d064c4f171318eab3c27e717fcb0f19ccd1",
+          "sizeBytes": 137216
+        },
+        {
+          "path": "bin/Serilog/2.12.0/netstandard2.0/Serilog.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "bee942425f5afffd6897ff3e55a337677459c4763b504015956bfa3e22cdcf3f",
+          "sizeBytes": 136704
+        }
+      ]
+    },
+    {
+      "id": "FluentAssertions",
+      "version": "6.12.2",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/fluentassertions/6.12.2/fluentassertions.6.12.2.nupkg",
+      "nupkgSha256": "caf6e765aa5317ad74cc6f1884c3844a7d225ee757e3154276848a568e9ebbec",
+      "tags": [
+        "net47",
+        "netcoreapp3.1",
+        "net5.0",
+        "net6.0",
+        "netstandard2.0"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/FluentAssertions/6.12.2/netcoreapp2.1/FluentAssertions.dll",
+          "tfm": "netcoreapp2.1",
+          "sha256": "46dab2bed1b8f28c98668b164cce9fe96498dbbdc078532c45e39c3448e96705",
+          "sizeBytes": 718336
+        },
+        {
+          "path": "bin/FluentAssertions/6.12.2/net47/FluentAssertions.dll",
+          "tfm": "net47",
+          "sha256": "a981c2eca2fddd179d9f9a9b598e4b3b691416b39bffde74b31ea21584a22d27",
+          "sizeBytes": 717312
+        },
+        {
+          "path": "bin/FluentAssertions/6.12.2/net6.0/FluentAssertions.dll",
+          "tfm": "net6.0",
+          "sha256": "74989bec64beb8c1269e51c3e867233711cab1268f2a921fdeb34e0a88e1a4e4",
+          "sizeBytes": 733184
+        },
+        {
+          "path": "bin/FluentAssertions/6.12.2/netstandard2.1/FluentAssertions.dll",
+          "tfm": "netstandard2.1",
+          "sha256": "aca42ca83c89d1ca30a211cd0396886bf4d6b31da69b65fc145558ee0ce43e9a",
+          "sizeBytes": 712704
+        },
+        {
+          "path": "bin/FluentAssertions/6.12.2/netcoreapp3.0/FluentAssertions.dll",
+          "tfm": "netcoreapp3.0",
+          "sha256": "2eb09166bc9a5611d2dae8da763826876b9a5df2f4c7ec0d371d506824900b7a",
+          "sizeBytes": 714752
+        },
+        {
+          "path": "bin/FluentAssertions/6.12.2/netstandard2.0/FluentAssertions.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "7650c6af3e04970949cce83aef359eaae7fc1becb948742ec710d01ed35b65e5",
+          "sizeBytes": 697856
+        }
+      ]
+    },
+    {
+      "id": "Topshelf",
+      "version": "4.3.0",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/topshelf/4.3.0/topshelf.4.3.0.nupkg",
+      "nupkgSha256": "ab94a0ac2dac8bb06c6ebc7ba5491290c802c3ea4d6039ce189001418c67f740",
+      "tags": [
+        "net452",
+        "netstandard2.0"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/Topshelf/4.3.0/net452/Topshelf.dll",
+          "tfm": "net452",
+          "sha256": "bd70a5832124e36840452ff46e442efa0a09a4ceba842aea72c79b2d322d7fe8",
+          "sizeBytes": 190464
+        },
+        {
+          "path": "bin/Topshelf/4.3.0/netstandard2.0/Topshelf.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "b4a6f3c582cb4c5200b75ac202db86e0de40b7ddc82b80c8382a0328730368e7",
+          "sizeBytes": 194048
+        }
+      ]
+    },
+    {
+      "id": "Costura.Fody",
+      "version": "5.7.0",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/costura.fody/5.7.0/costura.fody.5.7.0.nupkg",
+      "nupkgSha256": "81fcc69e121910d1fa9caa5a9925baa054dc5f8c51d9445c6631b4b5bb63cb35",
+      "tags": [
+        "net452",
+        "netstandard2.0"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/Costura.Fody/5.7.0/netstandard1.0/Costura.dll",
+          "tfm": "netstandard1.0",
+          "sha256": "41bb464ac7c0d192641077e44a59d7d89860c3c620a59961f2fc4a4be47deae3",
+          "sizeBytes": 4608
+        }
+      ]
+    },
+    {
+      "id": "Microsoft.Extensions.DependencyInjection",
+      "version": "3.1.32",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.dependencyinjection/3.1.32/microsoft.extensions.dependencyinjection.3.1.32.nupkg",
+      "nupkgSha256": "628192ecc095c03ca6bf9054f44ab2050292c9f31d3f7a6f93ffbfa15345e550",
+      "tags": [
+        "netcoreapp3.1",
+        "netstandard2.0"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/Microsoft.Extensions.DependencyInjection/3.1.32/netcoreapp3.1/Microsoft.Extensions.DependencyInjection.dll",
+          "tfm": "netcoreapp3.1",
+          "sha256": "5106737d5eb248cd1c33178026bc8852cbc3ac11ce15d0b749bd6906449c32b8",
+          "sizeBytes": 72608
+        },
+        {
+          "path": "bin/Microsoft.Extensions.DependencyInjection/3.1.32/net461/Microsoft.Extensions.DependencyInjection.dll",
+          "tfm": "net461",
+          "sha256": "97ae57933ebe9e9c8056c761a28f9cbc202abf47a6fb3768145da104ed77697b",
+          "sizeBytes": 72640
+        },
+        {
+          "path": "bin/Microsoft.Extensions.DependencyInjection/3.1.32/netstandard2.1/Microsoft.Extensions.DependencyInjection.dll",
+          "tfm": "netstandard2.1",
+          "sha256": "2fab9b8e184da09af1ad453d68dc02fefed0b2515eeded044a200dc364ac4d88",
+          "sizeBytes": 72640
+        },
+        {
+          "path": "bin/Microsoft.Extensions.DependencyInjection/3.1.32/netstandard2.0/Microsoft.Extensions.DependencyInjection.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "b2e8dc6cc71263db2b9229db353ef27c519e37e0fd4bdb86449f2b747f52aee2",
+          "sizeBytes": 66496
+        }
+      ]
+    },
+    {
+      "id": "Microsoft.Extensions.DependencyInjection",
+      "version": "5.0.0",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.dependencyinjection/5.0.0/microsoft.extensions.dependencyinjection.5.0.0.nupkg",
+      "nupkgSha256": "44de3bf1825013460cd20f89ced5e9d34c39ec2205e1b6f8f21483ff3de34d97",
+      "tags": [
+        "net5.0",
+        "netstandard2.1"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/Microsoft.Extensions.DependencyInjection/5.0.0/net461/Microsoft.Extensions.DependencyInjection.dll",
+          "tfm": "net461",
+          "sha256": "c85cf85783322abea6532c10f63f7dd6745398ff875486ab869ee542ee731fea",
+          "sizeBytes": 76168
+        },
+        {
+          "path": "bin/Microsoft.Extensions.DependencyInjection/5.0.0/net5.0/Microsoft.Extensions.DependencyInjection.dll",
+          "tfm": "net5.0",
+          "sha256": "865fc0bfb4e82f536a570ea5711dfdae4b1b9c3651c0235c616b40a813ac3991",
+          "sizeBytes": 74120
+        },
+        {
+          "path": "bin/Microsoft.Extensions.DependencyInjection/5.0.0/netstandard2.1/Microsoft.Extensions.DependencyInjection.dll",
+          "tfm": "netstandard2.1",
+          "sha256": "5225d7d0ed47bc1393aea2334c9eb25e3b78b6e4678c20999a020cc1f15e4aff",
+          "sizeBytes": 75648
+        },
+        {
+          "path": "bin/Microsoft.Extensions.DependencyInjection/5.0.0/netstandard2.0/Microsoft.Extensions.DependencyInjection.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "ac5c9eee091a57928a8f17b63b4973d191049c5b4466ed9d0fa4a3c7db2a57fb",
+          "sizeBytes": 67976
+        }
+      ]
+    },
+    {
+      "id": "Microsoft.Extensions.DependencyInjection",
+      "version": "8.0.1",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.dependencyinjection/8.0.1/microsoft.extensions.dependencyinjection.8.0.1.nupkg",
+      "nupkgSha256": "3bd8348d64be8df1a84f7caa2b06582462fe8c64887926f09afa262830b78535",
+      "tags": [
+        "net8.0",
+        "netstandard2.0",
+        "netstandard2.1"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/Microsoft.Extensions.DependencyInjection/8.0.1/net6.0/Microsoft.Extensions.DependencyInjection.dll",
+          "tfm": "net6.0",
+          "sha256": "df0ae00b1599acae93d9f4df2bcc6d0ba109221ccc44d2d1486183f84a5fec78",
+          "sizeBytes": 94512
+        },
+        {
+          "path": "bin/Microsoft.Extensions.DependencyInjection/8.0.1/net462/Microsoft.Extensions.DependencyInjection.dll",
+          "tfm": "net462",
+          "sha256": "e969e314ce9398a34710e93e5f77668efe2f85b08f8c9729f98eba786c32c2a2",
+          "sizeBytes": 98088
+        },
+        {
+          "path": "bin/Microsoft.Extensions.DependencyInjection/8.0.1/netstandard2.1/Microsoft.Extensions.DependencyInjection.dll",
+          "tfm": "netstandard2.1",
+          "sha256": "e23df94fc2bca057bd88d87c18afc22fb41281f41d3b38430c483ee6fc95d53b",
+          "sizeBytes": 96040
+        },
+        {
+          "path": "bin/Microsoft.Extensions.DependencyInjection/8.0.1/net7.0/Microsoft.Extensions.DependencyInjection.dll",
+          "tfm": "net7.0",
+          "sha256": "56703642e266987952fd0199f968af09bd182b11e83b2d22067896aa18b217ed",
+          "sizeBytes": 93480
+        },
+        {
+          "path": "bin/Microsoft.Extensions.DependencyInjection/8.0.1/net8.0/Microsoft.Extensions.DependencyInjection.dll",
+          "tfm": "net8.0",
+          "sha256": "158761ce778e799949f3a3060c461b1055bb35f1f5a65eff0e42397849f09ecd",
+          "sizeBytes": 92952
+        },
+        {
+          "path": "bin/Microsoft.Extensions.DependencyInjection/8.0.1/netstandard2.0/Microsoft.Extensions.DependencyInjection.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "6f3e98e95f9c9e5f0d7dce06e9918097c1d85d8191d63ece8e3aa2b16d99bf19",
+          "sizeBytes": 91432
+        }
+      ]
+    },
+    {
+      "id": "Microsoft.Extensions.DependencyInjection",
+      "version": "9.0.0",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.dependencyinjection/9.0.0/microsoft.extensions.dependencyinjection.9.0.0.nupkg",
+      "nupkgSha256": "7401f9d8f3e54cb9fb5fed5a23fee7a5dac3ccc1053cc5d1bf88ac5756bed789",
+      "tags": [
+        "net9.0",
+        "netstandard2.0",
+        "netstandard2.1"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/Microsoft.Extensions.DependencyInjection/9.0.0/net9.0/Microsoft.Extensions.DependencyInjection.dll",
+          "tfm": "net9.0",
+          "sha256": "09c80cce213152ced75d791fc4fd57b34f79a2026c69d133b0380f10128096ce",
+          "sizeBytes": 93448
+        },
+        {
+          "path": "bin/Microsoft.Extensions.DependencyInjection/9.0.0/net462/Microsoft.Extensions.DependencyInjection.dll",
+          "tfm": "net462",
+          "sha256": "9a7e5d960b4ca79981fc3321a7099ac79fa2e2eba026ad43728b3f9ced991452",
+          "sizeBytes": 97544
+        },
+        {
+          "path": "bin/Microsoft.Extensions.DependencyInjection/9.0.0/netstandard2.1/Microsoft.Extensions.DependencyInjection.dll",
+          "tfm": "netstandard2.1",
+          "sha256": "e78387c4d6160552f5214d04e4befc95c905607ec4205afad4c61e4019981bf9",
+          "sizeBytes": 96024
+        },
+        {
+          "path": "bin/Microsoft.Extensions.DependencyInjection/9.0.0/net8.0/Microsoft.Extensions.DependencyInjection.dll",
+          "tfm": "net8.0",
+          "sha256": "599cc9afe9098912d387edc458e4cfccbd8e16efc1efa03a3032ace6586960c1",
+          "sizeBytes": 92424
+        },
+        {
+          "path": "bin/Microsoft.Extensions.DependencyInjection/9.0.0/netstandard2.0/Microsoft.Extensions.DependencyInjection.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "d71c83f7c943dc229e85345964eac35937b316570e2de9880a483f5765f1c02d",
+          "sizeBytes": 91400
+        }
+      ]
+    },
+    {
+      "id": "Microsoft.EntityFrameworkCore",
+      "version": "6.0.36",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/microsoft.entityframeworkcore/6.0.36/microsoft.entityframeworkcore.6.0.36.nupkg",
+      "nupkgSha256": "c7e5594cbef1a8c13629c3c42f6c4b193628d2f08f87286019915ee74d43ed3a",
+      "tags": [
+        "net6.0"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/Microsoft.EntityFrameworkCore/6.0.36/net6.0/Microsoft.EntityFrameworkCore.dll",
+          "tfm": "net6.0",
+          "sha256": "fe7c944d9a6d96231facf54fb08a7dfe382984c3b2857ec2922e3c0d72a44641",
+          "sizeBytes": 2102304
+        }
+      ]
+    },
+    {
+      "id": "Microsoft.Extensions.Logging",
+      "version": "7.0.0",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/microsoft.extensions.logging/7.0.0/microsoft.extensions.logging.7.0.0.nupkg",
+      "nupkgSha256": "aebfcd5c867fdc51b91581ab1c3ee2208af5d8092c3f80a77d4cb562f11d0daf",
+      "tags": [
+        "net7.0",
+        "netstandard2.0"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/Microsoft.Extensions.Logging/7.0.0/net6.0/Microsoft.Extensions.Logging.dll",
+          "tfm": "net6.0",
+          "sha256": "6833a9076b9a4bb4195c87cdac7ccf4b99b86d1fc848a08e074d668d1e03530e",
+          "sizeBytes": 48248
+        },
+        {
+          "path": "bin/Microsoft.Extensions.Logging/7.0.0/net462/Microsoft.Extensions.Logging.dll",
+          "tfm": "net462",
+          "sha256": "a8e30ff3d55dd697b149529e981a56705e1cc675e338daf09d16987f84b46354",
+          "sizeBytes": 49792
+        },
+        {
+          "path": "bin/Microsoft.Extensions.Logging/7.0.0/netstandard2.1/Microsoft.Extensions.Logging.dll",
+          "tfm": "netstandard2.1",
+          "sha256": "69596ce0624598403d7f12cc242b74a94a08e3d0c05e7d0a16361eac9860e29f",
+          "sizeBytes": 48760
+        },
+        {
+          "path": "bin/Microsoft.Extensions.Logging/7.0.0/net7.0/Microsoft.Extensions.Logging.dll",
+          "tfm": "net7.0",
+          "sha256": "58cb2e63cae1b60fafbecb0615247b64b2a1a983c0cce8b9dfc217328889e9b2",
+          "sizeBytes": 47240
+        },
+        {
+          "path": "bin/Microsoft.Extensions.Logging/7.0.0/netstandard2.0/Microsoft.Extensions.Logging.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "2f5d79badc466ad09316b0b07fab35d2264588eacbe68a6ea7e9f8a8f4c8892b",
+          "sizeBytes": 49784
+        }
+      ]
+    },
+    {
+      "id": "System.Text.Json",
+      "version": "8.0.5",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/system.text.json/8.0.5/system.text.json.8.0.5.nupkg",
+      "nupkgSha256": "c8ac68e78c39a1d593ea73ebb9456c697e77a0f45efa02b31af2e79f1b703faf",
+      "tags": [
+        "net8.0",
+        "netstandard2.0"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/System.Text.Json/8.0.5/net6.0/System.Text.Json.dll",
+          "tfm": "net6.0",
+          "sha256": "73800261ac9a961db9800c7ccf8039d142b9a4e5a14fd58a99a4760a59c65c6f",
+          "sizeBytes": 580880
+        },
+        {
+          "path": "bin/System.Text.Json/8.0.5/net462/System.Text.Json.dll",
+          "tfm": "net462",
+          "sha256": "86c3f263ae9b4469ab1266c80471087082447eb4a38e6b97bf5e84de15c07a1d",
+          "sizeBytes": 644888
+        },
+        {
+          "path": "bin/System.Text.Json/8.0.5/net7.0/System.Text.Json.dll",
+          "tfm": "net7.0",
+          "sha256": "28033865036b0267efadede9d84d85ad6bba7097ec27b2e6a825c2f5b82eab96",
+          "sizeBytes": 582408
+        },
+        {
+          "path": "bin/System.Text.Json/8.0.5/net8.0/System.Text.Json.dll",
+          "tfm": "net8.0",
+          "sha256": "eb5439bd29d68d04730a85b22cf8ec4fe62256457e9da7680ccb9979fc273fce",
+          "sizeBytes": 580360
+        },
+        {
+          "path": "bin/System.Text.Json/8.0.5/netstandard2.0/System.Text.Json.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "42a3d66464aa3f52202a625fb8d719663ceae07678081253b54d6ed56a95ea0a",
+          "sizeBytes": 608520
+        }
+      ]
+    },
+    {
+      "id": "System.Numerics.Vectors",
+      "version": "4.5.0",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/system.numerics.vectors/4.5.0/system.numerics.vectors.4.5.0.nupkg",
+      "nupkgSha256": "a9d49320581fda1b4f4be6212c68c01a22cdf228026099c20a8eabefcf90f9cf",
+      "tags": [
+        "netstandard2.0",
+        "net46",
+        "simd"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/System.Numerics.Vectors/4.5.0/net46/System.Numerics.Vectors.dll",
+          "tfm": "net46",
+          "sha256": "1d3ef8698281e7cf7371d1554afef5872b39f96c26da772210a33da041ba1183",
+          "sizeBytes": 115856
+        },
+        {
+          "path": "bin/System.Numerics.Vectors/4.5.0/netstandard1.0/System.Numerics.Vectors.dll",
+          "tfm": "netstandard1.0",
+          "sha256": "671b682dde1d554d898bf34004c4dc2fef2da6985078c77311308b858b704828",
+          "sizeBytes": 160912
+        },
+        {
+          "path": "bin/System.Numerics.Vectors/4.5.0/portable-net45%2Bwin8%2Bwp8%2Bwpa81/System.Numerics.Vectors.dll",
+          "tfm": "portable-net45%2Bwin8%2Bwp8%2Bwpa81",
+          "sha256": "671b682dde1d554d898bf34004c4dc2fef2da6985078c77311308b858b704828",
+          "sizeBytes": 160912
+        },
+        {
+          "path": "bin/System.Numerics.Vectors/4.5.0/netstandard2.0/System.Numerics.Vectors.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "17924e5dc87e0d6229d2dd0bcfc1fdfabd820901b13a68baa89fcb80c4d1a67f",
+          "sizeBytes": 163464
+        }
+      ]
+    },
+    {
+      "id": "System.Buffers",
+      "version": "4.5.1",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/system.buffers/4.5.1/system.buffers.4.5.1.nupkg",
+      "nupkgSha256": "c30b3dd2c7e2f4cee4b823d692fd42118309b42ab1f5007f923d329a5b0d6b12",
+      "tags": [
+        "netstandard2.0",
+        "span"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/System.Buffers/4.5.1/net461/System.Buffers.dll",
+          "tfm": "net461",
+          "sha256": "accccfbe45d9f08ffeed9916e37b33e98c65be012cfff6e7fa7b67210ce1fefb",
+          "sizeBytes": 20856
+        },
+        {
+          "path": "bin/System.Buffers/4.5.1/netstandard1.1/System.Buffers.dll",
+          "tfm": "netstandard1.1",
+          "sha256": "423200010a7684763451473a4fb206dfa074fc8249676621ef9d9a13417d364d",
+          "sizeBytes": 20864
+        },
+        {
+          "path": "bin/System.Buffers/4.5.1/netstandard2.0/System.Buffers.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "c65fff603b283dc966d1a8b730c11d5e5e750e8021bd24640612f6cc3f2c6fb7",
+          "sizeBytes": 21376
+        }
+      ]
+    },
+    {
+      "id": "SixLabors.ImageSharp",
+      "version": "3.1.6",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/sixlabors.imagesharp/3.1.6/sixlabors.imagesharp.3.1.6.nupkg",
+      "nupkgSha256": "1508cbc82e35e7c1751b28652a3ce31a8e93c40bbaf7cad859363d964928fdf0",
+      "tags": [
+        "net6.0",
+        "netstandard2.0",
+        "unsafe"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/SixLabors.ImageSharp/3.1.6/net6.0/SixLabors.ImageSharp.dll",
+          "tfm": "net6.0",
+          "sha256": "e16632223b130f023484bbe57c1ade94a6883fa8b5cfba7731e075c87036ab54",
+          "sizeBytes": 2092032
+        }
+      ]
+    },
+    {
+      "id": "FSharp.Core",
+      "version": "8.0.400",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/fsharp.core/8.0.400/fsharp.core.8.0.400.nupkg",
+      "nupkgSha256": "c25adc0238ef23962d9c747b9051fcb91500e06a262589aaaf8d4ae4b623086b",
+      "tags": [
+        "netstandard2.0",
+        "fsharp"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/FSharp.Core/8.0.400/netstandard2.1/FSharp.Core.dll",
+          "tfm": "netstandard2.1",
+          "sha256": "9503f09eea9141e57ee6e9b359a7f59fd8ca0fbc4e510fde55b50fd6c0dbd300",
+          "sizeBytes": 3312416
+        },
+        {
+          "path": "bin/FSharp.Core/8.0.400/netstandard2.0/FSharp.Core.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "b05c59ef3d9454fb8aedc6bcc6405e3e19d3df22c35b7c0d23ee49fd617da798",
+          "sizeBytes": 3304200
+        }
+      ]
+    },
+    {
+      "id": "Microsoft.VisualBasic",
+      "version": "10.3.0",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/microsoft.visualbasic/10.3.0/microsoft.visualbasic.10.3.0.nupkg",
+      "nupkgSha256": "f8738af4e2c529062c8a38f67e4a5a57394304282dfe368bdbb2af9c752843d0",
+      "tags": [
+        "netcoreapp3.1",
+        "netstandard2.0",
+        "vb"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/Microsoft.VisualBasic/10.3.0/netcore50/Microsoft.VisualBasic.dll",
+          "tfm": "netcore50",
+          "sha256": "2afeb65652720342a1a976cd340bdf38860682183585c349c07d35b9d0acd413",
+          "sizeBytes": 188120
+        },
+        {
+          "path": "bin/Microsoft.VisualBasic/10.3.0/netstandard1.3/Microsoft.VisualBasic.dll",
+          "tfm": "netstandard1.3",
+          "sha256": "2afeb65652720342a1a976cd340bdf38860682183585c349c07d35b9d0acd413",
+          "sizeBytes": 188120
+        },
+        {
+          "path": "bin/Microsoft.VisualBasic/10.3.0/netstandard2.0/Microsoft.VisualBasic.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "810e5d09d81f4a2c932e2d996c4c5c81c819a52b0fe2dac2eccda035f5bdf8f4",
+          "sizeBytes": 178832
+        }
+      ]
+    },
+    {
+      "id": "Stub.System.Data.SQLite.Core.NetFramework",
+      "version": "1.0.119",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/stub.system.data.sqlite.core.netframework/1.0.119/stub.system.data.sqlite.core.netframework.1.0.119.nupkg",
+      "nupkgSha256": "f5f86b80729323890da590a8c7ba7957f04e2735e583d075220d1521745e9f4c",
+      "tags": [
+        "net46",
+        "mixedMode"
+      ],
+      "mixedMode": true,
+      "assemblies": [
+        {
+          "path": "bin/Stub.System.Data.SQLite.Core.NetFramework/1.0.119/net451/System.Data.SQLite.dll",
+          "tfm": "net451",
+          "sha256": "71491a413b8d3e5bf3bfdf3e6f0d98e01ab99c6e706d860cc035a12c2d4d204c",
+          "sizeBytes": 459960
+        },
+        {
+          "path": "bin/Stub.System.Data.SQLite.Core.NetFramework/1.0.119/net40/System.Data.SQLite.dll",
+          "tfm": "net40",
+          "sha256": "fc72bba66c7633c000c491ab3a68799b97d47a1c96a8754c382a1c0c91ebcef3",
+          "sizeBytes": 459960
+        },
+        {
+          "path": "bin/Stub.System.Data.SQLite.Core.NetFramework/1.0.119/net45/System.Data.SQLite.dll",
+          "tfm": "net45",
+          "sha256": "80c12c41107f0c29904b1794b81aa62d653f4f5f436a5f38ef9d09b1adc04d4e",
+          "sizeBytes": 459960
+        },
+        {
+          "path": "bin/Stub.System.Data.SQLite.Core.NetFramework/1.0.119/net46/System.Data.SQLite.dll",
+          "tfm": "net46",
+          "sha256": "77dac4e1aa63161d6aff363030a801945d6b8d5b823a6b460b2c2be9ec38d3b7",
+          "sizeBytes": 450232
+        },
+        {
+          "path": "bin/Stub.System.Data.SQLite.Core.NetFramework/1.0.119/net20/System.Data.SQLite.dll",
+          "tfm": "net20",
+          "sha256": "0a5f13a6a0ca34fe0881120d7fe624aed22a77f14aa382f1a3f0bf99b0af8f3d",
+          "sizeBytes": 468152
+        }
+      ]
+    },
+    {
+      "id": "Microsoft.Bcl.AsyncInterfaces",
+      "version": "8.0.0",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/microsoft.bcl.asyncinterfaces/8.0.0/microsoft.bcl.asyncinterfaces.8.0.0.nupkg",
+      "nupkgSha256": "f5a5a68b03092ab2abf68843d4a4aea25dfbcbe8dd0f13c625cb779b6fc1927c",
+      "tags": [
+        "net462",
+        "netstandard2.0",
+        "modreq"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/Microsoft.Bcl.AsyncInterfaces/8.0.0/net462/Microsoft.Bcl.AsyncInterfaces.dll",
+          "tfm": "net462",
+          "sha256": "80678203bd0203a6594f4e330b22543c0de5059382bb1c9334b7868b8f31b1bc",
+          "sizeBytes": 26904
+        },
+        {
+          "path": "bin/Microsoft.Bcl.AsyncInterfaces/8.0.0/netstandard2.1/Microsoft.Bcl.AsyncInterfaces.dll",
+          "tfm": "netstandard2.1",
+          "sha256": "136d5965cf4768e8420b547a8bddea882921f426c371833d558a858a2f0c235a",
+          "sizeBytes": 19104
+        },
+        {
+          "path": "bin/Microsoft.Bcl.AsyncInterfaces/8.0.0/netstandard2.0/Microsoft.Bcl.AsyncInterfaces.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "33e3c58d46c76d5535d7c24085957b7ccb7ce3815707300955a6309ecc2e81d1",
+          "sizeBytes": 26784
+        }
+      ]
+    },
+    {
+      "id": "System.CommandLine",
+      "version": "2.0.0-beta4.22272.1",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/system.commandline/2.0.0-beta4.22272.1/system.commandline.2.0.0-beta4.22272.1.nupkg",
+      "nupkgSha256": "cd23be0989cc1fc75e0470c8f431e108f8fbf427b718ecc70b21f5fd3887c5c7",
+      "tags": [
+        "net6.0",
+        "netstandard2.0"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/System.CommandLine/2.0.0-beta4.22272.1/net6.0/System.CommandLine.dll",
+          "tfm": "net6.0",
+          "sha256": "2158cfc2c484ebdec95fd9959c7eecaebe44657e1e1dee5abb78fc971276829f",
+          "sizeBytes": 205216
+        },
+        {
+          "path": "bin/System.CommandLine/2.0.0-beta4.22272.1/netstandard2.0/System.CommandLine.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "d665f036a8371a380fff304dc70481fe1be9d62f2073f908234f69c9f84b73f9",
+          "sizeBytes": 206736
+        }
+      ]
+    },
+    {
+      "id": "Antlr4.Runtime.Standard",
+      "version": "4.13.1",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/antlr4.runtime.standard/4.13.1/antlr4.runtime.standard.4.13.1.nupkg",
+      "nupkgSha256": "96fa9174e4d8e094668e12b4b4c2ad238cdb0200dbc9e0401f14f0a730c4c991",
+      "tags": [
+        "netstandard2.0",
+        "generatedCode"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/Antlr4.Runtime.Standard/4.13.1/net45/Antlr4.Runtime.Standard.dll",
+          "tfm": "net45",
+          "sha256": "67196a7daec968deca84833049c4ab624166bda94e325319a593c12b7ef909ab",
+          "sizeBytes": 192000
+        },
+        {
+          "path": "bin/Antlr4.Runtime.Standard/4.13.1/netstandard2.0/Antlr4.Runtime.Standard.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "0440e3d2c5906326e04df87d6a5272192b7d29099901ba4215ca9e0f5dca7591",
+          "sizeBytes": 192000
+        }
+      ]
+    },
+    {
+      "id": "Moq",
+      "version": "4.20.72",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/moq/4.20.72/moq.4.20.72.nupkg",
+      "nupkgSha256": "fae01cffac6dce28fd627999ae167073ee2f520c7a729a59b164258b708643ca",
+      "tags": [
+        "net462",
+        "netstandard2.0",
+        "ilGen"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/Moq/4.20.72/net6.0/Moq.dll",
+          "tfm": "net6.0",
+          "sha256": "8d56b9cbec93f401f7e4a4031c1691c3c849411ff09cef6f777109c0701dc30b",
+          "sizeBytes": 312320
+        },
+        {
+          "path": "bin/Moq/4.20.72/net462/Moq.dll",
+          "tfm": "net462",
+          "sha256": "36e56d5ce4a9b14dd2e71e5c0d623375918277d6788ed7817131d1cf7d2703bb",
+          "sizeBytes": 303104
+        },
+        {
+          "path": "bin/Moq/4.20.72/netstandard2.1/Moq.dll",
+          "tfm": "netstandard2.1",
+          "sha256": "ed2388c384cd0838b22dd27ca89e0ab95e2a41e3585609efe9e697592f0f70b2",
+          "sizeBytes": 310784
+        },
+        {
+          "path": "bin/Moq/4.20.72/netstandard2.0/Moq.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "fba07b8af99de78f644ad75cfb599649d1554fbff7bddd02b2dc64ac295065c2",
+          "sizeBytes": 305664
+        }
+      ]
+    },
+    {
+      "id": "LiteDB",
+      "version": "5.0.21",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/litedb/5.0.21/litedb.5.0.21.nupkg",
+      "nupkgSha256": "938a4f5f9d6a28383de8ccfcbdb8897e78432399215232cf38dbf147e03ec167",
+      "tags": [
+        "netstandard2.0"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/LiteDB/5.0.21/net45/LiteDB.dll",
+          "tfm": "net45",
+          "sha256": "c0058a52eb8914c98092525803d0560531f2d3bf5ab0c06c4ebd60da4518256d",
+          "sizeBytes": 510464
+        },
+        {
+          "path": "bin/LiteDB/5.0.21/netstandard1.3/LiteDB.dll",
+          "tfm": "netstandard1.3",
+          "sha256": "fa94582ca5c49b1aca98f63133f01188239ada08814730971c3e2bde686b249f",
+          "sizeBytes": 509952
+        },
+        {
+          "path": "bin/LiteDB/5.0.21/netstandard2.0/LiteDB.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "ae31ac6a93549217b9e8b81497d1ee831658ade6df9e1ee20f2838f22de5e218",
+          "sizeBytes": 510464
+        }
+      ]
+    },
+    {
+      "id": "protobuf-net",
+      "version": "3.2.30",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/protobuf-net/3.2.30/protobuf-net.3.2.30.nupkg",
+      "nupkgSha256": "91e472e4e593fbfb6566ddc3ef1fbd3c47634ef109719758b1ffe2d5906d7221",
+      "tags": [
+        "net462",
+        "netstandard2.0"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/protobuf-net/3.2.30/net6.0/protobuf-net.dll",
+          "tfm": "net6.0",
+          "sha256": "563bc9e0f9c674a9816b2253737978e23c3c0c7f47fc39b829f93ec06967bc93",
+          "sizeBytes": 284160
+        },
+        {
+          "path": "bin/protobuf-net/3.2.30/net462/protobuf-net.dll",
+          "tfm": "net462",
+          "sha256": "ca62620b36b834c4d345831f467d40c24e5dc5606c688521e0a277470a1c24f5",
+          "sizeBytes": 276480
+        },
+        {
+          "path": "bin/protobuf-net/3.2.30/netstandard2.1/protobuf-net.dll",
+          "tfm": "netstandard2.1",
+          "sha256": "dfa425783e7dfc4ba1d758c96d719b53c97c300e913ddeecf8aa0593087ea040",
+          "sizeBytes": 280064
+        },
+        {
+          "path": "bin/protobuf-net/3.2.30/netstandard2.0/protobuf-net.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "af6355a4220f95b88a9b1434f56edc9dcb99ee09b2edc79838fa8d2adb93bff7",
+          "sizeBytes": 279552
+        }
+      ]
+    },
+    {
+      "id": "Grpc.Core.Api",
+      "version": "2.62.0",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/grpc.core.api/2.62.0/grpc.core.api.2.62.0.nupkg",
+      "nupkgSha256": "2357a08b5ec4372da2a750dd0dea8b8e7455afcec4da5b3bafe5ae1a34e7d07f",
+      "tags": [
+        "netstandard2.0",
+        "netstandard2.1"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/Grpc.Core.Api/2.62.0/net462/Grpc.Core.Api.dll",
+          "tfm": "net462",
+          "sha256": "d3bbdcad27a99d9fe35f7be988cc72bf1cd84921ac4a70dfaea7899b110e9f9b",
+          "sizeBytes": 70432
+        },
+        {
+          "path": "bin/Grpc.Core.Api/2.62.0/netstandard2.1/Grpc.Core.Api.dll",
+          "tfm": "netstandard2.1",
+          "sha256": "40fceeeefc825fba751c366ba4181aa070a78b2dd1dd7f2ea76107ab3a9b8c55",
+          "sizeBytes": 70432
+        },
+        {
+          "path": "bin/Grpc.Core.Api/2.62.0/netstandard2.0/Grpc.Core.Api.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "8bc8bd3ae45fa57e074d8d6bc57c0b820c8cc77ce521e23133f5bf0b18f4f226",
+          "sizeBytes": 70432
+        }
+      ]
+    },
+    {
+      "id": "System.Data.Odbc",
+      "version": "8.0.0",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/system.data.odbc/8.0.0/system.data.odbc.8.0.0.nupkg",
+      "nupkgSha256": "b908c3c2c0589bb0531937a69e76ba8d8243aa576494be5f0a6ac267d57aabce",
+      "tags": [
+        "netstandard2.0",
+        "net8.0"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/System.Data.Odbc/8.0.0/net6.0/System.Data.Odbc.dll",
+          "tfm": "net6.0",
+          "sha256": "951fea380a19217b0c99e9a545db2c79439df7130668ef17008f890de3077d8a",
+          "sizeBytes": 101656
+        },
+        {
+          "path": "bin/System.Data.Odbc/8.0.0/net462/System.Data.Odbc.dll",
+          "tfm": "net462",
+          "sha256": "f4b77a404670612a8ff32415aa7cc6ead63e2be6b9734c467a154a69bed27698",
+          "sizeBytes": 82704
+        },
+        {
+          "path": "bin/System.Data.Odbc/8.0.0/net7.0/System.Data.Odbc.dll",
+          "tfm": "net7.0",
+          "sha256": "77101ecdc37e613759480dfa56f2a715e20367d95110c3f29e9e74da34a87159",
+          "sizeBytes": 101136
+        },
+        {
+          "path": "bin/System.Data.Odbc/8.0.0/net8.0/System.Data.Odbc.dll",
+          "tfm": "net8.0",
+          "sha256": "d52bae16e8f883802211dfa49d287d014e07e70b6218258b142dbb2e1c592934",
+          "sizeBytes": 100512
+        },
+        {
+          "path": "bin/System.Data.Odbc/8.0.0/netstandard2.0/System.Data.Odbc.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "77d46ecea274f94ce8434207bff69c1994a3ca01bddf87b991b76b10c1a7168e",
+          "sizeBytes": 103584
+        }
+      ]
+    },
+    {
+      "id": "MessagePack",
+      "version": "2.5.187",
+      "nupkgUrl": "https://api.nuget.org/v3-flatcontainer/messagepack/2.5.187/messagepack.2.5.187.nupkg",
+      "nupkgSha256": "dec04836176419d28f2932b113862e2c614783ab2d0041d421ba11d60ede5e00",
+      "tags": [
+        "netstandard2.0",
+        "net6.0",
+        "net8.0",
+        "dynamicCodegen"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/MessagePack/2.5.187/net472/MessagePack.dll",
+          "tfm": "net472",
+          "sha256": "a72ed3f440c1936a3e49dd38d0d452d54e8450ccdfbf99847c4729e2f61aae8d",
+          "sizeBytes": 338432
+        },
+        {
+          "path": "bin/MessagePack/2.5.187/net6.0/MessagePack.dll",
+          "tfm": "net6.0",
+          "sha256": "adec69d3b6391b7103c5f845dd5e2b257ba1ce2a9d393b3626dfda740fe5d78e",
+          "sizeBytes": 330752
+        },
+        {
+          "path": "bin/MessagePack/2.5.187/netstandard2.0/MessagePack.dll",
+          "tfm": "netstandard2.0",
+          "sha256": "822f855de086e533f9b9a2502215391443686e09e0d47109bb07181657e50c73",
+          "sizeBytes": 338432
+        }
+      ]
+    },
+    {
+      "id": "cilantro.corrupt-fixtures",
+      "version": "1",
+      "nupkgUrl": "",
+      "nupkgSha256": "",
+      "tags": [
+        "corrupt"
+      ],
+      "mixedMode": false,
+      "assemblies": [
+        {
+          "path": "bin/corrupt/truncated-newtonsoft-net45.dll",
+          "tfm": "corrupt",
+          "sha256": "38963be8730d4f453c6a4b635fdc9c81efcc8174934b16477d6b35eb3676e2ab",
+          "sizeBytes": 1024
+        },
+        {
+          "path": "bin/corrupt/truncated-newtonsoft-net20.dll",
+          "tfm": "corrupt",
+          "sha256": "796afbc931c4d5baeb8ea87a4467a4b5c572e987e8f4871fd0ae2b9ddff2e4f6",
+          "sizeBytes": 65536
+        }
+      ]
+    }
+  ]
+}

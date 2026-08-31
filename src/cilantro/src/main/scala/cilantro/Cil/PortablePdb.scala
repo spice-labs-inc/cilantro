@@ -18,22 +18,25 @@ import java.io.FileInputStream
 
 sealed class PortablePdbReaderProvider extends SymbolReaderProvider {
 
-    def getSymbolReader(module: ModuleDefinition, fileName: String): SymbolReader =
+    def getSymbolReader(module: ModuleDefinition, fileName: String): Option[SymbolReader] = {
         checkModule(module)
         checkFileName(fileName)
 
         val file = new FileInputStream(fileName)
-        getSymbolReader(module, Disposable.owned(file), fileName)
+        Some(getSymbolReader(module, Disposable.owned(file), fileName))
         
-    def getSymbolReader(module: ModuleDefinition, symbolStream: FileInputStream): SymbolReader =
+    }
+    def getSymbolReader(module: ModuleDefinition, symbolStream: FileInputStream): Option[SymbolReader] = {
         checkModule(module)
         checkStream(symbolStream)
 
-        getSymbolReader(module, Disposable.notOwned(symbolStream), "unknown filename")
+        Some(getSymbolReader(module, Disposable.notOwned(symbolStream), "unknown filename"))
     
-    private def getSymbolReader(module: ModuleDefinition, symbolStream: Disposable[FileInputStream], fileName: String): SymbolReader =
+    }
+    private def getSymbolReader(module: ModuleDefinition, symbolStream: Disposable[FileInputStream], fileName: String): SymbolReader = {
         val (image, heapOffset) = ImageReader.readPortablePdb(symbolStream, fileName)
         PortablePdbReader(image, module)
+    }
 }
 
 class PortablePdbReader( private val image: Image, private val module: ModuleDefinition) extends SymbolReader {

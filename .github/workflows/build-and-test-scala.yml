@@ -18,6 +18,7 @@ jobs:
   build:
 
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
 
     steps:
     - uses: actions/checkout@v4
@@ -29,6 +30,18 @@ jobs:
         cache: 'sbt'
     - name: Set up sbt
       uses: sbt/setup-sbt@v1
+    # Corpus provision (ADR-0009): warm the cache BEFORE the tests so the
+    # suite fast-paths. Only on push: the provisioner lives on this branch,
+    # and the base commit a PR is compared against does not contain it, so
+    # PR runs self-provision in-test via the gate (the same code the tests
+    # execute). PR code runs in the test JVM either way; the fetch inputs
+    # (packages.json, manifest.json, golden-index.json, scripts/) are
+    # reviewed like any other lockfile.
+    - name: Corpus provision
+      if: github.event_name == 'push'
+      run: |
+        cd src/cilantro
+        sbt "Test / runMain io.spicelabs.cilantro.metadata.CorpusProvisioner"
     - name: Run tests
       working-directory: src/cilantro
       run: sbt test

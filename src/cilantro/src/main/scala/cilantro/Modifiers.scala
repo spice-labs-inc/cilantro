@@ -30,16 +30,18 @@ sealed class OptionalModifierType(private var _modifier_type: TypeReference, `ty
 
     override def fullName = super.fullName + suffix
 
-    private def suffix =
+    private def suffix = {
         " modopt(" + modifierType.toString() + ")"
     
+    }
     override def isValueType = false
     override def isValueType_=(value: Boolean) = throw OperationNotSupportedException()
 
     override def isOptionalModifier = true
 
-    override def containsGenericParameter =
+    override def containsGenericParameter = {
         _modifier_type.containsGenericParameter || super.containsGenericParameter
+    }
 }
 
 sealed class RequiredModifierType(private var _modifier_type: TypeReference, `type`: TypeReference) extends TypeSpecification(`type`) with ModifierType {
@@ -52,15 +54,17 @@ sealed class RequiredModifierType(private var _modifier_type: TypeReference, `ty
 
     override def fullName = super.fullName + suffix
 
-    private def suffix =
+    private def suffix = {
         " modreq(" + modifierType.toString() + ")"
     
+    }
     override def isValueType = false
     override def isValueType_=(value: Boolean) = throw OperationNotSupportedException()
 
     override def isRequiredModifier = true
 
-    override def containsGenericParameter =
+    override def containsGenericParameter = {
         _modifier_type.containsGenericParameter || super.containsGenericParameter
 
+    }
 }

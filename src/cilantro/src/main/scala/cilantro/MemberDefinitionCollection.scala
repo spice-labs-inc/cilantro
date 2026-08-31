@@ -16,36 +16,46 @@ import scala.collection.mutable.ArrayBuffer
 
 class MemberDefinitionCollection[T <: MemberDefinition](container: TypeDefinition, capacity: Int = 0) extends ArrayBuffer[T](capacity) {
 
-    override def addOne(elem: T): this.type =
+    override def addOne(elem: T): this.type = {
         val result = super.addOne(elem)
         attach(elem)
         this
     
-    override def update(index: Int, elem: T): Unit =
+    }
+    override def update(index: Int, elem: T): Unit = {
         super.update(index, elem)
         attach(elem)
     
-    override def insert(index: Int, elem: T): Unit =
+    }
+    override def insert(index: Int, elem: T): Unit = {
         super.insert(index, elem)
         attach(elem)
     
-    override def remove(index: Int): T =
+    }
+    override def remove(index: Int): T = {
         val elem = super.remove(index)
         detach(elem)
         elem
     
-    override def clear(): Unit =
+    }
+    override def clear(): Unit = {
         this.foreach(detach)
         super.clear()
     
-    private def attach(element: T) =
-        if (element.declaringType == container)
+    }
+    private def attach(element: T) = {
+        if (element.declaringType.contains(container)) {
             ()
-        else if (element.declaringType != null)
+        }
+        else if (element.declaringType.isDefined) {
             throw IllegalArgumentException("member already attached")
-        else
+        }
+        else {
             element.declaringType = container
     
-    private def detach(element: T) =
-        element.declaringType = null
+        }
+    }
+    private def detach(element: T) = {
+        element.declaringType = None
+    }
 }
