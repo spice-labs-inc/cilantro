@@ -19,18 +19,21 @@ package io.spicelabs.cilantro.cil
 
 import scala.util.{Failure, Success}
 import io.spicelabs.cilantro.{AssemblyDefinition, MethodDefinition, TargetArchitecture, TypeReference}
+import io.spicelabs.cilantro.metadata.CorpusProvisioner
 
 class RvaMappingTests extends munit.FunSuite {
+  override def munitTimeout = scala.concurrent.duration.Duration(120, "min")
 
   private def loadAssembly(rel: String): AssemblyDefinition = {
-    AssemblyDefinition.readAssembly(rel) match {
+    val root = CorpusProvisioner.ensureCorpus()
+    AssemblyDefinition.readAssembly(root.resolve(rel).toString) match {
       case Success(assembly) => assembly
       case Failure(t) => fail(s"failed to load $rel: $t")
     }
   }
 
   test("C3-05: PE32 section start and end map exactly") {
-    val assembly = loadAssembly("../../corpus/fixtures/ilasm_fixture.dll")
+    val assembly = loadAssembly("fixtures/ilasm_fixture.dll")
     val image = assembly.mainModule.get.image.get
     assert(image.sections.nonEmpty)
     image.sections.foreach { section =>
@@ -48,13 +51,13 @@ class RvaMappingTests extends munit.FunSuite {
   }
 
   test("C3-05: RVAs beyond every section map to None") {
-    val assembly = loadAssembly("../../corpus/fixtures/ilasm_fixture.dll")
+    val assembly = loadAssembly("fixtures/ilasm_fixture.dll")
     val image = assembly.mainModule.get.image.get
     assertEquals(image.resolveVirtualAddress(Int.MaxValue), None)
   }
 
   test("C3-05: the x64 fixture loads as PE32+") {
-    val assembly = loadAssembly("../../corpus/fixtures/x64_fixture.dll")
+    val assembly = loadAssembly("fixtures/x64_fixture.dll")
     val image = assembly.mainModule.get.image.get
     assertEquals(image.architecture, TargetArchitecture.amd64)
     // And its sections map through the same math.
@@ -77,7 +80,7 @@ class RvaMappingTests extends munit.FunSuite {
   test("C3-05: an RVA outside the file yields a clean Failure") {
     val method = MethodDefinition("M", 0, TypeReference("", ""))
     method._rva = 0x7fffff00
-    val assembly = loadAssembly("../../corpus/fixtures/ilasm_fixture.dll")
+    val assembly = loadAssembly("fixtures/ilasm_fixture.dll")
     method.declaringType = assembly.mainModule.get.types.head
     MethodBodyReader.readBody(method) match {
       case Success(_) => fail("unmapped RVA must be a Failure")

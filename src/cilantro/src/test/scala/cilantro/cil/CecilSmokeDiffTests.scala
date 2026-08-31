@@ -23,19 +23,17 @@ package io.spicelabs.cilantro.cil
 
 import org.json4s._
 import org.json4s.native.JsonMethods
-import io.spicelabs.cilantro.metadata.CorpusHelpers
+import io.spicelabs.cilantro.metadata.{CorpusHelpers, CorpusProvisioner}
 
 class CecilSmokeDiffTests extends munit.FunSuite {
+  override def munitTimeout = scala.concurrent.duration.Duration(120, "min")
 
   implicit val formats: DefaultFormats.type = DefaultFormats
 
   private def goldenJson(relPath: String): JValue = {
-    CorpusHelpers.requireCorpus(CorpusHelpers.corpusRoot) match {
-      case None => fail("corpus missing at ../../corpus — run scripts/ensure_corpus.sh")
-      case Some(root) =>
-        val path = root.resolve(relPath)
-        JsonMethods.parse(CorpusHelpers.readGzipJson(path))
-    }
+    val root = CorpusProvisioner.ensureCorpus()
+    val path = root.resolve(relPath)
+    JsonMethods.parse(CorpusHelpers.readGzipJson(path))
   }
 
   private final case class GoldenBody(

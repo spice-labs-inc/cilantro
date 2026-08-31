@@ -42,7 +42,7 @@ import java.nio.file.{Files, Path}
 import org.json4s._
 import org.json4s.native.JsonMethods
 import io.spicelabs.cilantro.{AssemblyDefinition, LogSanitizer, TypeDefinition, MethodDefinition, FieldDefinition, ModuleDefinition}
-import io.spicelabs.cilantro.metadata.CorpusHelpers
+import io.spicelabs.cilantro.metadata.{CorpusHelpers, CorpusProvisioner}
 
 class CorpusPropertyTests extends munit.FunSuite {
 
@@ -53,11 +53,8 @@ class CorpusPropertyTests extends munit.FunSuite {
   implicit val formats: DefaultFormats.type = DefaultFormats
 
   private def manifest: JValue = {
-    CorpusHelpers.requireCorpus(CorpusHelpers.corpusRoot) match {
-      case None => fail("corpus missing at ../../corpus — run scripts/ensure_corpus.sh")
-      case Some(root) =>
-        JsonMethods.parse(new String(java.nio.file.Files.readAllBytes(root.resolve("manifest.json")), "UTF-8"))
-    }
+    val root = CorpusProvisioner.ensureCorpus()
+    JsonMethods.parse(new String(java.nio.file.Files.readAllBytes(root.resolve("manifest.json")), "UTF-8"))
   }
 
   private def corpusAssemblies(): List[(String, Boolean, Boolean)] = {

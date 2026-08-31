@@ -20,7 +20,7 @@ import java.io.{PrintWriter, StringWriter}
 import org.json4s._
 import org.json4s.native.JsonMethods
 import io.spicelabs.cilantro.{AssemblyDefinition, LogSanitizer}
-import io.spicelabs.cilantro.metadata.CorpusHelpers
+import io.spicelabs.cilantro.metadata.{CorpusHelpers, CorpusProvisioner}
 
 class ParityHarnessTests extends munit.FunSuite {
 
@@ -31,14 +31,11 @@ class ParityHarnessTests extends munit.FunSuite {
   val Slow = new munit.Tag("Slow")
 
   private def manifest: JValue = {
-    CorpusHelpers.requireCorpus(CorpusHelpers.corpusRoot) match {
-      case None => fail("corpus missing at ../../corpus — run scripts/ensure_corpus.sh")
-      case Some(root) =>
-        JsonMethods.parse(new String(java.nio.file.Files.readAllBytes(root.resolve("manifest.json")), "UTF-8"))
-    }
+    val root = CorpusProvisioner.ensureCorpus()
+    JsonMethods.parse(new String(java.nio.file.Files.readAllBytes(root.resolve("manifest.json")), "UTF-8"))
   }
 
-  private def corpusRoot = CorpusHelpers.corpusRoot
+  private def corpusRoot = CorpusProvisioner.ensureCorpus()
 
   private def dumpTier1(assembly: AssemblyDefinition, label: String): String = {
     val writer = new StringWriter()
@@ -60,7 +57,7 @@ class ParityHarnessTests extends munit.FunSuite {
     // Corpus-derived strings are attacker-controlled names: everything
     // that lands in a message goes through the log sanitizer.
     val safeRel = LogSanitizer.sanitize(rel)
-    val full = "../../corpus/" + rel
+    val full = corpusRoot.resolve(rel).toString
     AssemblyDefinition.readAssembly(full) match {
       case scala.util.Success(a) =>
         // The oracle names fixture goldens after the file base name

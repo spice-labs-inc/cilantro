@@ -7,14 +7,16 @@ hs_err_pid*
 # build outputs (sbt and maven)
 target/
 
-# Corpus cache (see ADR-0003): everything except the seed list
-# (corpus/packages.json) and the integrity manifest (corpus/manifest.json)
-# is regenerable from pinned sources. scripts/ensure_corpus.sh checks the
-# cache against the manifest and re-fetches whatever is missing or wrong.
+# Corpus cache (see ADR-0006): only artifacts that cannot be pulled from
+# external reliable sources are committed: the hand-authored fixtures
+# (corpus/fixtures/), their oracle dumps (corpus/golden/fixtures/), the seed
+# list (corpus/packages.json), the integrity manifest (corpus/manifest.json)
+# and the golden index (corpus/golden-index.json). Everything else is
+# regenerable from pinned sources and fetched into the cache on demand by the
+# test-side provisioner (CorpusProvisioner).
 corpus/nupkg/
 corpus/bin/
-corpus/golden/
-corpus/fixtures/
+corpus/golden/bin/
 
 # GoldenDumper build outputs (regenerable from the committed sources)
 scripts/GoldenDumper/bin/

@@ -24,6 +24,7 @@ import org.json4s._
 import org.json4s.native.JsonMethods
 
 class CorpusManifestTests extends munit.FunSuite {
+  override def munitTimeout = scala.concurrent.duration.Duration(120, "min")
 
   implicit val formats: DefaultFormats.type = DefaultFormats
 
@@ -33,68 +34,59 @@ class CorpusManifestTests extends munit.FunSuite {
   }
 
   test("C1-01: manifest parses with schemaVersion 1 and non-empty package list") {
-    CorpusHelpers.requireCorpus(CorpusHelpers.corpusRoot) match {
-      case None => fail("corpus missing at ../../corpus — run scripts/fetch_corpus.sh")
-      case Some(root) =>
-        val manifest = manifestJson(root)
-        assertEquals((manifest \ "schemaVersion").extract[Int], 1)
-        val packages = (manifest \ "packages").extract[List[JValue]]
-        assert(packages.nonEmpty, "manifest must list at least one package")
-    }
+    val root = CorpusProvisioner.ensureCorpus()
+    val manifest = manifestJson(root)
+    assertEquals((manifest \ "schemaVersion").extract[Int], 1)
+    val packages = (manifest \ "packages").extract[List[JValue]]
+    assert(packages.nonEmpty, "manifest must list at least one package")
   }
 
   test("C1-01: every assembly exists and matches its manifest sha256") {
-    CorpusHelpers.requireCorpus(CorpusHelpers.corpusRoot) match {
-      case None => fail("corpus missing at ../../corpus — run scripts/fetch_corpus.sh")
-      case Some(root) =>
-        val manifest = manifestJson(root)
-        val packages = (manifest \ "packages").extract[List[JValue]]
-        var checked = 0
-        packages.foreach { pkg =>
-          (pkg \ "assemblies").extract[List[JValue]].foreach { asm =>
-            val rel = (asm \ "path").extract[String]
-            val expected = (asm \ "sha256").extract[String]
-            val file = root.resolve(rel)
-            assert(
-              Files.isRegularFile(file),
-              s"assembly missing from corpus: $rel"
-            )
-            assertEquals(
-              CorpusHelpers.sha256(file),
-              expected,
-              s"sha256 mismatch for $rel"
-            )
-            checked += 1
-          }
-        }
-        assert(checked > 0, "manifest must list assemblies to verify")
+    val root = CorpusProvisioner.ensureCorpus()
+    val manifest = manifestJson(root)
+    val packages = (manifest \ "packages").extract[List[JValue]]
+    var checked = 0
+    packages.foreach { pkg =>
+      (pkg \ "assemblies").extract[List[JValue]].foreach { asm =>
+        val rel = (asm \ "path").extract[String]
+        val expected = (asm \ "sha256").extract[String]
+        val file = root.resolve(rel)
+        assert(
+          Files.isRegularFile(file),
+          s"assembly missing from corpus: $rel"
+        )
+        assertEquals(
+          CorpusHelpers.sha256(file),
+          expected,
+          s"sha256 mismatch for $rel"
+        )
+        checked += 1
+      }
     }
+    assert(checked > 0, "manifest must list assemblies to verify")
   }
 
   test("C1-01: corpus stays within size caps (~50 MB per package, 300 MB total)") {
-    CorpusHelpers.requireCorpus(CorpusHelpers.corpusRoot) match {
-      case None => fail("corpus missing at ../../corpus — run scripts/fetch_corpus.sh")
-      case Some(root) =>
-        val manifest = manifestJson(root)
-        val packages = (manifest \ "packages").extract[List[JValue]]
-        val perPackageCap = 50L * 1024 * 1024
-        var total = 0L
-        packages.foreach { pkg =>
-          var pkgSize = 0L
-          (pkg \ "assemblies").extract[List[JValue]].foreach { asm =>
-            val rel = (asm \ "path").extract[String]
-            val size = Files.size(root.resolve(rel))
-            pkgSize += size
-            total += size
-          }
-          assert(
-            pkgSize <= perPackageCap,
-            s"package ${pkg \\ "id"} exceeds 50 MB cap: $pkgSize bytes"
-          )
-        }
-        val corpusCap = 300L * 1024 * 1024
-        assert(total <= corpusCap, s"corpus exceeds 300 MB cap: $total bytes")
+    val root = CorpusProvisioner.ensureCorpus()
+    val manifest = manifestJson(root)
+    val packages = (manifest \ "packages").extract[List[JValue]]
+    val perPackageCap = 50L * 1024 * 1024
+    var total = 0L
+    packages.foreach { pkg =>
+      var pkgSize = 0L
+      (pkg \ "assemblies").extract[List[JValue]].foreach { asm =>
+        val rel = (asm \ "path").extract[String]
+        val size = Files.size(root.resolve(rel))
+        pkgSize += size
+        total += size
+      }
+      assert(
+        pkgSize <= perPackageCap,
+        s"package ${pkg \\ "id"} exceeds 50 MB cap: $pkgSize bytes"
+      )
     }
+    val corpusCap = 300L * 1024 * 1024
+    assert(total <= corpusCap, s"corpus exceeds 300 MB cap: $total bytes")
   }
 
   test("C1-02: missing corpus is reported, never skipped") {

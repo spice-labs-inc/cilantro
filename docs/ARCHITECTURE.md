@@ -88,20 +88,52 @@ The corpus loop forced these exact behaviors; each is golden-pinned by
 
 - All caps are pre-checks, tested at limit and limit+1 (`CapTests`).
 - The corpus cache is sha256-pinned; the fetch refuses to re-record a
-  changed package (ADR-0003).
+  changed package (ADR-0003, ADR-0009).
 - The golden helper never loads or invokes assembly code
   (`GoldenHelperBannedApiScan`); extraction is entry-safe
-  (`ExtractionSafetyTests`).
+  (`ExtractionSafetyTests`, P1-26).
 - Attacker-controlled names never reach log output raw
   (`LogSanitizer`, `LogSanitizationTests`).
+- The provisioning gate rejects symlinked cache paths, refuses to
+  follow them, and never writes the committed trees (P1-15, P1-16,
+  ADR-0009).
+
+## Corpus provisioning (ADR-0009)
+
+Committed ground truth (`corpus/fixtures/`, `corpus/golden/fixtures/`,
+`corpus/golden-index.json`, `manifest.json`, `packages.json` — ~60KB)
+vs regenerable cache (`corpus/nupkg/`, `corpus/bin/`,
+`corpus/golden/bin/`). `CorpusProvisioner.ensureCorpus()` is the single
+gate every corpus test passes through:
+
+```
+ensureCorpus()
+  ├─ fast path (no docker, no network; memoized)
+  │    manifest sha256s + golden-index pins + golden/bin presence
+  └─ slow path (cross-process lock outside the repo)
+       ├─ JVM fetch: pinned nupkgs → entry-safe extract → corrupt
+       │  fixtures (CorpusFetcher + CorpusExtractor)
+       ├─ docker regen of golden/bin when absent (pinned dumper,
+       │  read-only repo mount, --user uid:gid)
+       └─ post-verify: fast path re-run + committed snapshot compare
+```
+
+A full-cache machine never touches docker or the network for the gate
+(P1-01); a cold cache is populated in-test and tests wait (P1-12,
+P1-13); a failed population retries once, then fails with an
+actionable message (P1-08). The completeness definition, the lock
+protocol and the docker footprint are documented in OPERATIONS.md.
 
 ## Testing strategy
 
 Red → green everywhere. Suites by phase: C0 style gates, C1 corpus and
-goldens, C2 decoder, C3 EH and integration, C4 parity/caps/properties.
-The full traceability table (every Cx-xx test and the claim it pins)
-lives in the workspace `TRACEABILITY.md`. Fast vs Slow: anything that
-needs the corpus is `Slow`-tagged; the fast suite is the default gate.
+goldens, C2 decoder, C3 EH and integration, C4 parity/caps/properties,
+P1 provisioning-gate unit tests. The full traceability table (every
+Cx-xx test and the claim it pins) lives in the workspace
+`TRACEABILITY.md`. Fast vs Slow: anything that needs the corpus is
+`Slow`-tagged; the fast suite is the default gate. The provisioning
+tests (P1-xx) run in the default suite with synthetic corpora — no
+docker, no network.
 
 ## Style
 
@@ -111,8 +143,9 @@ Brace format (`-no-indent`), Option/Try only (`-Yexplicit-nulls`), no
 
 ## Decisions
 
-See the workspace `docs/adr/`:
+See `docs/adr/` (plus the workspace `docs/adr/` records):
 - ADR-0001 null-free style, ADR-0002 null-ref constant and resolve
 - ADR-0003 NuGet corpus, ADR-0004 CIL switch alignment
 - ADR-0005 EH offset bases, ADR-0006 parity reader semantics
 - ADR-0007 mixed-mode packages, ADR-0008 PDB cut
+- ADR-0009 corpus ground truth committed; cache provisioned on demand

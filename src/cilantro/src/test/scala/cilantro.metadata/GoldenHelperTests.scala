@@ -30,16 +30,14 @@ import org.json4s._
 import org.json4s.native.JsonMethods
 
 class GoldenHelperTests extends munit.FunSuite {
+  override def munitTimeout = scala.concurrent.duration.Duration(120, "min")
 
   implicit val formats: DefaultFormats.type = DefaultFormats
 
   private def fixtureJson(name: String): JValue = {
-    CorpusHelpers.requireCorpus(CorpusHelpers.corpusRoot) match {
-      case None => fail("corpus missing at ../../corpus — run scripts/fetch_corpus.sh")
-      case Some(root) =>
-        val path = root.resolve(s"golden/fixtures/$name")
-        JsonMethods.parse(CorpusHelpers.readGzipJson(path))
-    }
+    val root = CorpusProvisioner.ensureCorpus()
+    val path = root.resolve(s"golden/fixtures/$name")
+    JsonMethods.parse(CorpusHelpers.readGzipJson(path))
   }
 
   private def bodyFor(tier2: JValue, methodName: String): JValue = {

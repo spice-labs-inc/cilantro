@@ -30,9 +30,11 @@
 package io.spicelabs.cilantro.cil
 
 import scala.util.{Success, Failure}
+import io.spicelabs.cilantro.metadata.CorpusProvisioner
 import java.io.FileOutputStream
 
 class ResourceTests extends munit.FunSuite {
+  private def corpusRoot = CorpusProvisioner.ensureCorpus()
 
   override def munitTimeout = scala.concurrent.duration.Duration(120, "min")
 
@@ -60,7 +62,7 @@ class ResourceTests extends munit.FunSuite {
   }
 
   test("C5-02a: the pinned fixture's resources match the oracle and round-trip their bytes") {
-    resources("../../corpus/fixtures/resources_fixture.dll") match {
+    resources(corpusRoot.resolve("fixtures/resources_fixture.dll").toString) match {
       case Success(res) =>
         assertEquals(res.length, 2)
         val byName = res.map(r => r.name -> r).toMap
@@ -187,7 +189,7 @@ class ResourceTests extends munit.FunSuite {
   test("C5-02e (Slow): every corpus assembly's resource table enumerates — never throws".tag(Slow)) {
     import org.json4s._
     val manifest = org.json4s.native.JsonMethods.parse(
-      new String(java.nio.file.Files.readAllBytes(io.spicelabs.cilantro.metadata.CorpusHelpers.corpusRoot.resolve("manifest.json")), "UTF-8"))
+      new String(java.nio.file.Files.readAllBytes(corpusRoot.resolve("manifest.json")), "UTF-8"))
     implicit val formats: DefaultFormats.type = DefaultFormats
     var total = 0
     var withResources = 0
@@ -196,7 +198,7 @@ class ResourceTests extends munit.FunSuite {
         val rel = (asm \ "path").extract[String]
         if (!rel.contains("corrupt")) {
           total += 1
-          resources("../../corpus/" + rel) match {
+          resources(corpusRoot.resolve(rel).toString) match {
             case Success(res) =>
               if (res.nonEmpty) withResources += 1
             case Failure(t) => fail(s"$rel resource enumeration threw: $t")

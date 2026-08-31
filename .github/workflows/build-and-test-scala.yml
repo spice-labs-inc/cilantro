@@ -18,6 +18,7 @@ jobs:
   build:
 
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
 
     steps:
     - uses: actions/checkout@v4
@@ -29,6 +30,29 @@ jobs:
         cache: 'sbt'
     - name: Set up sbt
       uses: sbt/setup-sbt@v1
+    # Corpus provision (ADR-0006): run the provisioning gate BEFORE the
+    # tests so the suite fast-paths. On pull requests the gate runs from a
+    # second checkout pinned to the BASE commit: the fetch inputs
+    # (packages.json, manifest.json, scripts/, Dockerfile) are trusted
+    # refs, so a PR author cannot get docker-on-the-runner by editing them.
+    # The populated cache (untracked: nupkg/, bin/, golden/bin) is then
+    # copied into the PR checkout; the PR's committed ground truth still
+    # governs the gate's verification in the test JVM.
+    - name: Checkout trusted corpus inputs (pull requests only)
+      if: github.event_name == 'pull_request'
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.base.sha }}
+        path: trusted
+    - name: Corpus provision
+      run: |
+        DIR=.
+        if [ -d trusted ]; then DIR=trusted; fi
+        (cd "$DIR/src/cilantro" && sbt "test:runMain io.spicelabs.cilantro.metadata.CorpusProvisioner")
+        if [ -d trusted ]; then
+          mkdir -p corpus
+          cp -r trusted/corpus/nupkg trusted/corpus/bin trusted/corpus/golden/bin corpus/
+        fi
     - name: Run tests
       working-directory: src/cilantro
       run: sbt test

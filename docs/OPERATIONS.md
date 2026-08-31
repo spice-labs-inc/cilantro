@@ -5,29 +5,34 @@ something breaks. Companion LLM copy: OPERATIONS_llm.md.
 
 ## Getting started
 
-Prerequisites: a JVM and Docker (Docker is only needed for the corpus
-and the golden oracle; the fast suite runs without either).
+Prerequisites: a JVM (Docker is needed only when the corpus cache is
+cold AND the golden dumps must be regenerated; a machine with a warm
+cache runs the suite with no docker and no network).
 
 ```
 cd src/cilantro
 sbt -batch test
 ```
 
-First run on a machine without the corpus cache: the Maven path
-(`mvn test`) or the test helpers will fail with a clear message pointing
-at `scripts/ensure_corpus.sh`. Run it once (it downloads ~46 MB of
-pinned nupkgs and builds the fetch image on first use; warm runs verify
-in seconds with no network):
+The corpus cache (corpus/nupkg, corpus/bin, corpus/golden/bin) is
+populated ON DEMAND by the test-side provisioner
+(`CorpusProvisioner.ensureCorpus()`, ADR-0009): the first corpus test
+on a cold machine downloads the pinned nupkgs (~46 MB), extracts the
+assemblies entry-safely, and regenerates the golden dumps via the
+pinned dumper in docker (first use also builds the fetch image).
+Tests wait for population; only a failed population fails the run, with
+an actionable message. No manual step is required.
 
-```
-scripts/ensure_corpus.sh
-```
+The committed ground truth — `corpus/fixtures/`, `corpus/golden/fixtures/`,
+`corpus/golden-index.json`, `corpus/manifest.json`,
+`corpus/packages.json` — comes from the checkout; it is never written
+by the provisioner (ADR-0009).
 
 ## The suites
 
 | Suite | Command | What it proves |
 |---|---|---|
-| Fast (default) | `sbt -batch test` | 165 tests: style gates, model contract, decoder, EH, bodies, caps, re-encode, sanitizer, fixture parity |
+| Default | `sbt -batch test` | 220 tests: style gates, corpus pins, provisioning gate, model contract, decoder, EH, bodies, caps, re-encode, sanitizer, fixture + corpus parity |
 | Slow parity | `sbt -batch 'set Test / testOptions := Seq.empty' "testOnly io.spicelabs.cilantro.cil.ParityHarnessTests"'` | every corpus assembly's tier1+tier2 dumps are byte-identical to the goldens |
 | Slow properties | `... "testOnly io.spicelabs.cilantro.cil.CorpusPropertyTests"` | parse-all accounting, token round-trip, mutation fuzz (incl. oracle verdict comparison), cyclic-token resolution |
 | Clean gate | `sbt -batch clean test` | 0 warnings, 0 errors — a project gate |
@@ -39,55 +44,59 @@ incantation is required because the exclusion also applies to
 
 ## Corpus operations
 
-Everything lives under `corpus/` (gitignored except
-`corpus/manifest.json` and `corpus/packages.json`):
+Everything lives under `corpus/`. Committed ground truth (never
+written by tooling): `fixtures/`, `golden/fixtures/`,
+`golden-index.json`, `manifest.json`, `packages.json`. Regenerable
+cache (gitignored, provisioned on demand): `nupkg/`, `bin/`,
+`golden/bin`.
 
-- `corpus/nupkg/` — pinned package archives (sha256-pinned).
-- `corpus/bin/` — the extracted assemblies (151 files, ~72 MB).
-- `corpus/golden/` — the pinned golden dumps (gzip streams named
-  `*.tier1.json` / `*.tier2.json`, ~65 MB).
-
-### Checking the cache
+### Provisioning / verifying the cache
 
 ```
 scripts/ensure_corpus.sh
 ```
 
-Verifies every file against the manifest; re-fetches anything missing
-or wrong. It refuses to re-record a changed package, so a tampered
-cache can never re-bless itself (`CorpusManifestTests.C1-01`, the
-GoldenDumper `verify` command).
+Runs the same gate the tests use: JVM fetch (download + sha256 verify +
+entry-safe extract + corrupt fixtures), docker golden regeneration when
+`corpus/golden/bin` is absent, retry-once, then a clear error with the
+manual remedy if anything fails. Equivalent: `cd src/cilantro && sbt
+"test:runMain io.spicelabs.cilantro.metadata.CorpusProvisioner"`.
 
-### Fetching from scratch
+### Docker-only cache fetch (no sbt)
 
-`scripts/fetch_corpus.sh` rebuilds the pinned Docker image
-(`cilantro-corpus-fetch:1`, base digest pinned, never `:latest`) and
-runs the pinned `GoldenDumper fetch` + `dump` inside it, preserving
-the invoking user's uid/gid on all mounts.
+`scripts/fetch_corpus.sh` rebuilds the pinned image (base digest
+pinned, GoldenDumper baked — no build/restore/network at runtime) and
+runs the pinned `GoldenDumper fetch` inside it: nupkg download,
+manifest sha256 discipline (it refuses to rewrite a changed
+`manifest.json`), entry-safe extraction, deterministic corrupt
+fixtures. It never writes goldens or fixtures (committed ground truth).
 
 ### Regenerating goldens (deliberate, versioned)
 
-The goldens are the oracle. Regenerating them is a decision, not a
-command: it overwrites the pinned tier1/tier2 files, and it must only
-happen after a conscious review of what changed. (The manifest itself
-is only re-recorded by the pinned `fetch` — which refuses to re-record
-a changed package — never by `dump`; a full pipeline re-run is
-`scripts/fetch_corpus.sh`.)
+The goldens are the oracle. `corpus/golden/fixtures` is committed;
+`corpus/golden/bin` is regenerated on demand. A full regeneration
+(after a Cecil/dumper bump) is a deliberate workflow — dump with the
+pinned image into a scratch dir, review, then move into place and
+re-index:
 
 ```
 docker run --rm --user "$(id -u):$(id -g)" \
-  -v "$PWD:/work" -w /work \
+  -v "$PWD:/work:ro" -w /work \
   cilantro-corpus-fetch:1 \
-  bash -lc 'dotnet scripts/GoldenDumper/bin/Release/net8.0/GoldenDumper.dll dump \
-              --manifest corpus/manifest.json --out corpus/golden'
+  bash -lc '/opt/goldendumper/GoldenDumper dump \
+              --manifest /work/corpus/manifest.json --out /tmp/golden-new'
+# review /tmp/golden-new, then:
+#   rm -rf corpus/golden/bin && cp -r <scratch>/bin corpus/golden/bin
+# regenerate corpus/golden-index.json (sha256 of the committed
+# corpus/golden/fixtures files; see the index schema)
 ```
 
-(If the helper binary is missing, build it first inside the image:
-`dotnet build scripts/GoldenDumper/GoldenDumper.csproj -c Release`.)
-
-The helper never loads or invokes assembly code (`GoldenHelperBannedApiScan`
-pins this), reads symbols off (`ReadSymbols = false`), uses a
-NullResolver, and skips tier2 for `mixedMode` packages (ADR-0007).
+The dumper never loads or invokes assembly code
+(`GoldenHelperBannedApiScan` pins this), reads symbols off
+(`ReadSymbols = false`), uses a NullResolver, and skips tier2 for
+`mixedMode` packages (ADR-0007). Fixture regeneration (after editing
+`scripts/fixtures/*.il`) uses `GoldenDumper ilasm-compile` in the
+image and re-commits the fixture DLLs + their goldens together.
 
 ## Interpreting parity failures
 
@@ -95,26 +104,36 @@ A `tier1 diff for ...` / `tier2 diff for ...` failure names the
 assembly. The test prints the munit diff (expected/golden vs obtained).
 Workflow:
 
-1. Find the first divergent byte (the debug pattern used all through
-   Phase 4: dump both strings and walk to the first mismatch).
+1. Find the first divergent byte.
 2. Classify: serialization shape (escaping, number formatting, enum
    names), model wiring (a wrong full name, a wrong attribute), or
    reader semantics (a token resolved under the wrong context — see
    ADR-0006).
 3. Fix against the golden, never "correct" the golden. If a golden is
    actually wrong (it should not be — it is the pinned Cecil output),
-   that is a golden-regeneration decision, not a code change.
+   that is a golden-regeneration decision (above), not a code change.
 
 ## Troubleshooting
 
-- **"corpus missing at ../../corpus"** — run `scripts/ensure_corpus.sh`
-  (or `mvn -Dcilantro.skipCorpus=true` only if you are not running the
-  corpus-backed tests).
+- **"corpus manifest not found at .../manifest.json"** — sbt must run
+  from `src/cilantro` (the corpus root resolves as `../../corpus`).
+  The manifest is COMMITTED; a missing one means the checkout is
+  broken or the working directory is wrong — the provisioner says so
+  explicitly and does not try to fetch.
+- **"corpus population failed (…): … Manual remedy:
+  scripts/ensure_corpus.sh"** — the fetch/regeneration failed; the
+  message names the step (download / sha mismatch / extraction / golden
+  regen / timeout / lock). Docker is required only for the golden
+  step; if docker is unavailable and `corpus/golden/bin` is missing,
+  copy `corpus/golden/bin` from a machine that has it.
+- **"committed ground truth modified"** — a fetch attempted to write
+  the committed trees; report it, do not clear it.
 - **Slow tests "Ignored"** — the build.sbt exclusion applies to
   `testOnly` too; use `set Test / testOptions := Seq.empty` first.
-- **Timeouts** — the corpus suites raise munit's timeout to 120 min;
-  if a run times out, the corpus is being re-read cold (or Docker is
-  slow), not necessarily a bug.
+- **Timeouts** — corpus suites raise munit's timeout to 120 min (a
+  cold-cache population can legitimately take minutes); a timeout on a
+  warm cache points at a hung fetch — check `corpus/.populating.lock`
+  (actually `$XDG_CACHE_HOME/cilantro/corpus-*.lock`).
 - **OutOfMemoryError** — the test JVM is forked with `-Xmx6g -Xss16m`;
   if you changed that, restore it (the deep reader recursion needs the
   stack).
@@ -126,5 +145,6 @@ Workflow:
   fail cleanly.
 - **Verdict mismatches in the fuzz comparison** — the helper probe runs
   in Docker; make sure the image exists (`docker image inspect
-  cilantro-corpus-fetch:1`) and that `scripts/GoldenDumper` was rebuilt
-  after any helper change.
+  cilantro-corpus-fetch:1`) and was rebuilt after a helper change
+  (`docker build -f scripts/fetch_image/Dockerfile -t
+  cilantro-corpus-fetch:1 scripts`).

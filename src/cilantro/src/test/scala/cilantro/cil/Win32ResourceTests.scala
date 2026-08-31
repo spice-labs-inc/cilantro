@@ -32,9 +32,11 @@
 package io.spicelabs.cilantro.cil
 
 import scala.util.{Success, Failure}
+import io.spicelabs.cilantro.metadata.CorpusProvisioner
 import java.io.FileOutputStream
 
 class Win32ResourceTests extends munit.FunSuite {
+  private def corpusRoot = CorpusProvisioner.ensureCorpus()
 
   override def munitTimeout = scala.concurrent.duration.Duration(120, "min")
 
@@ -96,7 +98,7 @@ class Win32ResourceTests extends munit.FunSuite {
   }
 
   test("C5-04a: the pinned assembly's version resource matches pinned constants") {
-    readResources("../../corpus/bin/Newtonsoft.Json/12.0.3/net20/Newtonsoft.Json.dll") match {
+    readResources(corpusRoot.resolve("bin/Newtonsoft.Json/12.0.3/net20/Newtonsoft.Json.dll").toString) match {
       case Success(resources) =>
         assertEquals(resources.length, 1, "the net20 assembly has one resource leaf")
         val r = resources(0)
@@ -158,7 +160,7 @@ class Win32ResourceTests extends munit.FunSuite {
   test("C5-04d (Slow): every corpus assembly's resource tree reads — never throws".tag(Slow)) {
     import org.json4s._
     val manifest = org.json4s.native.JsonMethods.parse(
-      new String(java.nio.file.Files.readAllBytes(io.spicelabs.cilantro.metadata.CorpusHelpers.corpusRoot.resolve("manifest.json")), "UTF-8"))
+      new String(java.nio.file.Files.readAllBytes(corpusRoot.resolve("manifest.json")), "UTF-8"))
     implicit val formats: DefaultFormats.type = DefaultFormats
     var withResources = 0
     var total = 0
@@ -167,7 +169,7 @@ class Win32ResourceTests extends munit.FunSuite {
         val rel = (asm \ "path").extract[String]
         if (!rel.contains("corrupt")) {
           total += 1
-          readResources("../../corpus/" + rel) match {
+          readResources(corpusRoot.resolve(rel).toString) match {
             case Success(resources) =>
               if (resources.nonEmpty) withResources += 1
             case Failure(t) => fail(s"$rel resource walk threw: $t")

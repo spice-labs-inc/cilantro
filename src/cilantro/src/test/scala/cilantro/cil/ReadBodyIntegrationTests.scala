@@ -21,18 +21,16 @@ package io.spicelabs.cilantro.cil
 import org.json4s._
 import org.json4s.native.JsonMethods
 import io.spicelabs.cilantro.{AssemblyDefinition, MethodDefinition}
-import io.spicelabs.cilantro.metadata.CorpusHelpers
+import io.spicelabs.cilantro.metadata.{CorpusHelpers, CorpusProvisioner}
 
 class ReadBodyIntegrationTests extends munit.FunSuite {
+  override def munitTimeout = scala.concurrent.duration.Duration(120, "min")
 
   implicit val formats: DefaultFormats.type = DefaultFormats
 
   private def goldenJson(relPath: String): JValue = {
-    CorpusHelpers.requireCorpus(CorpusHelpers.corpusRoot) match {
-      case None => fail("corpus missing at ../../corpus — run scripts/ensure_corpus.sh")
-      case Some(root) =>
-        JsonMethods.parse(CorpusHelpers.readGzipJson(root.resolve(relPath)))
-    }
+    val root = CorpusProvisioner.ensureCorpus()
+    JsonMethods.parse(CorpusHelpers.readGzipJson(root.resolve(relPath)))
   }
 
   private def loadAssembly(rel: String): AssemblyDefinition = {

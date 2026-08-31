@@ -38,6 +38,7 @@ import java.io.{PrintWriter, StringWriter}
 import io.spicelabs.cilantro.AssemblyDefinition
 import io.spicelabs.cilantro.TypeDefinition
 import io.spicelabs.cilantro.dump.CanonicalJson
+import io.spicelabs.cilantro.metadata.CorpusProvisioner
 
 class CanonicalJsonTests extends munit.FunSuite {
 
@@ -46,7 +47,8 @@ class CanonicalJsonTests extends munit.FunSuite {
   private val Slow = new munit.Tag("Slow")
 
   private def loadNet20(): AssemblyDefinition = {
-    AssemblyDefinition.readAssembly("../../corpus/bin/Newtonsoft.Json/12.0.3/net20/Newtonsoft.Json.dll") match {
+    val root = CorpusProvisioner.ensureCorpus()
+    AssemblyDefinition.readAssembly(root.resolve("bin/Newtonsoft.Json/12.0.3/net20/Newtonsoft.Json.dll").toString) match {
       case Success(a) => a
       case Failure(t) => fail(s"failed to load net20: $t")
     }

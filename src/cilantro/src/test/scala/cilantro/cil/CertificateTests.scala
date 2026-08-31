@@ -35,9 +35,10 @@ package io.spicelabs.cilantro.cil
 import scala.util.{Success, Failure}
 import java.io.FileOutputStream
 import io.spicelabs.cilantro.AssemblyDefinition
-import io.spicelabs.cilantro.metadata.CorpusHelpers
+import io.spicelabs.cilantro.metadata.{CorpusHelpers, CorpusProvisioner}
 
 class CertificateTests extends munit.FunSuite {
+  private def corpusRoot = CorpusProvisioner.ensureCorpus()
 
   override def munitTimeout = scala.concurrent.duration.Duration(120, "min")
 
@@ -87,7 +88,7 @@ class CertificateTests extends munit.FunSuite {
     java.security.MessageDigest.getInstance("SHA-256").digest(bytes).map(b => f"${b & 0xff}%02x").mkString
 
   test("C5-03a: the pinned signed assembly's certificate table matches pinned constants") {
-    readEntries("../../corpus/bin/Newtonsoft.Json/12.0.3/net20/Newtonsoft.Json.dll") match {
+    readEntries(corpusRoot.resolve("bin/Newtonsoft.Json/12.0.3/net20/Newtonsoft.Json.dll").toString) match {
       case Success(entries) =>
         assertEquals(entries.length, 1, "Newtonsoft.Json net20 has one Authenticode signature")
         assertEquals(entries(0).revision, 0x0200, "the signature revision is WIN_CERT_REVISION_2_0")
@@ -132,7 +133,7 @@ class CertificateTests extends munit.FunSuite {
   }
 
   test("C5-03d: an unsigned assembly yields an empty result cleanly") {
-    readEntries("../../corpus/fixtures/ilasm_fixture.dll") match {
+    readEntries(corpusRoot.resolve("fixtures/ilasm_fixture.dll").toString) match {
       case Success(entries) => assertEquals(entries.length, 0, "the ilasm fixture is unsigned")
       case Failure(t) => fail(s"an unsigned assembly must read cleanly: $t")
     }
@@ -141,7 +142,7 @@ class CertificateTests extends munit.FunSuite {
   test("C5-03e (Slow): every corpus assembly's certificate table reads or is empty — never throws".tag(Slow)) {
     import org.json4s._
     val manifest = org.json4s.native.JsonMethods.parse(
-      new String(java.nio.file.Files.readAllBytes(CorpusHelpers.corpusRoot.resolve("manifest.json")), "UTF-8"))
+      new String(java.nio.file.Files.readAllBytes(corpusRoot.resolve("manifest.json")), "UTF-8"))
     implicit val formats: DefaultFormats.type = DefaultFormats
     var signed = 0
     var total = 0
@@ -150,7 +151,7 @@ class CertificateTests extends munit.FunSuite {
         val rel = (asm \ "path").extract[String]
         if (!rel.contains("corrupt")) {
           total += 1
-          readEntries("../../corpus/" + rel) match {
+          readEntries(corpusRoot.resolve(rel).toString) match {
             case Success(entries) =>
               if (entries.nonEmpty) signed += 1
             case Failure(t) => fail(s"$rel certificate read threw: $t")

@@ -1,68 +1,111 @@
-# Operations (LLM copy)
+# Cilantro Operations — LLM copy
 
-Machine-oriented operations facts. Human narrative: OPERATIONS.md.
+This is the machine-readable companion to OPERATIONS.md. Same facts,
+tuned for retrieval. Claims carry their pinning test in parentheses.
 
-## Commands (verbatim)
+## Run model
 
-```
-# repo root
-scripts/ensure_corpus.sh                       # verify/fix the cache (docker)
-scripts/fetch_corpus.sh                        # cold fetch + golden regen
+- Suite: `cd src/cilantro && sbt -batch test` (default excludes the
+  `Slow` tag via build.sbt).
+- Prerequisites: JVM always; docker only when `corpus/golden/bin` is
+  absent (golden regeneration, ADR-0009); network only when the cache
+  is cold.
+- Corpus root resolution: `../../corpus` relative to CWD — sbt MUST run
+  from `src/cilantro` (CorpusHelpers.scala).
 
-# src/cilantro
-sbt -batch test                                 # fast gate (165)
-sbt -batch clean test                           # + zero warnings gate
-sbt -batch 'set Test / testOptions := Seq.empty' \
-  "testOnly io.spicelabs.cilantro.cil.ParityHarnessTests"            # Slow parity (2)
-sbt -batch 'set Test / testOptions := Seq.empty' \
-  "testOnly io.spicelabs.cilantro.cil.CorpusPropertyTests"           # Slow properties (5)
-mvn -Dcilantro.skipCorpus=true package          # artifact build, no corpus check
-```
+## Corpus layout (ADR-0009)
 
-## Files
+Committed (never written by tooling; verified by CorpusPinTests C9-01 /
+C9-04):
+- `corpus/fixtures/*.dll` — 4 hand-authored fixture DLLs.
+- `corpus/golden/fixtures/*` — oracle dumps (tier1/tier2 = gzip JSON,
+  resources/debug = plain JSON).
+- `corpus/golden-index.json` — path → sha256 of the committed goldens.
+- `corpus/manifest.json` (schemaVersion 1; pins nupkg + bin sha256s,
+  incl. the deterministic corrupt fixtures) and `corpus/packages.json`
+  (seed list + corruptFixtures recipe).
 
-- `corpus/manifest.json` (committed): schemaVersion 1, packages[]
-  with id/version/tags/assemblies[path]/nupkgSha256/assembly sha256s.
-- `corpus/packages.json` (committed): the seed the fetcher works from.
-- `corpus/{nupkg,bin,golden}` (gitignored): cache, sha256-pinned.
-- `scripts/GoldenDumper/` — the C# oracle: commands
-  `fetch | dump | extract | verify | ilasm-compile | make-hostile |
-  make-benign | probe`.
-- `scripts/fetch_image/` — the Dockerfile for
-  `cilantro-corpus-fetch:1` (pinned base digest
-  `sha256:bb32ba3ba3ea...`).
+Cache (gitignored, provisioned on demand):
+- `corpus/nupkg/`, `corpus/bin/`, `corpus/golden/bin/`.
 
-## Golden regeneration procedure
+## Provisioning gate (CorpusProvisioner, ADR-0009)
 
-1. Review what changed (diff the code paths the dumper covers).
-2. Rebuild the helper in the image, run `dump` as the invoking user
-   (see OPERATIONS.md for the exact docker invocation). `dump` writes
-   goldens only; it never touches the manifest, and it skips `corrupt`
-   packages entirely (no goldens by design) and skips tier2 for
-   `mixedMode` packages.
-3. Commit the new goldens. The manifest changes only via the pinned
-   `fetch` (which refuses to re-record a changed package). Never
-   regenerate implicitly.
+`ensureCorpus()` (throws on failure with an actionable message) /
+`ensureCorpusWith(cfg)` (Either; test-only seams).
 
-## Interpreting parity failure output
+- Fast path (no docker, no network; memoized per JVM incl. failures):
+  manifest parses (schemaVersion 1); every manifest assembly path is a
+  non-symlink regular file with matching sha256 (P1-01, P1-03, P1-04);
+  every golden-index entry matches (P1-15); `golden/bin` exists.
+- Completeness definition: bin (per manifest) + golden-index
+  (committed) + golden/bin (existence). nupkg is fetch-input only — a
+  missing/tampered nupkg alone never triggers anything (P1-24).
+- Slow path: cross-process FileLock at
+  `$XDG_CACHE_HOME/cilantro/corpus-<sha256-of-root>.lock` (outside the
+  repo); re-check fast path; JVM fetch (CorpusFetcher: download,
+  nupkg sha256, entry-safe extract, corrupt fixtures); golden
+  regeneration via docker seam when `golden/bin` absent; post-verify =
+  fast path re-run + committed-snapshot byte-compare ("committed ground
+  truth modified" on any change — P1-16); retry-once (P1-08); 30-min
+  wall-clock timeout (P1-17); failure memoized (P1-10/P1-11).
+- Error message contract (R5): step label + root cause + corpus root +
+  manual remedy `scripts/ensure_corpus.sh` (P1-08).
+- Symlink policy: gate rejects symlinked cache paths and refuses to
+  follow them (P1-15a); population never creates symlinks (P1-15b).
+- Path safety: manifest paths with `..` / absolute / backslash are
+  rejected (P1-20); malformed manifest / wrong schemaVersion fail with
+  a clear message (P1-21); empty packages list = complete (P1-22);
+  absent corpus root = clear manifest error, no fetch (P1-18).
 
-- `tier1 diff for <rel>` — the model dump diverges (names, attributes,
-  constants, custom attributes).
-- `tier2 diff for <rel>` — the body dump diverges (opcode names,
-  operand formatting, resolved tokens).
-- munit prints expected (golden) vs obtained (ours). The canonical
-  debug: dump both strings, walk to the first mismatching byte, read
-  the ±150-byte context, classify (escape/number formatting vs model
-  wiring vs context-dependent resolution — ADR-0006), fix ours against
-  the golden.
+## CorpusFetcher (pure JVM; no docker, no .NET)
 
-## Known environmental dependencies
+- Inputs: committed manifest + packages.json. Downloads pinned nupkgs
+  (skips when the cached sha matches — P1-24), verifies sha, extracts
+  with CorpusExtractor, generates deterministic corrupt fixtures
+  (truncate + last-byte XOR 0x5A — P1-25, recipe verified against the
+  manifest pins).
+- Downloader seam; production downloader = java.net.http with bounded
+  timeouts and atomic temp+rename (CorpusFetcher.scala).
 
-- Docker for the corpus + oracle (image `cilantro-corpus-fetch:1`).
-- The helper binary path inside the image:
-  `scripts/GoldenDumper/bin/Release/net8.0/GoldenDumper.dll`.
-- The C4-07 helper comparison mounts the temp mutation dir at
-  `/work/probe` and `scripts/GoldenDumper` at `/work/gd`; it runs
-  `probe --file` per mutation and compares ok/fail verdicts with ours.
-- All docker mounts preserve the invoking uid/gid
-  (`--user "$(id -u):$(id -g)"` — house rule 13).
+## CorpusExtractor (entry-safe port of scripts/GoldenDumper/Extraction.cs)
+
+- Keeps only `lib/<tfm>/<file>.dll` (P1-27): satellite culture dirs,
+  native helper DLLs (SQLite.Interop.dll etc.), non-DLL entries,
+  top-level ref/runtimes skipped benignly.
+- Rejects (Left(reason)): backslash paths, absolute/drive paths, `..`
+  segments, Unix symlink/device/fifo mode entries (via a minimal zip
+  central-directory reader for external attributes — java.util.zip
+  does not expose them), oversized entries (512 MB per entry / 2 GB
+  total), pre-existing symlinks in the destination chain (P1-26).
+- Never creates symlinks; never throws (C0-04).
+
+## Docker footprint (the only docker in the pipeline)
+
+- Golden regeneration: `defaultGoldenRegen` runs the pinned image
+  (cilantro-corpus-fetch:1) with repo mounted READ-ONLY, only
+  `corpus/golden/bin` writable, `--user $(id -u):$(id -g)`, no
+  `--network host`; uses the baked `/opt/goldendumper/GoldenDumper`
+  (fallback: copy+build in the container); dump with
+  `--fixtures-dir /tmp/no-fixtures` so the committed
+  `corpus/golden/fixtures` is never touched. Regenerated goldens are
+  byte-identical to a warm cache (verified during Phase 3).
+- Pre-existing docker tests (unchanged): GoldenDeterminismTests
+  (C1-07 determinism + C1-07b committed-oracle reproducibility),
+  CorpusPropertyTests (probe oracle), ExtractionSafetyTests (C# 
+  extractor vectors).
+
+## CI (build-and-test-scala.yml)
+
+- Pre-populate step before `sbt test`:
+  `sbt "test:runMain io.spicelabs.cilantro.metadata.CorpusProvisioner"`.
+- On pull requests the step runs from a second checkout pinned to
+  `pull_request.base.sha` (trusted refs); the populated cache
+  (nupkg/, bin/, golden/bin) is then copied into the PR checkout, so
+  the test JVM fast-paths and PR-authored fetch inputs never run with
+  docker.
+- Known defect (flagged for approval, not fixed): GoldenDeterminismTests
+  C1-07's submanifest uses ABSOLUTE assembly paths; .NET
+  `Path.Combine` then writes the tier dumps NEXT TO THE ASSEMBLIES
+  (into corpus/bin — 9 stray files were found and removed) instead of
+  into `--out`, and its `find`/diff on the empty output dirs passes
+  trivially. C1-07b (fixtures, relative paths) is sound.

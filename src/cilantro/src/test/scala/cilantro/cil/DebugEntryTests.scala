@@ -30,10 +30,12 @@
 package io.spicelabs.cilantro.cil
 
 import scala.util.{Success, Failure}
+import io.spicelabs.cilantro.metadata.CorpusProvisioner
 import java.io.FileOutputStream
 import io.spicelabs.cilantro.AssemblyDefinition
 
 class DebugEntryTests extends munit.FunSuite {
+  private def corpusRoot = CorpusProvisioner.ensureCorpus()
 
   override def munitTimeout = scala.concurrent.duration.Duration(120, "min")
 
@@ -71,7 +73,7 @@ class DebugEntryTests extends munit.FunSuite {
     zero(12) ++ i4(entryType) ++ i4(size) ++ i4(0) ++ i4(pointer)
 
   test("C5-05a: the pinned embedded-PDB fixture matches the oracle entries and its own sources") {
-    debugInfo("../../corpus/fixtures/embedded_pdb_fixture.dll") match {
+    debugInfo(corpusRoot.resolve("fixtures/embedded_pdb_fixture.dll").toString) match {
       case Success((entries, pdb)) =>
         // Pinned against the GoldenDumper debug oracle (2026-08-28).
         assertEquals(entries.length, 3, "the size-0 deterministic entry is skipped")
@@ -114,7 +116,7 @@ class DebugEntryTests extends munit.FunSuite {
   test("C5-05b (Slow): every corpus assembly's debug data reads or is empty — never throws".tag(Slow)) {
     import org.json4s._
     val manifest = org.json4s.native.JsonMethods.parse(
-      new String(java.nio.file.Files.readAllBytes(io.spicelabs.cilantro.metadata.CorpusHelpers.corpusRoot.resolve("manifest.json")), "UTF-8"))
+      new String(java.nio.file.Files.readAllBytes(corpusRoot.resolve("manifest.json")), "UTF-8"))
     implicit val formats: DefaultFormats.type = DefaultFormats
     var withDebug = 0
     var total = 0
@@ -123,7 +125,7 @@ class DebugEntryTests extends munit.FunSuite {
         val rel = (asm \ "path").extract[String]
         if (!rel.contains("corrupt")) {
           total += 1
-          debugInfo("../../corpus/" + rel) match {
+          debugInfo(corpusRoot.resolve(rel).toString) match {
             case Success((entries, _)) =>
               if (entries.nonEmpty) withDebug += 1
             case Failure(t) => fail(s"$rel debug read threw: $t")

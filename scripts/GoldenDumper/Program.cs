@@ -1,10 +1,16 @@
 // GoldenDumper command-line entry point.
 //
 // Commands:
-//   fetch  --seed packages.json --out corpus            download + verify + extract + manifest
-//   dump   --manifest corpus/manifest.json --out corpus/golden
+//   fetch  --seed packages.json --out corpus            download + verify + extract
+//   dump   --manifest corpus/manifest.json --out DIR    regenerate golden dumps (cache, never committed)
 //   extract --nupkg file.nupkg --out dir                 entry-safe extraction (C1-05 harness)
 //   ilasm-compile --input x.il --output out/x.dll        wrap mono ilasm (deterministic)
+//
+// Ground-truth discipline (ADR-0006): corpus/manifest.json, corpus/fixtures/
+// and corpus/golden/fixtures/ are COMMITTED. fetch never rewrites
+// manifest.json (it diffs the would-be manifest against the committed one
+// and fails loudly on mismatch), never compiles fixtures, and never writes
+// goldens. dump writes only to its --out directory.
 //
 // Never-execute guarantee: no command loads or executes assembly code.
 
@@ -126,9 +132,15 @@ public static class Program
                 {
                     throw new InvalidOperationException($"download failed for {id} {version}: HTTP {(int)response.StatusCode}");
                 }
-                using var stream = response.Content.ReadAsStream();
-                using var file = File.Create(nupkgPath);
-                stream.CopyTo(file);
+                // Atomic write: download to a temp name, then rename, so a
+                // reader can never observe a torn nupkg.
+                var tmp = nupkgPath + ".tmp";
+                using (var stream = response.Content.ReadAsStream())
+                using (var file = File.Create(tmp))
+                {
+                    stream.CopyTo(file);
+                }
+                File.Move(tmp, nupkgPath, overwrite: true);
             }
             var nupkgSha = Convert.ToHexString(Extraction.Sha256Of(nupkgPath)).ToLowerInvariant();
             if (priorNupkgHashes.TryGetValue($"{id}@{version}", out var priorSha) && priorSha != nupkgSha)
@@ -215,34 +227,42 @@ public static class Program
             });
         }
 
+        // Ground-truth discipline (ADR-0006): manifest.json is COMMITTED.
+        // fetch must never re-bless it: write the would-be manifest to a
+        // temp location and require byte-identity with the committed one.
+        // The only exception is a scratch outDir with no committed manifest.
         var manifest = new Dictionary<string, object>
         {
             ["schemaVersion"] = 1,
             ["generator"] = "scripts/GoldenDumper fetch",
             ["packages"] = manifestPackages,
         };
+        var wouldBe = JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true });
         var manifestPath = Path.Combine(outDir, "manifest.json");
-        File.WriteAllText(manifestPath, JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }));
-        Console.WriteLine($"wrote {manifestPath}");
-
-        // Fetch command also builds the ilasm fixture, the PE32+ (x64)
-        // fixture, the embedded-PDB fixture and the embedded-resources
-        // fixture so the harness has all of them.
-        IlasmCompileCommand(new[] { "--input", "scripts/fixtures/ilasm_fixture.il", "--output", Path.Combine(outDir, "fixtures/ilasm_fixture.dll") });
-        BuildX64Fixture(Path.Combine(outDir, "fixtures", "x64_fixture.dll"));
-        BuildFixtureProject("scripts/fixtures/embedded/EmbeddedPdbFixture.csproj", "EmbeddedPdbFixture.dll", Path.Combine(outDir, "fixtures/embedded_pdb_fixture.dll"));
-        BuildFixtureProject("scripts/fixtures/resources/ResourcesFixture.csproj", "ResourcesFixture.dll", Path.Combine(outDir, "fixtures/resources_fixture.dll"));
-        // The resources/debug goldens for the new fixtures (C5-02/C5-05).
-        var goldenFixturesDir = Path.Combine(outDir, "golden", "fixtures");
-        Directory.CreateDirectory(goldenFixturesDir);
-        var resourcesOut = Path.Combine(goldenFixturesDir, "resources_fixture.resources.json");
-        File.WriteAllText(resourcesOut, CaptureCommand("resources", "--file", Path.Combine(outDir, "fixtures/resources_fixture.dll")));
-        var debugOut = Path.Combine(goldenFixturesDir, "embedded_pdb_fixture.debug.json");
-        File.WriteAllText(debugOut, CaptureCommand("debug", "--file", Path.Combine(outDir, "fixtures/embedded_pdb_fixture.dll")));
+        if (File.Exists(manifestPath))
+        {
+            var committed = File.ReadAllText(manifestPath);
+            if (!committed.Equals(wouldBe, StringComparison.Ordinal))
+            {
+                var tmp = Path.Combine(Path.GetTempPath(), "cilantro-would-be-manifest.json");
+                File.WriteAllText(tmp, wouldBe);
+                throw new InvalidOperationException(
+                    $"refusing to rewrite committed manifest.json: the would-be manifest differs. " +
+                    $"Compare {tmp} against {manifestPath} and reconcile packages.json deliberately. " +
+                    "A fetch may not re-bless the integrity anchor (ADR-0006).");
+            }
+            Console.WriteLine($"manifest.json already committed and consistent (not rewritten)");
+        }
+        else
+        {
+            File.WriteAllText(manifestPath, wouldBe);
+            Console.WriteLine($"wrote {manifestPath} (no committed manifest existed)");
+        }
         return 0;
     }
 
     // Runs a GoldenDumper subcommand in-process and captures stdout.
+    // (Kept for the fixture-regeneration workflow; fetch no longer uses it.)
     private static string CaptureCommand(params string[] args)
     {
         var originalOut = Console.Out;
@@ -323,6 +343,11 @@ public static class Program
     {
         var manifestPath = Opt(args, "--manifest", "corpus/manifest.json");
         var outDir = Opt(args, "--out", "corpus/golden");
+        // Fixtures are COMMITTED ground truth (ADR-0006). By default dump
+        // regenerates their goldens into outDir; pass --fixtures-dir to an
+        // absent directory to dump assemblies only (the on-demand cache
+        // regeneration path must never write corpus/golden/fixtures).
+        var fixturesDirOpt = Opt(args, "--fixtures-dir", null);
         var doc = JsonDocument.Parse(File.ReadAllText(manifestPath));
         int dumped = 0;
         foreach (var pkg in doc.RootElement.GetProperty("packages").EnumerateArray())
@@ -357,7 +382,9 @@ public static class Program
 
         // The hand-authored ilasm fixture is part of the oracle trust chain
         // (C1-03): dump it like any other assembly.
-        var fixturesDir = Path.Combine(Path.GetDirectoryName(manifestPath)!, "fixtures");
+        var fixturesDir = fixturesDirOpt != null
+            ? fixturesDirOpt
+            : Path.Combine(Path.GetDirectoryName(manifestPath)!, "fixtures");
         if (Directory.Exists(fixturesDir))
         {
             foreach (var dll in Directory.EnumerateFiles(fixturesDir, "*.dll"))

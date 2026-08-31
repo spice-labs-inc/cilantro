@@ -85,7 +85,10 @@ object CorpusHelpers {
     val present = inspect.waitFor() == 0
     if (!present) {
       val build = new ProcessBuilder(
-        "docker", "build", "-t", fetchImageTag, "scripts/fetch_image"
+        "docker", "build",
+        "-f", "scripts/fetch_image/Dockerfile",
+        "-t", fetchImageTag,
+        "scripts"
       ).directory(Paths.get("../..").toFile).redirectErrorStream(true).start()
       val builderOutput = new ByteArrayOutputStream()
       val builderStream = build.getInputStream

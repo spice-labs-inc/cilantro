@@ -22,6 +22,7 @@ import org.json4s._
 import org.json4s.native.JsonMethods
 
 class MixedModeManifestTests extends munit.FunSuite {
+  override def munitTimeout = scala.concurrent.duration.Duration(120, "min")
 
   implicit val formats: DefaultFormats.type = DefaultFormats
 
@@ -31,54 +32,48 @@ class MixedModeManifestTests extends munit.FunSuite {
   }
 
   test("C1-06: mixed-mode package is tagged and excluded from body goldens") {
-    CorpusHelpers.requireCorpus(CorpusHelpers.corpusRoot) match {
-      case None => fail("corpus missing at ../../corpus — run scripts/fetch_corpus.sh")
-      case Some(root) =>
-        val manifestJson = manifest(root)
-        val packages = (manifestJson \ "packages").extract[List[JValue]]
-        val sqlite = packages
-          .find(p => (p \ "id").extract[String] == "Stub.System.Data.SQLite.Core.NetFramework")
-          .getOrElse(fail("Stub.System.Data.SQLite.Core.NetFramework missing from manifest"))
+    val root = CorpusProvisioner.ensureCorpus()
+    val manifestJson = manifest(root)
+    val packages = (manifestJson \ "packages").extract[List[JValue]]
+    val sqlite = packages
+      .find(p => (p \ "id").extract[String] == "Stub.System.Data.SQLite.Core.NetFramework")
+      .getOrElse(fail("Stub.System.Data.SQLite.Core.NetFramework missing from manifest"))
 
-        assertEquals(
-          (sqlite \ "mixedMode").extract[Boolean],
-          true,
-          "Stub.System.Data.SQLite.Core.NetFramework must be tagged mixedMode"
-        )
+    assertEquals(
+      (sqlite \ "mixedMode").extract[Boolean],
+      true,
+      "Stub.System.Data.SQLite.Core.NetFramework must be tagged mixedMode"
+    )
 
-        val assemblies = (sqlite \ "assemblies").extract[List[JValue]]
-        assert(assemblies.nonEmpty, "mixed-mode package must list assemblies")
+    val assemblies = (sqlite \ "assemblies").extract[List[JValue]]
+    assert(assemblies.nonEmpty, "mixed-mode package must list assemblies")
 
-        assemblies.foreach { asm =>
-          val rel = (asm \ "path").extract[String]
-          val tier1 = root.resolve(s"golden/$rel.tier1.json")
-          val tier2 = root.resolve(s"golden/$rel.tier2.json")
-          assert(Files.isRegularFile(tier1), s"tier1 golden missing for $rel")
-          assert(
-            !Files.exists(tier2),
-            s"mixed-mode assembly must not have a tier2 body golden: $rel"
-          )
-        }
+    assemblies.foreach { asm =>
+      val rel = (asm \ "path").extract[String]
+      val tier1 = root.resolve(s"golden/$rel.tier1.json")
+      val tier2 = root.resolve(s"golden/$rel.tier2.json")
+      assert(Files.isRegularFile(tier1), s"tier1 golden missing for $rel")
+      assert(
+        !Files.exists(tier2),
+        s"mixed-mode assembly must not have a tier2 body golden: $rel"
+      )
     }
   }
 
   test("C1-06: pure-managed packages keep both golden tiers") {
-    CorpusHelpers.requireCorpus(CorpusHelpers.corpusRoot) match {
-      case None => fail("corpus missing at ../../corpus — run scripts/fetch_corpus.sh")
-      case Some(root) =>
-        val manifestJson = manifest(root)
-        val packages = (manifestJson \ "packages").extract[List[JValue]]
-        val newtonsoft = packages
-          .find(p => (p \ "id").extract[String] == "Newtonsoft.Json")
-          .getOrElse(fail("Newtonsoft.Json missing from manifest"))
-        assertEquals((newtonsoft \ "mixedMode").extract[Boolean], false)
-        val assemblies = (newtonsoft \ "assemblies").extract[List[JValue]]
-        assert(assemblies.nonEmpty)
-        assemblies.take(2).foreach { asm =>
-          val rel = (asm \ "path").extract[String]
-          assert(Files.isRegularFile(root.resolve(s"golden/$rel.tier1.json")))
-          assert(Files.isRegularFile(root.resolve(s"golden/$rel.tier2.json")))
-        }
+    val root = CorpusProvisioner.ensureCorpus()
+    val manifestJson = manifest(root)
+    val packages = (manifestJson \ "packages").extract[List[JValue]]
+    val newtonsoft = packages
+      .find(p => (p \ "id").extract[String] == "Newtonsoft.Json")
+      .getOrElse(fail("Newtonsoft.Json missing from manifest"))
+    assertEquals((newtonsoft \ "mixedMode").extract[Boolean], false)
+    val assemblies = (newtonsoft \ "assemblies").extract[List[JValue]]
+    assert(assemblies.nonEmpty)
+    assemblies.take(2).foreach { asm =>
+      val rel = (asm \ "path").extract[String]
+      assert(Files.isRegularFile(root.resolve(s"golden/$rel.tier1.json")))
+      assert(Files.isRegularFile(root.resolve(s"golden/$rel.tier2.json")))
     }
   }
 }

@@ -19,8 +19,10 @@ package io.spicelabs.cilantro.cil
 
 import scala.util.{Failure, Success}
 import io.spicelabs.cilantro.{AssemblyDefinition, MethodDefinition, MethodAttributes, MethodImplAttributes, TypeReference}
+import io.spicelabs.cilantro.metadata.CorpusProvisioner
 
 class NoNativeBodyReadTests extends munit.FunSuite {
+  override def munitTimeout = scala.concurrent.duration.Duration(120, "min")
 
   private def methodWith(
       attributes: Char = 0,
@@ -68,8 +70,9 @@ class NoNativeBodyReadTests extends munit.FunSuite {
   }
 
   test("C3-07: every method of the mixed-mode corpus specimen reads or skips cleanly") {
+    val root = CorpusProvisioner.ensureCorpus()
     val assembly = AssemblyDefinition.readAssembly(
-      "../../corpus/bin/Stub.System.Data.SQLite.Core.NetFramework/1.0.119/net46/System.Data.SQLite.dll"
+      root.resolve("bin/Stub.System.Data.SQLite.Core.NetFramework/1.0.119/net46/System.Data.SQLite.dll").toString
     ) match {
       case Success(a) => a
       case Failure(t) => fail(s"failed to load mixed-mode specimen: $t")

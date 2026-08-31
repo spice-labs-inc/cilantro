@@ -164,6 +164,23 @@ public static class Extraction
 
             var dest = Path.Combine(outDir, relative.Replace('/', Path.DirectorySeparatorChar));
             var destDir = Path.GetDirectoryName(dest);
+            // Refuse to write through a pre-existing symlink anywhere in the
+            // destination chain: File.Create follows symlinks and would
+            // truncate/overwrite the link target (e.g. a git-tracked symlink
+            // planted in the cache tree).
+            for (var current = destDir; current != null && current.Length >= outDir.Length; current = Path.GetDirectoryName(current))
+            {
+                if (Directory.Exists(current) && new DirectoryInfo(current).LinkTarget != null)
+                {
+                    throw new InvalidDataException(
+                        $"refusing to extract {Path.GetFileName(nupkgPath)}: destination directory is a symlink: {current}");
+                }
+            }
+            if (File.Exists(dest) && new FileInfo(dest).LinkTarget != null)
+            {
+                throw new InvalidDataException(
+                    $"refusing to extract {Path.GetFileName(nupkgPath)}: destination is a symlink: {dest}");
+            }
             Directory.CreateDirectory(destDir!);
             using (var src = entry.Open())
             using (var dst = File.Create(dest))

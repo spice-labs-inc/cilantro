@@ -68,6 +68,26 @@ EventMap/NestedClass/InterfaceImpl/GenericParam tables.
   (short→long branch promotion, switch tables, InlineVar/Arg = 2-byte).
 - `CorpusHelpers` — `corpusRoot = ../../corpus`, `requireCorpus`,
   `readGzipJson` (goldens are gzip streams named *.json).
+- `CorpusProvisioner` (ADR-0009) — the gate: `ensureCorpus()` /
+  `ensureCorpusWith(cfg)`; fast path (manifest sha256 + golden-index +
+  golden/bin, memoized per JVM incl. failures), slow path under a
+  cross-process FileLock at `$XDG_CACHE_HOME/cilantro/corpus-<hash>.lock`
+  (outside the repo); JVM fetch (CorpusFetcher) + docker golden regen
+  seam (the ONLY docker in the pipeline); retry-once; 30-min timeout;
+  committed-snapshot compare post-fetch ("committed ground truth
+  modified"). `main` = CI/ops entry (`sbt "test:runMain ..."`).
+- `CorpusFetcher` — pure-JVM cache population: download pinned nupkgs
+  (skip when cached sha matches), verify nupkgSha256, entry-safe
+  extract, deterministic corrupt fixtures (truncate + XOR 0x5A).
+- `CorpusExtractor` — entry-safe extraction port (no throw, no null):
+  keeps only `lib/<tfm>/*.dll`; rejects backslash/absolute/`..` names,
+  Unix link/device/fifo mode entries (via a minimal central-directory
+  reader for external attributes), oversize entries, dest symlink
+  chains (P1-26/P1-27).
+- `CorpusPinTests` — C9-01 golden index completeness/authenticity,
+  C9-04 byte-pinned anchors (manifest, packages, index, 4 fixture DLLs).
+- `CorpusProvisioningTests` — P1-01..P1-27, synthetic corpora in temp
+  dirs, injected seams, no docker/network; fixed-seed property tests.
 
 ## What the goldens pin (do not "fix")
 
@@ -95,11 +115,11 @@ EventMap/NestedClass/InterfaceImpl/GenericParam tables.
   build (json4s Manifest synthesis = the only `-Wconf` exemption),
   `-Wunused:imports`, `-deprecation`, `-unchecked`, `-feature`.
 - No null literals anywhere; no `throw` in tests; no `return`.
-- Test counts (fast): 165 passed + 1 ignored (Slow-tagged). Slow:
-  7 tests.
+- Test counts: 220 passed + 1 ignored (Slow-tagged). Slow: 7 tests.
 
 ## References
 
-- Decision records: workspace `docs/adr/adr-0001..0008`.
+- Decision records: `docs/adr/adr-0009` (this work) + workspace
+  `docs/adr/adr-0001..0008`.
 - Traceability: workspace `TRACEABILITY.md`.
 - Operations: `docs/OPERATIONS.md` / `OPERATIONS_llm.md`.
