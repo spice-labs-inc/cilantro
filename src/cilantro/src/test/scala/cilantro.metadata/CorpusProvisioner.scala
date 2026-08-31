@@ -558,7 +558,9 @@ object CorpusProvisioner {
       )
     } else {
       val repoRoot = root.getParent.toAbsolutePath.normalize
-      val goldenBin = root.resolve("golden/bin")
+      // docker -v requires ABSOLUTE host paths: corpusRoot itself is the
+      // relative ../../corpus, so resolve golden/bin against the real path.
+      val goldenBin = root.toAbsolutePath.normalize.resolve("golden/bin")
       val mk = Try(Files.createDirectories(goldenBin))
       mk match {
         case scala.util.Failure(t) =>

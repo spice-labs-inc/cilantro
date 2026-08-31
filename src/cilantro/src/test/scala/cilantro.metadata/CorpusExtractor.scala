@@ -35,9 +35,8 @@
 
 package io.spicelabs.cilantro.metadata
 
-import java.io.ByteArrayInputStream
 import java.nio.file.{Files, Path, StandardCopyOption}
-import java.util.zip.{CRC32, ZipEntry, ZipFile, ZipInputStream, ZipOutputStream}
+import java.util.zip.{CRC32, ZipEntry, ZipFile, ZipOutputStream}
 import scala.util.Try
 
 object CorpusExtractor {

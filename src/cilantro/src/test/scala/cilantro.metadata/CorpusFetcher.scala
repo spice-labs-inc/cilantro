@@ -31,10 +31,9 @@ package io.spicelabs.cilantro.metadata
 
 import java.net.URI
 import java.net.http.{HttpClient, HttpRequest, HttpResponse}
-import java.nio.file.{Files, Path, StandardCopyOption, StandardOpenOption}
+import java.nio.file.{Files, Path, StandardCopyOption}
 import java.time.Duration
 import org.json4s._
-import org.json4s.native.JsonMethods
 import scala.util.Try
 
 object CorpusFetcher {
@@ -149,22 +148,30 @@ object CorpusFetcher {
 
     val corruptBin = root.resolve("bin/corrupt")
     var corruptCount = 0
-    corruptSpecs.foreach { case (source, name, length) =>
+    var corruptFailure: Option[FetchProblem] = None
+    val corruptIter = corruptSpecs.iterator
+    while (corruptIter.hasNext && corruptFailure.isEmpty) {
+      val (source, name, length) = corruptIter.next()
       val sourcePath = root.resolve("bin").resolve(source)
       if (!Files.isRegularFile(sourcePath)) {
-        return Left(FetchProblem("corrupt fixtures", s"source missing for corrupt fixture $name: $source"))
+        corruptFailure = Some(FetchProblem("corrupt fixtures", s"source missing for corrupt fixture $name: $source"))
+      } else {
+        val bytes = Files.readAllBytes(sourcePath)
+        if (length > bytes.length) {
+          corruptFailure = Some(FetchProblem("corrupt fixtures", s"length $length exceeds source size ${bytes.length} for $name"))
+        } else {
+          val truncated = bytes.take(length.toInt)
+          if (truncated.nonEmpty) {
+            truncated(truncated.length - 1) = (truncated(truncated.length - 1) ^ 0x5A).toByte
+          }
+          Files.createDirectories(corruptBin)
+          Files.write(corruptBin.resolve(name), truncated)
+          corruptCount += 1
+        }
       }
-      val bytes = Files.readAllBytes(sourcePath)
-      if (length > bytes.length) {
-        return Left(FetchProblem("corrupt fixtures", s"length $length exceeds source size ${bytes.length} for $name"))
-      }
-      val truncated = bytes.take(length.toInt)
-      if (truncated.nonEmpty) {
-        truncated(truncated.length - 1) = (truncated(truncated.length - 1) ^ 0x5A).toByte
-      }
-      Files.createDirectories(corruptBin)
-      Files.write(corruptBin.resolve(name), truncated)
-      corruptCount += 1
+    }
+    if (corruptFailure.isDefined) {
+      return Left(corruptFailure.get)
     }
 
     Right(Report(downloaded, extractedCount, corruptCount))

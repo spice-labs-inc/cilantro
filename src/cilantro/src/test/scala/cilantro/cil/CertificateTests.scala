@@ -35,7 +35,7 @@ package io.spicelabs.cilantro.cil
 import scala.util.{Success, Failure}
 import java.io.FileOutputStream
 import io.spicelabs.cilantro.AssemblyDefinition
-import io.spicelabs.cilantro.metadata.{CorpusHelpers, CorpusProvisioner}
+import io.spicelabs.cilantro.metadata.CorpusProvisioner
 
 class CertificateTests extends munit.FunSuite {
   private def corpusRoot = CorpusProvisioner.ensureCorpus()
