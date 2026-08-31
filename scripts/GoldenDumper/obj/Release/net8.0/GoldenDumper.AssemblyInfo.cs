@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("GoldenDumper")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+2e350fd4b23baac293986c076eb724668ca92afb")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+73b2e90e619c08e4d53e926ec7b1fbb1e3dd0592")]
 [assembly: System.Reflection.AssemblyProductAttribute("GoldenDumper")]
 [assembly: System.Reflection.AssemblyTitleAttribute("GoldenDumper")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

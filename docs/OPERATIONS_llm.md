@@ -103,9 +103,14 @@ Cache (gitignored, provisioned on demand):
   (nupkg/, bin/, golden/bin) is then copied into the PR checkout, so
   the test JVM fast-paths and PR-authored fetch inputs never run with
   docker.
-- Known defect (flagged for approval, not fixed): GoldenDeterminismTests
-  C1-07's submanifest uses ABSOLUTE assembly paths; .NET
-  `Path.Combine` then writes the tier dumps NEXT TO THE ASSEMBLIES
-  (into corpus/bin — 9 stray files were found and removed) instead of
-  into `--out`, and its `find`/diff on the empty output dirs passes
-  trivially. C1-07b (fixtures, relative paths) is sound.
+- Remediated 2026-08-31: GoldenDeterminismTests C1-07 previously
+  passed trivially — its ABSOLUTE submanifest paths made .NET
+  `Path.Combine` write the tier dumps next to the assemblies (into
+  corpus/bin) while the test compared empty output dirs. Now the
+  submanifest lives in /work/corpus with RELATIVE paths (resolving
+  against the manifest's directory), fixtures dumping is excluded
+  (`--fixtures-dir /tmp/no-fixtures`), a file-count guard (exactly 9
+  goldens for the 5-assembly submanifest) makes a trivial pass
+  impossible, and a bash EXIT trap removes the submanifest afterward.
+  Verified: 9 files dumped under `--out`, byte-identical across the
+  two runs, zero strays left in corpus/bin.

@@ -41,34 +41,44 @@ class GoldenDeterminismTests extends munit.FunSuite {
   }
 
   test("C1-07: two dump runs are byte-identical") {
+    // The submanifest lives in /work/corpus so its RELATIVE assembly paths
+    // resolve against the corpus root (DumpCommand joins paths against the
+    // manifest's directory). Absolute paths here would make .NET
+    // Path.Combine ignore --out and write the dumps NEXT TO THE ASSEMBLIES
+    // while the output dirs stay empty — a trivially passing test (this
+    // exact defect was found and remediated 2026-08-31). A file-count
+    // guard pins the non-trivial case: 5 assemblies = 4 regular (tier1 +
+    // tier2) + 1 mixed-mode (tier1 only, SkipBodies) = 9 golden files.
     val (dumpCode, dumpOutput) = CorpusHelpers.runInFetchImage(
-      """cat > /tmp/submanifest.json <<'EOF'
+      "trap 'rm -f /work/corpus/submanifest.json' EXIT && " +
+        """cat > /work/corpus/submanifest.json <<'EOF'
         |{
         |  "schemaVersion": 1,
         |  "packages": [
         |    { "id": "sub", "version": "1", "mixedMode": false,
         |      "assemblies": [
-        |        { "path": "/work/corpus/bin/Newtonsoft.Json/12.0.3/net20/Newtonsoft.Json.dll" },
-        |        { "path": "/work/corpus/bin/Newtonsoft.Json/12.0.3/net45/Newtonsoft.Json.dll" },
-        |        { "path": "/work/corpus/bin/FSharp.Core/8.0.400/netstandard2.0/FSharp.Core.dll" },
-        |        { "path": "/work/corpus/bin/SixLabors.ImageSharp/3.1.6/net6.0/SixLabors.ImageSharp.dll" }
+        |        { "path": "bin/Newtonsoft.Json/12.0.3/net20/Newtonsoft.Json.dll" },
+        |        { "path": "bin/Newtonsoft.Json/12.0.3/net45/Newtonsoft.Json.dll" },
+        |        { "path": "bin/FSharp.Core/8.0.400/netstandard2.0/FSharp.Core.dll" },
+        |        { "path": "bin/SixLabors.ImageSharp/3.1.6/net6.0/SixLabors.ImageSharp.dll" }
         |      ]
         |    },
         |    { "id": "sub-mixed", "version": "1", "mixedMode": true,
         |      "assemblies": [
-        |        { "path": "/work/corpus/bin/Stub.System.Data.SQLite.Core.NetFramework/1.0.119/net46/System.Data.SQLite.dll" }
+        |        { "path": "bin/Stub.System.Data.SQLite.Core.NetFramework/1.0.119/net46/System.Data.SQLite.dll" }
         |      ]
         |    }
         |  ]
         |}
         |EOF
         |""".stripMargin +
-      s"rm -rf /tmp/goldenA /tmp/goldenB && " +
-        s"$goldenDumper dump --manifest /tmp/submanifest.json --out /tmp/goldenA && " +
-        s"$goldenDumper dump --manifest /tmp/submanifest.json --out /tmp/goldenB && " +
+        s"rm -rf /tmp/goldenA /tmp/goldenB && " +
+        s"$goldenDumper dump --manifest /work/corpus/submanifest.json --out /tmp/goldenA --fixtures-dir /tmp/no-fixtures && " +
+        s"$goldenDumper dump --manifest /work/corpus/submanifest.json --out /tmp/goldenB --fixtures-dir /tmp/no-fixtures && " +
         "find /tmp/goldenA -type f | sed 's|/tmp/goldenA/||' | sort > /tmp/listA && " +
         "find /tmp/goldenB -type f | sed 's|/tmp/goldenB/||' | sort > /tmp/listB && " +
         "diff /tmp/listA /tmp/listB && " +
+        "[ \"$(wc -l < /tmp/listA)\" = \"9\" ] || { echo \"unexpected golden file count: $(wc -l < /tmp/listA)\"; exit 1; } && " +
         "cd /tmp && for f in $(cat /tmp/listA); do " +
         "sha256sum goldenA/$f goldenB/$f | awk '{print $1}' | sort -u | wc -l; done | grep -v '^1$' | wc -l"
     )
