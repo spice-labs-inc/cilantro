@@ -15,6 +15,7 @@ package io.spicelabs.cilantro.PE
 import java.io.FileInputStream
 import java.nio.channels.FileChannel.MapMode
 import java.nio.ByteOrder
+import java.util.zip.DataFormatException
 import io.spicelabs.cilantro.PE.DataDirectory
 
 class BinaryStreamReader(protected val fileInputStream: FileInputStream) {
@@ -39,7 +40,16 @@ class BinaryStreamReader(protected val fileInputStream: FileInputStream) {
     def readInt32() = byteBuffer.getInt()
     def readInt64() = byteBuffer.getLong()
     def readBoolean() = byteBuffer.get() != 0
+    // H1 (ADR-0013): hostile lengths must fail BEFORE the allocation.
+    // The check is the shared guard for every consumer (heaps, debug
+    // data, certificates, win32 blobs, managed resources): negative
+    // lengths fail instead of NegativeArraySizeException, and lengths
+    // past the remaining buffer fail instead of BufferUnderflowException
+    // after a multi-GiB Array.ofDim.
     def readBytes(length: Int) = {
+        if (length < 0 || length > byteBuffer.remaining()) {
+            throw DataFormatException()
+        }
         val bytes = Array.ofDim[Byte](length)
         byteBuffer.get(bytes)
         bytes

@@ -345,7 +345,14 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
         }
         image.debug.foreach(moveTo)
 
-        var entries = Array.ofDim[ImageDebugHeaderEntry](image.debug.map(_.size).getOrElse(0) / ImageDebugDirectory.size)
+        // H6 (ADR-0013): cap the entry count BEFORE the array
+        // allocation — a hostile size field claims ~153M entries
+        // (~1.2 GiB of array) today.
+        val declaredEntries = image.debug.map(_.size).getOrElse(0) / ImageDebugDirectory.size
+        if (declaredEntries > ImageReader.MaxDebugEntries) {
+            throw DataFormatException()
+        }
+        var entries = Array.ofDim[ImageDebugHeaderEntry](declaredEntries)
         
         for i <- 0 until entries.length do {
             var directory = ImageDebugDirectory()
@@ -362,6 +369,16 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
                 entries(i) = ImageDebugHeaderEntry(directory, Array.emptyByteArray)
             }
             else {
+                // H6: each entry's data must lie inside the file and stay
+                // under the 256 MiB cap before any read (the old path
+                // escaped as an NIO IllegalArgumentException for hostile
+                // pointers).
+                val fileSize = fileInputStream.getChannel.size()
+                if (directory.sizeOfData > ImageReader.MaxDebugDataSize
+                    || directory.pointerToRawData < 0
+                    || directory.pointerToRawData.toLong + directory.sizeOfData.toLong > fileSize) {
+                    throw DataFormatException()
+                }
                 val position = this.position
 
                 try {
@@ -602,6 +619,12 @@ object ImageReader {
     val MaxSectionSize = 512 * 1024 * 1024
     val MaxTableRows = 10_000_000
     val MaxHeapSize = 256 * 1024 * 1024
+    // H6 (ADR-0013): the debug-directory entry count is capped before
+    // the array allocation; the per-entry data size shares the 256 MiB
+    // cap with AssemblyReader (MaxDebugDataSize is the single source of
+    // that value).
+    val MaxDebugEntries = 1024
+    val MaxDebugDataSize = 256 * 1024 * 1024
 
     private def makeImage(stream: Disposable[FileInputStream], file_name: String) =  {
         val image = Image()

@@ -56,6 +56,27 @@ class EmbeddedResource(name: String, attributes: Int) extends Resource(name, att
     getResourceData()
   }
 
+  // Plan 2026_09_01 (H2): cheap declared-length accessor — the 4-byte
+  // prefix only, no blob materialization. Data-backed resources report
+  // their length directly; stream-backed resources cannot know a
+  // length without reading (documented Failure).
+  def resourceLength(): scala.util.Try[Int] = scala.util.Try {
+    _data match {
+      case Some(d) => d.length
+      case None => _stream match {
+        case Some(_) => throw OperationNotSupportedException("resourceLength is unavailable for stream-backed resources")
+        case None => (_offset, _reader) match {
+          case (Some(value), Some(r)) =>
+            r.managedResourceLength(value) match {
+              case scala.util.Success(len) => len
+              case scala.util.Failure(e) => throw e
+            }
+          case _ => throw OperationNotSupportedException()
+        }
+      }
+    }
+  }
+
   def getResourceData(): Array[Byte] = {
     _stream match {
         case Some(s) => s.readAllBytes()

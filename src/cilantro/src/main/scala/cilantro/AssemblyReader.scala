@@ -15,6 +15,7 @@ package io.spicelabs.cilantro
 import io.spicelabs.cilantro.PE.ByteBuffer
 import io.spicelabs.cilantro.PE.Image
 import io.spicelabs.cilantro.PE.BinaryStreamReader
+import io.spicelabs.cilantro.PE.ImageReader
 import io.spicelabs.cilantro.metadata.CodedIndex
 import io.spicelabs.cilantro.metadata.Table
 import scala.collection.mutable.ArrayBuffer
@@ -724,20 +725,73 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         record
     
     }
-    def getManagedResource(offset: Int): Array[Byte] = {
-        val bytes = image.resources.flatMap(rs => image.getReaderAt(rs.virtualAddress, offset, (o, reader) => {
-            reader.advance(o)
-            reader.readBytes(reader.readInt32())
-        }))
-        bytes match {
-            case Some(value) => value
-            case None => Array.emptyByteArray
-    
+    // H2 (ADR-0013): resolve the CLI-header Resources directory plus a
+    // ManifestResource offset to the raw file offset of the blob's
+    // 4-byte length prefix. None = the directory is absent or does not
+    // resolve into a section (the resource is absent); hostile offsets
+    // (negative or past the file extent) throw DataFormatException
+    // instead of escaping as an NIO IllegalArgumentException.
+    private def managedResourceBlobStart(offset: Int): Option[Int] = {
+        for {
+            rs <- image.resources
+            section <- image.getSectionAtVirtualAddress(rs.virtualAddress)
+            disposable <- image.stream
+        } yield {
+            val length = disposable.value.getChannel.size()
+            val raw = rs.virtualAddress.toLong + section.pointerToRawData.toLong - section.virtualAddress.toLong
+            val start = raw + offset.toLong
+            if (offset < 0 || start < 0 || start + 4L > length) {
+                throw DataFormatException()
             }
+            start.toInt
         }
+    }
+
+    // H2: read the validated length prefix at a raw blob start. A
+    // declared length beyond the file extent fails with
+    // DataFormatException before any allocation.
+    private def readManagedResourceLength(start: Int): Int = {
+        image.stream match {
+            case None => throw DataFormatException()
+            case Some(disposable) =>
+                val length = disposable.value.getChannel.size()
+                val reader = BinaryStreamReader(disposable.value)
+                reader.moveTo(start)
+                val declared = reader.readInt32()
+                if (declared < 0 || start.toLong + 4L + declared.toLong > length) {
+                    throw DataFormatException()
+                }
+                declared
+        }
+    }
+
+    def getManagedResource(offset: Int): Array[Byte] = {
+        managedResourceBlobStart(offset) match {
+            case None => Array.emptyByteArray
+            case Some(start) =>
+                val declared = readManagedResourceLength(start)
+                image.stream match {
+                    case None => throw DataFormatException()
+                    case Some(disposable) =>
+                        val reader = BinaryStreamReader(disposable.value)
+                        reader.moveTo(start + 4)
+                        reader.readBytes(declared)
+                }
+        }
+    }
+
+    // H2: cheap declared-length accessor for EmbeddedResource — reads
+    // only the 4-byte prefix, with the same extent validation as
+    // getManagedResource. No blob materialization.
+    def managedResourceLength(offset: Int): scala.util.Try[Int] = scala.util.Try {
+        managedResourceBlobStart(offset) match {
+            case None => throw DataFormatException()
+            case Some(start) => readManagedResourceLength(start)
+        }
+    }
     private val maxCertificateEntries = 1024
 
-    private val maxDebugEntryData = 256 * 1024 * 1024
+    private val maxDebugEntryData = ImageReader.MaxDebugDataSize
 
     // Debug-directory data exposure (plan 13, C5-05): the directory
     // entries already parse during the header walk; this returns each
@@ -796,7 +850,7 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
                     }
                     else {
                         val payload = java.util.Arrays.copyOfRange(data, 8, data.length)
-                        rawInflate(payload).flatMap { root =>
+                        rawInflate(payload, uncompressed.toLong).flatMap { root =>
                             if (root.length != uncompressed) {
                                 None
                             }
@@ -810,7 +864,13 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         }
     }
 
-    private def rawInflate(bytes: Array[Byte]): Option[Array[Byte]] = {
+    // H3 (ADR-0013): inflate with a hard output cap — the output is
+    // checked DURING inflation so a hostile deflate stream cannot grow
+    // unboundedly (declared sizes are only compared afterwards, and
+    // embedded sources have no declared size at all). Failing the cap
+    // returns None — the "not present" shape, never an exception.
+    // private[cilantro] is the test seam for the cap boundary tests.
+    private[cilantro] def rawInflate(bytes: Array[Byte], maxOutput: Long): Option[Array[Byte]] = {
         val inflater = java.util.zip.Inflater(true)
         try {
             inflater.setInput(bytes)
@@ -825,6 +885,9 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
                 }
                 else {
                     out.write(buffer, 0, n)
+                    if (out.size().toLong > maxOutput) {
+                        return None
+                    }
                 }
             }
             Some(out.toByteArray)
@@ -1106,7 +1169,9 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
                                     Some(rest)
                                 }
                                 else {
-                                    rawInflate(rest)
+                                    // H3: cap at the declared uncompressed size, never
+                                    // beyond the absolute ceiling.
+                                    rawInflate(rest, Math.min(format.toLong, maxDebugEntryData.toLong))
                                 }
                                 bytes.foreach { b =>
                                     sources.addOne(EmbeddedSourceFile(name, b))
@@ -1133,6 +1198,8 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
 
     private val maxWin32EntriesPerDirectory = 65536
     private val maxWin32ResourceBlob = 512 * 1024 * 1024
+    private val maxWin32TotalLeaves = 1000000
+    private val maxWin32TotalBytes = 512 * 1024 * 1024
 
     private val win32ResourceTypeNames: Map[Int, String] = Map(
         1 -> "RT_CURSOR", 2 -> "RT_BITMAP", 3 -> "RT_ICON", 4 -> "RT_MENU",
@@ -1161,6 +1228,13 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
                     case Some(disposable) =>
                         val fileSize = disposable.value.getChannel.size()
                         val reader = BinaryStreamReader(disposable.value)
+                        // H4 (ADR-0013): aggregate work caps + a visited
+                        // set on directory raw offsets — hostile
+                        // directory-offset aliasing must not multiply the
+                        // walk, and total leaves/bytes must stay bounded.
+                        val visitedDirectories = scala.collection.mutable.HashSet[Int]()
+                        var totalLeaves = 0L
+                        var totalBytes = 0L
                         // The .rsrc section quirk: the tree lives at the
                         // section's raw start; directory-entry targets are
                         // offsets relative to the tree's raw position, and
@@ -1248,6 +1322,11 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
                             if (blobRaw.toLong + size.toLong > fileSize) {
                                 throw DataFormatException()
                             }
+                            totalLeaves += 1
+                            totalBytes += size.toLong
+                            if (totalLeaves > maxWin32TotalLeaves || totalBytes > maxWin32TotalBytes) {
+                                throw DataFormatException()
+                            }
                             reader.moveTo(blobRaw)
                             resources.addOne(Win32Resource(typeId, typeName, nameId, name, language, reader.readBytes(size)))
                         }
@@ -1267,6 +1346,7 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
                             val fullTypeName = typeName.orElse(win32ResourceTypeNames.get(typeId))
                             if ((typeTarget & 0x80000000) != 0) {
                                 val nameRaw = treeOffsetRaw(typeTarget & 0x7fffffff)
+                                if (visitedDirectories.add(nameRaw)) {
                                 val (nameNamed, nameIds) = readDirectoryHeader(nameRaw)
                                 var n = 0L
                                 val nameTotal = nameNamed.toLong + nameIds.toLong
@@ -1281,6 +1361,7 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
                                     val (nameId, name) = readNameValue(nameNameValue)
                                     if ((nameTarget & 0x80000000) != 0) {
                                         val langRaw = treeOffsetRaw(nameTarget & 0x7fffffff)
+                                        if (visitedDirectories.add(langRaw)) {
                                         val (langNamed, langIds) = readDirectoryHeader(langRaw)
                                         var l = 0L
                                         val langTotal = langNamed.toLong + langIds.toLong
@@ -1295,11 +1376,13 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
                                             readDataBlob(langTarget, typeId, fullTypeName, nameId, name, langName)
                                             l += 1
                                         }
+                                        }
                                     }
                                     else {
                                         readDataBlob(nameTarget, typeId, fullTypeName, nameId, name, 0)
                                     }
                                     n += 1
+                                }
                                 }
                             }
                             else {
@@ -3080,16 +3163,19 @@ sealed class SignatureReader(blob: Int, private val _reader: MetadataReader) ext
             val parameterType = GenericParameterResolver.resolveParameterTypeIfNeeded(
                 attribute.constructor, parameters(i)
             )
-            args.addOne(readCustomAttributeFixedArgument(parameterType))
+            args.addOne(readCustomAttributeFixedArgument(parameterType, 0))
 
             }
         }
-    private def readCustomAttributeFixedArgument(`type`: TypeReference) = {
+    private def readCustomAttributeFixedArgument(`type`: TypeReference, depth: Int) = {
+        if (depth > maxCustomAttributeDepth) {
+            throw DataFormatException()
+        }
         if (`type`.isArray) {
-            readCustomAttributeFixedArrayArgument(`type`.as[ArrayType].getOrElse(throw OperationNotSupportedException()))
+            readCustomAttributeFixedArrayArgument(`type`.as[ArrayType].getOrElse(throw OperationNotSupportedException()), depth + 1)
         }
         else {
-            readCustomAttributeElement(`type`)
+            readCustomAttributeElement(`type`, depth + 1)
     
         }
     }
@@ -3111,7 +3197,7 @@ sealed class SignatureReader(blob: Int, private val _reader: MetadataReader) ext
         var localFields = fields
         var localProps = properties
         val kind = readByte()
-        val `type` = readCustomAttributeFieldOrPropType()
+        val `type` = readCustomAttributeFieldOrPropType(0)
         val name = readUTF8String()
 
         val container = kind match {
@@ -3125,7 +3211,7 @@ sealed class SignatureReader(blob: Int, private val _reader: MetadataReader) ext
                 ct
             case _ => throw OperationNotSupportedException()
         }
-        container.addOne(CustomAttributeNamedArgument(name.getOrElse(""), readCustomAttributeFixedArgument(`type`)))
+        container.addOne(CustomAttributeNamedArgument(name.getOrElse(""), readCustomAttributeFixedArgument(`type`, 0)))
         (localFields, localProps)
     
     }
@@ -3133,7 +3219,16 @@ sealed class SignatureReader(blob: Int, private val _reader: MetadataReader) ext
         coll.getOrElse(ArrayBuffer[CustomAttributeNamedArgument]())
 
     }
-    private def readCustomAttributeFixedArrayArgument(`type`: ArrayType): CustomAttributeArgument = {
+    // H5 (ADR-0013): custom-attribute value nesting (boxed-object
+    // elements, szArray type tags, arrays of arrays) is attacker-driven
+    // one byte per level; cap it at the same 128 the type/signature
+    // readers use.
+    private val maxCustomAttributeDepth = 128
+
+    private def readCustomAttributeFixedArrayArgument(`type`: ArrayType, depth: Int): CustomAttributeArgument = {
+        if (depth > maxCustomAttributeDepth) {
+            throw DataFormatException()
+        }
         val length = readUInt32()
         length match {
             case 0xffffffff => CustomAttributeArgument(`type`, CilNullConstant)
@@ -3143,19 +3238,22 @@ sealed class SignatureReader(blob: Int, private val _reader: MetadataReader) ext
                 val element_type = `type`.elementType
 
                 for i <- 0 until length do {
-                    arguments(i) = readCustomAttributeElement(element_type)
+                    arguments(i) = readCustomAttributeElement(element_type, depth + 1)
                 }
                 CustomAttributeArgument(`type`, arguments)
     
             }
         }
-    private def readCustomAttributeElement(`type`: TypeReference): CustomAttributeArgument = {
+    private def readCustomAttributeElement(`type`: TypeReference, depth: Int): CustomAttributeArgument = {
+        if (depth > maxCustomAttributeDepth) {
+            throw DataFormatException()
+        }
         if (`type`.isArray) {
-            readCustomAttributeFixedArrayArgument(`type`.asInstanceOf[ArrayType])
+            readCustomAttributeFixedArrayArgument(`type`.asInstanceOf[ArrayType], depth + 1)
         }
         else {
             CustomAttributeArgument(`type`,
-                if `type`.etype == ElementType.`object` then readCustomAttributeElement(readCustomAttributeFieldOrPropType())
+                if `type`.etype == ElementType.`object` then readCustomAttributeElement(readCustomAttributeFieldOrPropType(depth + 1), depth + 1)
                 else readCustomAttributeElementValue(`type`)
             )
 
@@ -3224,11 +3322,14 @@ sealed class SignatureReader(blob: Int, private val _reader: MetadataReader) ext
 
             }
         }
-    private def readCustomAttributeFieldOrPropType():TypeReference = {
+    private def readCustomAttributeFieldOrPropType(depth: Int):TypeReference = {
+        if (depth > maxCustomAttributeDepth) {
+            throw DataFormatException()
+        }
         var etype = ElementType.fromOrdinalValue(readByte())
         etype match {
             case ElementType.boxed => _typeSystem.`object`
-            case ElementType.szArray => ArrayType(readCustomAttributeFieldOrPropType())
+            case ElementType.szArray => ArrayType(readCustomAttributeFieldOrPropType(depth + 1))
             case ElementType.`enum` => readTypeReference().getOrElse(throw OperationNotSupportedException())
             case ElementType.`type` => _typeSystem.lookupType("System", "Type")
             case _ => getPrimitiveType(etype)
