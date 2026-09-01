@@ -63,9 +63,21 @@ class MinimalPeBuilder(
     // placed in the section at RVA 0x2600; the Debug data directory
     // points at it.
     debugDirectory: Option[Array[Byte]] = None,
+    // When false, the CLI data directory is zeroed — the file is a
+    // plain PE with no .NET header (the probe's negative sample).
+    cliHeaderPresent: Boolean = true,
+    // When set, the metadata root's version-length field is written as
+    // this claim instead of the real version length (hostile input for
+    // the probe's version-string bound).
+    versionLengthClaim: Option[Int] = None,
     // Extra per-table row counts (table id -> rows), for offset-arithmetic
     // overflow tests.
     tableRowCounts: Map[Int, Int] = Map.empty,
+    // Extra blobs appended to the #Blob heap after the built-in field /
+    // method signature blobs; each entry is already length-prefixed
+    // (compressed u32 length + bytes). The first extra blob's index is
+    // 2 + fieldSigBlob + methodSigBlob when those are present.
+    extraBlobs: Seq[Array[Byte]] = Seq.empty,
     // Extra tables with real rows: (table id, row size, row bytes).
     // Emitted after the built-in rows in table-id order.
     extraTables: Seq[(Int, Int, Array[Byte])] = Seq.empty,
@@ -179,7 +191,8 @@ class MinimalPeBuilder(
     val strings = Array[Byte](0, 'A'.toByte, 0) ++ extraStrings
     val blobParts = Array[Byte](1, 0) ++
       (if (deepFieldSigDepth > 0) fieldSigBlob else Array.emptyByteArray) ++
-      (if (methodBodyClaim > 0) methodSigBlob else Array.emptyByteArray)
+      (if (methodBodyClaim > 0) methodSigBlob else Array.emptyByteArray) ++
+      extraBlobs.flatten
     val guid = Array[Byte](0) ++ Array.ofDim[Byte](16)
     val us = Array[Byte](0)
     val t = tableHeap()
@@ -219,8 +232,9 @@ class MinimalPeBuilder(
   private def metadataRoot(): Array[Byte] = {
     val rawVersion = "v4.0.30319".getBytes("ASCII") ++ zero(1)
     val version = rawVersion ++ zero((4 - (rawVersion.length % 4)) % 4)
+    val versionLength = versionLengthClaim.getOrElse(version.length)
     val streamData = streams()
-    val prefix = i4(0x424a5342) ++ i2(1) ++ i2(1) ++ i4(0) ++ i4(version.length) ++ version
+    val prefix = i4(0x424a5342) ++ i2(1) ++ i2(1) ++ i4(0) ++ i4(versionLength) ++ version
     prefix ++ i2(0) ++ i2(5) ++ streamData
   }
 
@@ -307,10 +321,12 @@ class MinimalPeBuilder(
         for i <- 0 until 4 do o(148 + i) = sz(i)
       }
       // CLI data directory at offset 208
-      val cliRva = i4(0x2000)
-      val cliSize = i4(cli.length)
-      for i <- 0 until 4 do o(208 + i) = cliRva(i)
-      for i <- 0 until 4 do o(212 + i) = cliSize(i)
+      if (cliHeaderPresent) {
+        val cliRva = i4(0x2000)
+        val cliSize = i4(cli.length)
+        for i <- 0 until 4 do o(208 + i) = cliRva(i)
+        for i <- 0 until 4 do o(212 + i) = cliSize(i)
+      }
       o
     }
 

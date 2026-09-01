@@ -25,6 +25,13 @@ import io.spicelabs.cilantro.{
 
 object CanonicalJson {
 
+  // H5 (ADR-0013): hostile input drives the serializer recursion one
+  // byte per level (a NestedClass chain, a boxed custom-attribute
+  // value); cap it far above any real shape. The depth is threaded
+  // through every recursive helper so alternating frames cannot bypass
+  // the cap, and a violation fails the typeToJson Try.
+  private val maxRecursionDepth = 256
+
   def typeToJson(typeDef: TypeDefinition): Try[String] = Try {
     val writer = new StringWriter()
     val pw = new PrintWriter(writer)
@@ -35,6 +42,13 @@ object CanonicalJson {
   }
 
   def writeType(writer: PrintWriter, typeDef: TypeDefinition): Unit = {
+    writeTypeDepth(writer, typeDef, 0)
+  }
+
+  private def writeTypeDepth(writer: PrintWriter, typeDef: TypeDefinition, depth: Int): Unit = {
+    if (depth > maxRecursionDepth) {
+      throw IllegalArgumentException("canonical json recursion limit exceeded at depth " + depth)
+    }
     writer.print("{\"fullName\":" + q(typeDef.fullName) + ",")
     writer.print("\"attributes\":" + q(f"${typeDef.attributes}%x") + ",")
     writer.print("\"baseType\":")
@@ -59,7 +73,7 @@ object CanonicalJson {
     writer.print("],\"customAttributes\":[")
     typeDef.customAttributes.zipWithIndex.foreach { case (attr, i) =>
       if (i > 0) writer.print(",")
-      writeCustomAttribute(writer, attr)
+      writeCustomAttribute(writer, attr, depth + 1)
     }
     writer.print("],\"fields\":[")
     typeDef.fields.zipWithIndex.foreach { case (field, i) =>
@@ -69,14 +83,14 @@ object CanonicalJson {
       writer.print("\"attributes\":" + q(f"${field.attributes & 0xffff}%x"))
       if (field.hasConstant) {
         writer.print(",\"constant\":")
-        writeConstant(writer, field.constant)
+        writeConstant(writer, field.constant, depth + 1)
       }
       writer.print("}")
     }
     writer.print("],\"methods\":[")
     typeDef.methods.zipWithIndex.foreach { case (method, i) =>
       if (i > 0) writer.print(",")
-      writeMethod(writer, method)
+      writeMethod(writer, method, depth + 1)
     }
     writer.print("],\"properties\":[")
     typeDef.properties.zipWithIndex.foreach { case (property, i) =>
@@ -102,12 +116,12 @@ object CanonicalJson {
     writer.print("],\"nestedTypes\":[")
     typeDef.nestedTypes.zipWithIndex.foreach { case (nested, i) =>
       if (i > 0) writer.print(",")
-      writeType(writer, nested)
+      writeTypeDepth(writer, nested, depth + 1)
     }
     writer.print("]}")
   }
 
-  private def writeMethod(writer: PrintWriter, method: MethodDefinition): Unit = {
+  private def writeMethod(writer: PrintWriter, method: MethodDefinition, depth: Int): Unit = {
     writer.print("{\"name\":" + q(method.name) + ",")
     writer.print("\"returnType\":" + q(method.returnType.fullName) + ",")
     writer.print("\"callingConvention\":" + q(f"${method.callingConvention.value}%x") + ",")
@@ -127,7 +141,7 @@ object CanonicalJson {
       writer.print("\"attributes\":" + q(f"${parameter.attributes & 0xffff}%x"))
       if (parameter.hasConstant) {
         writer.print(",\"constant\":")
-        writeConstant(writer, parameter.constant)
+        writeConstant(writer, parameter.constant, depth + 1)
       }
       writer.print("}")
     }
@@ -140,7 +154,7 @@ object CanonicalJson {
     writer.print("],\"customAttributes\":[")
     method.customAttributes.zipWithIndex.foreach { case (attr, i) =>
       if (i > 0) writer.print(",")
-      writeCustomAttribute(writer, attr)
+      writeCustomAttribute(writer, attr, depth + 1)
     }
     writer.print("]}")
   }
@@ -158,39 +172,42 @@ object CanonicalJson {
     parts.mkString(", ")
   }
 
-  private def writeCustomAttribute(writer: PrintWriter, attr: CustomAttribute): Unit = {
+  private def writeCustomAttribute(writer: PrintWriter, attr: CustomAttribute, depth: Int): Unit = {
     writer.print("{\"type\":" + q(attr.attributeType.map(_.fullName).getOrElse("")) + ",")
     writer.print("\"constructorArgs\":[")
     attr.constructorArguments.zipWithIndex.foreach { case (arg, i) =>
       if (i > 0) writer.print(",")
-      writeCustomAttributeArgument(writer, arg)
+      writeCustomAttributeArgument(writer, arg, depth + 1)
     }
     writer.print("],\"namedFields\":[")
     attr.fields.zipWithIndex.foreach { case (named, i) =>
       if (i > 0) writer.print(",")
-      writeNamed(writer, named)
+      writeNamed(writer, named, depth + 1)
     }
     writer.print("],\"namedProperties\":[")
     attr.properties.zipWithIndex.foreach { case (named, i) =>
       if (i > 0) writer.print(",")
-      writeNamed(writer, named)
+      writeNamed(writer, named, depth + 1)
     }
     writer.print("]}")
   }
 
-  private def writeNamed(writer: PrintWriter, named: io.spicelabs.cilantro.CustomAttributeNamedArgument): Unit = {
+  private def writeNamed(writer: PrintWriter, named: io.spicelabs.cilantro.CustomAttributeNamedArgument, depth: Int): Unit = {
     writer.print("{\"name\":" + q(named.name) + ",\"argument\":")
-    writeCustomAttributeArgument(writer, named.argument)
+    writeCustomAttributeArgument(writer, named.argument, depth + 1)
     writer.print("}")
   }
 
-  private def writeCustomAttributeArgument(writer: PrintWriter, arg: io.spicelabs.cilantro.CustomAttributeArgument): Unit = {
+  private def writeCustomAttributeArgument(writer: PrintWriter, arg: io.spicelabs.cilantro.CustomAttributeArgument, depth: Int): Unit = {
+    if (depth > maxRecursionDepth) {
+      throw IllegalArgumentException("canonical json recursion limit exceeded at depth " + depth)
+    }
     writer.print("{\"type\":" + q(arg.`type`.fullName) + ",\"value\":")
-    writeCustomAttributeValue(writer, arg.value)
+    writeCustomAttributeValue(writer, arg.value, depth + 1)
     writer.print("}")
   }
 
-  private def writeCustomAttributeValue(writer: PrintWriter, value: Any): Unit = value match {
+  private def writeCustomAttributeValue(writer: PrintWriter, value: Any, depth: Int): Unit = value match {
     case io.spicelabs.cilantro.CilNullConstant => writer.print("\"null\"")
     case s: String => writer.print(q(s))
     case t: TypeReference => writer.print("\"typeof(" + jsonEscape(t.fullName) + ")\"")
@@ -198,13 +215,13 @@ object CanonicalJson {
     case bytes: Array[Byte] => writer.print(q(bytes.map(b => f"$b%02x").mkString))
     case nested: io.spicelabs.cilantro.CustomAttributeArgument =>
       writer.print("{\"type\":" + q(nested.`type`.fullName) + ",\"value\":")
-      writeCustomAttributeValue(writer, nested.value)
+      writeCustomAttributeValue(writer, nested.value, depth + 1)
       writer.print("}")
     case array: Array[io.spicelabs.cilantro.CustomAttributeArgument] =>
       writer.print("[")
       array.zipWithIndex.foreach { case (item, i) =>
         if (i > 0) writer.print(",")
-        writeCustomAttributeArgument(writer, item)
+        writeCustomAttributeArgument(writer, item, depth + 1)
       }
       writer.print("]")
     case b: Byte => writer.print(q(b.toString))
@@ -219,12 +236,12 @@ object CanonicalJson {
     case other => writer.print(q(other.toString))
   }
 
-  private def writeConstant(writer: PrintWriter, constant: Any): Unit = {
+  private def writeConstant(writer: PrintWriter, constant: Any, depth: Int): Unit = {
     if (constant == io.spicelabs.cilantro.CilNullConstant) {
       writer.print("\"null\"")
     } else {
       writer.print("{\"value\":")
-      writeCustomAttributeValue(writer, constant)
+      writeCustomAttributeValue(writer, constant, depth + 1)
       writer.print("}")
     }
   }
