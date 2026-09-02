@@ -345,9 +345,10 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
         }
         image.debug.foreach(moveTo)
 
-        // H6 (ADR-0013): cap the entry count BEFORE the array
+        // H6/ADR-0014 (D-9): cap the entry count BEFORE the array
         // allocation — a hostile size field claims ~153M entries
-        // (~1.2 GiB of array) today.
+        // (~1.2 GiB of array) today. The count guard is 1,000,000
+        // (D-10).
         val declaredEntries = image.debug.map(_.size).getOrElse(0) / ImageDebugDirectory.size
         if (declaredEntries > ImageReader.MaxDebugEntries) {
             throw DataFormatException()
@@ -365,31 +366,25 @@ class ImageReader(stream: Disposable[FileInputStream], file_name: String) extend
             directory.addressOfRawData = readInt32()
             directory.pointerToRawData = readInt32()
 
+            // D-9 (plan 2026_09_02): the header walk validates the
+            // declaration STRUCTURALLY and never copies payload data —
+            // payload bytes are exposed as extent-only slices through
+            // readDebugEntryData / the walk. A data range running past
+            // the file's extent is hostile and refuses the read (the
+            // C5-05c/H6-03 function); zero pointer or negative size is
+            // benign-absent (ADR-0013 carve-out). In-file blobs of any
+            // size are legal (the 256 MiB data budget died with the
+            // open-time copy).
             if (directory.pointerToRawData == 0 || directory.sizeOfData < 0) {
                 entries(i) = ImageDebugHeaderEntry(directory, Array.emptyByteArray)
             }
             else {
-                // H6: each entry's data must lie inside the file and stay
-                // under the 256 MiB cap before any read (the old path
-                // escaped as an NIO IllegalArgumentException for hostile
-                // pointers).
                 val fileSize = fileInputStream.getChannel.size()
-                if (directory.sizeOfData > ImageReader.MaxDebugDataSize
-                    || directory.pointerToRawData < 0
+                if (directory.pointerToRawData < 0
                     || directory.pointerToRawData.toLong + directory.sizeOfData.toLong > fileSize) {
                     throw DataFormatException()
                 }
-                val position = this.position
-
-                try {
-                    moveTo(directory.pointerToRawData)
-                    val data = readBytes(directory.sizeOfData)
-                    entries(i) = ImageDebugHeaderEntry(directory, data)
-                }
-                finally {
-                    this.position = position
-
-                }
+                entries(i) = ImageDebugHeaderEntry(directory, Array.emptyByteArray)
             }
         }
         image.debugHeader = Some(ImageDebugHeader(entries))
@@ -619,11 +614,12 @@ object ImageReader {
     val MaxSectionSize = 512 * 1024 * 1024
     val MaxTableRows = 10_000_000
     val MaxHeapSize = 256 * 1024 * 1024
-    // H6 (ADR-0013): the debug-directory entry count is capped before
-    // the array allocation; the per-entry data size shares the 256 MiB
-    // cap with AssemblyReader (MaxDebugDataSize is the single source of
-    // that value).
-    val MaxDebugEntries = 1024
+    // H6/ADR-0014 (D-10): the debug-directory entry count is capped
+    // at 1,000,000 before the array allocation; the per-entry data
+    // size shares the 256 MiB cap with AssemblyReader
+    // (MaxDebugDataSize is the single source of that value) until
+    // plan 2026_09_02 phase D removes the open-time data copy (D-9).
+    val MaxDebugEntries = 1000000
     val MaxDebugDataSize = 256 * 1024 * 1024
 
     private def makeImage(stream: Disposable[FileInputStream], file_name: String) =  {

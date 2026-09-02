@@ -10,27 +10,32 @@
 //   with an NIO IllegalArgumentException today, or reads past EOF).
 //
 // Theory of the test:
-//   - The entry-count boundary pins 1024 accepted / 1025 rejected
-//     (the cap fires before Array.ofDim, so the rejection is a clean
+//   - The entry-count boundary pins 1,000,000 accepted / 1,000,001
+//     rejected (plan 2026_09_02, D-10 — the guard is 1,000,000; the
+//     cap fires before Array.ofDim, so the rejection is a clean
 //     DataFormatException, not an OOM).
 //   - The sizeOfData bomb (2 GiB claim) and the pointer bomb
 //     (pointer + size past EOF) fail with DataFormatException.
 //   - The exact-extent boundary (pointer + size == fileSize) succeeds
-//     and returns the exact blob bytes.
+//     and returns the exact blob bytes (re-pinned at the slice path
+//     in plan 2026_09_02 phase D when the open-time data copy is
+//     removed).
 //   - The pinned embedded-PDB fixture regression pins the real-world
 //     entries (types 2/19/17, sizes 47/39/6888).
 //
 // Requirements traced:
 //   plans/2026_09_01_cilantro_hardening_and_dotnet_probe/phase-06.md
-//   H6-01..H6-05 (suggestion cilantro #6; ADR-0013).
+//   H6-01..H6-05 (suggestion cilantro #6; ADR-0013); plan
+//   2026_09_02_cilantro_streaming_assembly_walk (D-9/D-10).
 //
 // LLM notes:
 //   - The 28-byte entry layout: characteristics(4) timeDataStamp(4)
 //     majorVersion(2) minorVersion(2) type(4) sizeOfData(4)
 //     addressOfRawData(4) pointerToRawData(4).
 //   - pointerToRawData is a RAW file offset (not an RVA).
-//   - The caps: MaxDebugEntries = 1024, MaxDebugDataSize = 256 MiB
-//     (shared with AssemblyReader via ImageReader.MaxDebugDataSize).
+//   - The caps: MaxDebugEntries = 1,000,000 (D-10). MaxDebugDataSize
+//     (256 MiB) bounds the open-time data copy until phase D removes
+//     the copy (D-9: extent-only slices).
 
 package io.spicelabs.cilantro.cil
 
@@ -67,9 +72,11 @@ class DebugHeaderCapTests extends munit.FunSuite {
     }
   }
 
-  test("H6-01: the entry count cap accepts 1024 and rejects 1025 before allocating") {
-    // Entries with type 2 (CodeView) and zeroed data pointers: each is
-    // skipped as empty, so the count is the only thing being tested.
+  test("H6-01: the entry count cap accepts 1,000,000 and rejects 1,000,001 before allocating") {
+    // Plan 2026_09_02 phase B (D-10): the debug entry-count guard is
+    // 1,000,000 (was 1024). Entries with type 2 (CodeView) and zeroed
+    // data pointers are skipped as empty, so the count is the only
+    // thing being tested.
     def entries(n: Int): Array[Byte] = {
       val out = new Array[Byte](n * 28)
       var i = 0
@@ -79,11 +86,11 @@ class DebugHeaderCapTests extends munit.FunSuite {
       }
       out
     }
-    withPe(entries(1024)) { path =>
-      assert(ModuleDefinition.readModule(path).isSuccess, "1024 debug entries is the cap and must parse")
+    withPe(entries(1000000)) { path =>
+      assert(ModuleDefinition.readModule(path).isSuccess, "1,000,000 debug entries is the cap and must parse")
     }
-    withPe(entries(1025)) { path =>
-      assert(ModuleDefinition.readModule(path).isFailure, "1025 debug entries must fail cleanly")
+    withPe(entries(1000001)) { path =>
+      assert(ModuleDefinition.readModule(path).isFailure, "1,000,001 debug entries must fail cleanly")
     }
   }
 
@@ -101,7 +108,10 @@ class DebugHeaderCapTests extends munit.FunSuite {
     }
   }
 
-  test("H6-04: pointer + size exactly at EOF reads the exact blob") {
+  test("H6-04: pointer + size exactly at EOF exposes the exact blob at the slice path") {
+    // Plan 2026_09_02 phase D (D-9): the header walk validates the
+    // declaration and never copies the payload; the exact-extent blob
+    // is read through readDebugEntryData's slice payload.
     val blob = Array[Byte](1, 2, 3, 4)
     // Two-pass: the file layout is fixed by the builder, so build once
     // to learn the length, then point the entry at the blob's raw
@@ -117,9 +127,19 @@ class DebugHeaderCapTests extends munit.FunSuite {
     withPe(dir, Some(blob)) { path =>
       ModuleDefinition.readModule(path) match {
         case Success(module) =>
-          val entries = module.image.flatMap(_.debugHeader).map(_.entties).getOrElse(fail("a debug header must parse"))
-          assertEquals(entries.length, 1)
-          assertEquals(entries(0).data.toVector, blob.toVector, "the exact blob bytes must round-trip")
+          val headerEntries = module.image.flatMap(_.debugHeader).map(_.entties).getOrElse(fail("a debug header must parse"))
+          assertEquals(headerEntries.length, 1)
+          assertEquals(headerEntries(0).directory.sizeOfData, blob.length, "the declaration is intact")
+          val payloadOutcome: scala.util.Try[scala.collection.mutable.ArrayBuffer[Vector[Byte]]] = scala.util.Try {
+            module.read(Vector.empty[io.spicelabs.cilantro.DebugEntryData], (_, reader: io.spicelabs.cilantro.MetadataReader) => {
+              reader.readDebugEntryData().map(e => e.processStream(in => in.readAllBytes()).toVector)
+            })
+          }
+          payloadOutcome match {
+            case scala.util.Success(payloads) =>
+              assertEquals(payloads.toVector, Vector(blob.toVector), "the exact blob bytes must round-trip through the slice path")
+            case scala.util.Failure(t) => fail(s"slice read failed: $t")
+          }
         case Failure(e) => fail(s"pointer + size == fileSize must parse: $e")
       }
     }
@@ -132,11 +152,23 @@ class DebugHeaderCapTests extends munit.FunSuite {
         val withData = entries.filter(e => e.directory.sizeOfData > 0)
         assertEquals(withData.length, 3)
         assertEquals(withData(0).directory.`type`.value, 2) // CodeView
-        assertEquals(withData(0).data.length, 47)
+        assertEquals(withData(0).directory.sizeOfData, 47, "the codeview declaration")
         assertEquals(withData(1).directory.`type`.value, 19) // PdbChecksum
-        assertEquals(withData(1).data.length, 39)
+        assertEquals(withData(1).directory.sizeOfData, 39, "the pdbchecksum declaration")
         assertEquals(withData(2).directory.`type`.value, 17) // EmbeddedPortablePdb
-        assertEquals(withData(2).data.length, 6888)
+        assertEquals(withData(2).directory.sizeOfData, 6888, "the embedded-PDB declaration")
+        // D-9: the open-time copy is gone; the data is read through the
+        // slice path with the same pinned lengths.
+        val payloadOutcome: scala.util.Try[scala.collection.mutable.ArrayBuffer[(Int, Int)]] = scala.util.Try {
+          module.read(Vector.empty[io.spicelabs.cilantro.DebugEntryData], (_, reader: io.spicelabs.cilantro.MetadataReader) => {
+            reader.readDebugEntryData().map(e => (e.entryType, e.processStream(in => in.readAllBytes()).length))
+          })
+        }
+        payloadOutcome match {
+          case scala.util.Success(payloads) =>
+            assertEquals(payloads.toVector.sortBy(_._1), Vector((2, 47), (17, 6888), (19, 39)))
+          case scala.util.Failure(t) => fail(s"slice read failed: $t")
+        }
       case Failure(e) => fail(s"the fixture must read: $e")
     }
   }

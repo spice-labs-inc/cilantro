@@ -74,8 +74,22 @@ class Win32ResourceTests extends munit.FunSuite {
     }
   }
 
-  private def sha256(bytes: Array[Byte]): String =
-    java.security.MessageDigest.getInstance("SHA-256").digest(bytes).map(b => f"${b & 0xff}%02x").mkString
+  // Plan 2026_09_02 phase B (D-3): leaf payloads are stream views
+  // (PayloadSource); pinned content is read through processStream.
+  private def payloadSha256(p: io.spicelabs.cilantro.PayloadSource): String =
+    p.processStream { in =>
+      val md = java.security.MessageDigest.getInstance("SHA-256")
+      val buf = new Array[Byte](65536)
+      var n = in.read(buf)
+      while (n >= 0) {
+        if (n > 0) md.update(buf, 0, n)
+        n = in.read(buf)
+      }
+      md.digest().map(b => f"${b & 0xff}%02x").mkString
+    }
+
+  private def payloadBytes(p: io.spicelabs.cilantro.PayloadSource): Array[Byte] =
+    p.processStream(in => in.readAllBytes())
 
   // A minimal tree: root (RT_RCDATA) -> name level (id 1) -> language
   // level (0x409) -> data entry -> blob. Offsets: directory targets
@@ -105,9 +119,9 @@ class Win32ResourceTests extends munit.FunSuite {
         assertEquals(r.typeNameOrId, "RT_VERSION")
         assertEquals(r.nameId, 1)
         assertEquals(r.language, 0)
-        assertEquals(r.blob.length, 1110)
+        assertEquals(payloadBytes(r).length, 1110)
         assertEquals(
-          sha256(r.blob),
+          payloadSha256(r),
           "5bd2a0f900755c12a17b123b78a6280d22f4cdaad481f44c490661132f928fcc",
           "the pinned RT_VERSION blob sha256"
         )
@@ -125,17 +139,23 @@ class Win32ResourceTests extends munit.FunSuite {
           assertEquals(r.typeNameOrId, "RT_RCDATA")
           assertEquals(r.nameId, 1)
           assertEquals(r.language, 0x409)
-          assertEquals(r.blob.toSeq, blob.toSeq, "the RCDATA blob must round-trip")
+          assertEquals(payloadBytes(r).toSeq, blob.toSeq, "the RCDATA blob must round-trip")
         case Failure(t) => fail(s"synthetic tree must read: $t")
       }
     }
   }
 
   test("C5-04c: an oversized directory entry count fails cleanly") {
+    // Plan 2026_09_02 phase B (D-10): the per-directory guard is
+    // 1,000,000 — above the u16 count fields' reachable maximum of
+    // 131070 (65535 named + 65535 ids), so the count guard can never
+    // fire on reachable input. A tree that CLAIMS 131070 entries but
+    // carries no entry data must still fail cleanly — the refusal now
+    // fires on the extent of the first entry read, not the count.
     val bomb = zero(12) ++ i2(0xffff) ++ i2(0xffff) ++ zero(8)
     withPe(bomb) { path =>
       readResources(path) match {
-        case Success(_) => fail("131070 entries must exceed the per-directory cap")
+        case Success(_) => fail("a 131070-entry claim on a header-only tree must fail")
         case Failure(_) => ()
       }
     }

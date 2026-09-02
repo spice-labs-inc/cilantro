@@ -8,14 +8,24 @@
 //
 // Licensed under the MIT/X11 license.
 
-// CertificateEntry — one WIN_CERTIFICATE entry from a PE Security data
-// directory (plan 13, C5-03). Cilantro exposes the raw blob only; it
-// never parses PKCS#7 — certificate processing belongs to consumers.
+// CertificateEntry — one WIN_CERTIFICATE entry (plan 13, C5-03; plan
+// 2026_09_02, phase B). Cilantro exposes the raw blob only: it never
+// interprets PKCS#7 content (ADR-0010's no-PKCS#7 rule). The payload
+// is a streaming, zero-copy view (PayloadSource) over the file's
+// certificate table; the 8-byte WIN_CERTIFICATE header (dwLength /
+// wRevision / wCertificateType) stays on the entry as
+// certificateRevision / certificateType so consumers can stamp
+// without owning any PE layout.
 
 package io.spicelabs.cilantro
 
-sealed class CertificateEntry(private val _revision: Int, private val _certificateType: Int, private val _blob: Array[Byte]) {
+final class CertificateEntry(
+    private val _revision: Int,
+    private val _certificateType: Int,
+    private val payload: PayloadSource
+) extends PayloadSource {
     def revision = _revision
     def certificateType = _certificateType
-    def blob = _blob
+
+    def processStream[T](f: java.io.InputStream => T): T = payload.processStream(f)
 }

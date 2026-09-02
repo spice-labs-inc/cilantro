@@ -149,3 +149,58 @@ See `docs/adr/` (plus the workspace `docs/adr/` records):
 - ADR-0005 EH offset bases, ADR-0006 parity reader semantics
 - ADR-0007 mixed-mode packages, ADR-0008 PDB cut
 - ADR-0009 corpus ground truth committed; cache provisioned on demand
+
+## Streaming payload exposure (plan 2026_09_02, ADR-0014)
+
+The handoff makes .NET assemblies behave like every other container:
+probe, walk, wrap. Three mechanisms back it (claims → tests):
+
+1. **Probe** — `DotnetAssemblyProbe` classifies from PE headers + CLI
+   header + BSJB magic within one bounded region read, never parses
+   heaps, never throws (`DotnetProbeTests` D1-01..D1-14; ADR-0012).
+2. **Slice payloads** — the whole-blob payload accessors were
+   replaced by streaming views (D-3): `CertificateEntry`,
+   `Win32Resource`, `DebugEntryData`, and managed-resource payloads
+   are `PayloadSource`s over bounded, zero-copy `ByteBuffer` slices of
+   the memory-mapped file. A declared length past the file's extent
+   refuses with `DataFormatException` before any allocation; there
+   are **no byte-budget constants** on payload exposure (D-10) — only
+   object guards (certificate/debug/win32-per-directory/source
+   counts at 1,000,000, win32 total leaves 1,000,000, class
+   canonical JSON ≤ 1 MiB). Claim: "payload slices never materialize
+   whole payloads on the heap — a 272 MiB leaf streams under a 32 MiB
+   heap" → `SliceViewTests.CP-3d`; "refusals precede allocation" →
+   `SliceViewTests.CP-3b/CP-3c`. The debug-directory header walk
+   validates declarations structurally and never copies payload data
+   (D-9): in-file blobs of any size are legal, past-EOF declarations
+   refuse at open (`DebugHeaderCapTests` H6-01..H6-05,
+   `DebugEntryTests` C5-05c).
+3. **The walk** — `AssemblyWalker.withinAssemblyStream` hands the
+   consumer one complete `Vector[AssemblyEntry]` or `None`
+   (all-or-nothing, D-1/D-2). Claim: "the vector is either populated
+   or not; f runs exactly once" → `AssemblyWalkerTests` CP-2c/CP-2e.
+   Class enumeration is cycle-safe (ancestor-RID set; a NestedClass
+   cycle refuses, never loops) → CP-2c/CP-2d. Entry names are
+   hardened at the source by `DotnetNameSanitizer` (injective
+   percent-escapes for controls/surrogates/separators; 255-unit cap;
+   never empty) → `NameHardeningTests` CP-6a..d. Entries are valid
+   only inside the callback; retained entries refuse cleanly with
+   `IOException` → CP-2e. The canonical per-class bytes remain the
+   golden `"cilantro-type"` v1 JSON (unchanged; `CanonicalJsonTests`).
+4. **Embedded portable PDBs** — the MPDB root is decompressed into a
+   scratch file the CALLER's spool directory provides (D-6), mapped,
+   and its tables walked from the map with Long extent arithmetic;
+   declared sizes ≥ 2^31 refuse before any write (D-12); embedded
+   sources stream lazily inside `processStream` (D-13). Claim: "the
+   root spools into the caller's directory and cilantro deletes only
+   files it created" → `PdbSpoolTests` CP-5a; "declared mismatch
+   refuses cleanly and output never exceeds declared" → CP-5d;
+   "a partial read performs only partial work" → CP-5f.
+
+The payload model lives in `PayloadSource.scala`,
+`cilantro.PE/MappedSliceSource.scala` (+ `BufferSliceInputStream`),
+`cilantro.PE/RawInflate.scala` (push `pump` + pull
+`RawInflateInputStream`), `AssemblyEntry.scala`,
+`AssemblyWalker.scala`, `DotnetNameSanitizer.scala`,
+`PortablePdbSpool.scala` (PDB root/tables parser) and
+`DebugEntryData.scala` (PDBView/EmbeddedSourceFile).

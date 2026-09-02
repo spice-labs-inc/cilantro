@@ -40,11 +40,32 @@ class ContractTests extends munit.FunSuite {
     val debugDataShape: io.spicelabs.cilantro.MetadataReader => scala.collection.mutable.ArrayBuffer[io.spicelabs.cilantro.DebugEntryData] =
       (r: io.spicelabs.cilantro.MetadataReader) => r.readDebugEntryData()
 
-    val embeddedPdbShape: io.spicelabs.cilantro.MetadataReader => Option[io.spicelabs.cilantro.EmbeddedPdb] =
-      (r: io.spicelabs.cilantro.MetadataReader) => r.readEmbeddedPortablePdb()
+    val embeddedPdbShape: io.spicelabs.cilantro.MetadataReader => (Option[java.nio.file.Path]) => scala.util.Try[Option[io.spicelabs.cilantro.PDBView]] =
+      (r: io.spicelabs.cilantro.MetadataReader) => r.readEmbeddedPortablePdb
 
     val securityDirShape: io.spicelabs.cilantro.PE.Image => Option[io.spicelabs.cilantro.PE.DataDirectory] =
       (i: io.spicelabs.cilantro.PE.Image) => i.securityDirectory
+
+    // Plan 2026_09_02 phase B (D-3/D-8): the payload-bearing model
+    // classes are PayloadSources — payloads are processStream views,
+    // never whole arrays. The certificate metadata (revision/type)
+    // stays on the entry.
+    val certificateEntryIsPayload: io.spicelabs.cilantro.CertificateEntry => io.spicelabs.cilantro.PayloadSource =
+      (e: io.spicelabs.cilantro.CertificateEntry) => e
+    val certificateEntryShape: io.spicelabs.cilantro.CertificateEntry => (Int, Int) =
+      (e: io.spicelabs.cilantro.CertificateEntry) => (e.revision, e.certificateType)
+    val win32EntryIsPayload: io.spicelabs.cilantro.Win32Resource => io.spicelabs.cilantro.PayloadSource =
+      (r: io.spicelabs.cilantro.Win32Resource) => r
+    val debugEntryIsPayload: io.spicelabs.cilantro.DebugEntryData => io.spicelabs.cilantro.PayloadSource =
+      (d: io.spicelabs.cilantro.DebugEntryData) => d
+    val processStreamShape: (io.spicelabs.cilantro.PayloadSource, java.io.InputStream => String) => String =
+      (p, f) => p.processStream[String](f)
+    val sourceShape: io.spicelabs.cilantro.EmbeddedSourceFile => io.spicelabs.cilantro.PayloadSource =
+      (e: io.spicelabs.cilantro.EmbeddedSourceFile) => e
+    val sourceNameShape: io.spicelabs.cilantro.EmbeddedSourceFile => String =
+      (e: io.spicelabs.cilantro.EmbeddedSourceFile) => e.name
+    val pdbViewShape: io.spicelabs.cilantro.PDBView => Vector[io.spicelabs.cilantro.EmbeddedSourceFile] =
+      (v: io.spicelabs.cilantro.PDBView) => v.sources
 
     // The ascriptions above are the contract: if any of these shapes
     // change, this file stops compiling. Reference them so the compiler
@@ -57,5 +78,13 @@ class ContractTests extends munit.FunSuite {
     assertEquals(debugDataShape.hashCode() != 0, true)
     assertEquals(embeddedPdbShape.hashCode() != 0, true)
     assertEquals(securityDirShape.hashCode() != 0, true)
+    assertEquals(certificateEntryIsPayload.hashCode() != 0, true)
+    assertEquals(certificateEntryShape.hashCode() != 0, true)
+    assertEquals(win32EntryIsPayload.hashCode() != 0, true)
+    assertEquals(debugEntryIsPayload.hashCode() != 0, true)
+    assertEquals(processStreamShape.hashCode() != 0, true)
+    assertEquals(sourceShape.hashCode() != 0, true)
+    assertEquals(sourceNameShape.hashCode() != 0, true)
+    assertEquals(pdbViewShape.hashCode() != 0, true)
   }
 }

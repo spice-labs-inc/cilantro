@@ -51,19 +51,55 @@ class DebugEntryTests extends munit.FunSuite {
   private def sha256(bytes: Array[Byte]): String =
     java.security.MessageDigest.getInstance("SHA-256").digest(bytes).map(b => f"${b & 0xff}%02x").mkString
 
-  private def debugInfo(path: String): scala.util.Try[(Vector[io.spicelabs.cilantro.DebugEntryData], Option[io.spicelabs.cilantro.EmbeddedPdb])] = {
+  // Plan 2026_09_02 phase B (D-3): payloads are stream views
+  // (PayloadSource); tests read them through processStream.
+  private def payloadBytes(p: io.spicelabs.cilantro.PayloadSource): Array[Byte] =
+    p.processStream(in => in.readAllBytes())
+
+  // Plan 2026_09_02 phase D (D-6/D-13): the embedded PDB accessor
+  // takes the caller's spool directory and returns a PDBView whose
+  // sources stream. Runs inside a per-call temp dir, cleaned after.
+  private def debugInfo(path: String): scala.util.Try[(Vector[io.spicelabs.cilantro.DebugEntryData], Option[io.spicelabs.cilantro.PDBView])] = {
     AssemblyDefinition.readAssembly(path).flatMap { assembly =>
       assembly.mainModule match {
         case None => scala.util.Failure(new IllegalArgumentException("no main module"))
         case Some(module) =>
           scala.util.Try {
-            module.read((Vector.empty[io.spicelabs.cilantro.DebugEntryData], Option.empty[io.spicelabs.cilantro.EmbeddedPdb]), (_, reader: io.spicelabs.cilantro.MetadataReader) => {
-              val entries = reader.readDebugEntryData()
-              val b = Vector.newBuilder[io.spicelabs.cilantro.DebugEntryData]
-              entries.foreach(e => b += e)
-              (b.result(), reader.readEmbeddedPortablePdb())
-            })
+            val spool = java.nio.file.Files.createTempDirectory("cilantro-test-spool")
+            try {
+              module.read((Vector.empty[io.spicelabs.cilantro.DebugEntryData], Option.empty[io.spicelabs.cilantro.PDBView]), (_, reader: io.spicelabs.cilantro.MetadataReader) => {
+                val entries = reader.readDebugEntryData()
+                val b = Vector.newBuilder[io.spicelabs.cilantro.DebugEntryData]
+                entries.foreach(e => b += e)
+                val pdbOutcome = reader.readEmbeddedPortablePdb(Some(spool))
+                pdbOutcome match {
+                  case scala.util.Success(v) => (b.result(), v)
+                  case scala.util.Failure(e) => sys.error(e.toString)
+                }
+              })
+            } finally {
+              Helpers.deleteRecursively(spool)
+            }
           }
+      }
+    }
+  }
+
+  private object Helpers {
+    def deleteRecursively(dir: java.nio.file.Path): Unit = {
+      if (java.nio.file.Files.isDirectory(dir)) {
+        val stream = java.nio.file.Files.list(dir)
+        try {
+          stream.forEach(p => deleteRecursively(p))
+        } finally {
+          stream.close()
+        }
+      }
+      try {
+        java.nio.file.Files.deleteIfExists(dir)
+        ()
+      } catch {
+        case _: java.io.IOException => ()
       }
     }
   }
@@ -78,11 +114,11 @@ class DebugEntryTests extends munit.FunSuite {
         // Pinned against the GoldenDumper debug oracle (2026-08-28).
         assertEquals(entries.length, 3, "the size-0 deterministic entry is skipped")
         assertEquals(entries(0).entryType, 2) // CodeView
-        assertEquals(entries(0).blob.length, 47)
+        assertEquals(payloadBytes(entries(0)).length, 47)
         assertEquals(entries(1).entryType, 19) // PdbChecksum
-        assertEquals(entries(1).blob.length, 39)
+        assertEquals(payloadBytes(entries(1)).length, 39)
         assertEquals(entries(2).entryType, 17) // EmbeddedPortablePdb
-        assertEquals(entries(2).blob.length, 6888)
+        assertEquals(payloadBytes(entries(2)).length, 6888)
 
         pdb match {
           case Some(p) =>
@@ -90,7 +126,8 @@ class DebugEntryTests extends munit.FunSuite {
             val widget = p.sources.find(_.name.endsWith("Widget.cs")).getOrElse(fail("Widget.cs missing"))
             val repoSource = new String(
               java.nio.file.Files.readAllBytes(java.nio.file.Paths.get("../../scripts/fixtures/embedded/Widget.cs")), "UTF-8")
-            assertEquals(new String(widget.bytes, "UTF-8"), repoSource, "the embedded Widget.cs must equal the repo source byte-for-byte")
+            val widgetText = new String(widget.processStream(in => in.readAllBytes()), "UTF-8")
+            assertEquals(widgetText, repoSource, "the embedded Widget.cs must equal the repo source byte-for-byte")
           case None => fail("the fixture must carry an embedded PDB")
         }
       case Failure(t) => fail(s"the fixture must read: $t")

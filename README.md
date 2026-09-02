@@ -16,7 +16,7 @@ oracle run in Docker).
 
 ```
 cd src/cilantro
-sbt -batch test          # fast suite: 165 tests, no Slow tests
+sbt -batch test          # fast suite: 291 tests, no Slow tests
 ```
 
 - The fast suite is the default regression gate: model accessors,

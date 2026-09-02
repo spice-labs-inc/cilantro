@@ -34,8 +34,10 @@
 //   - Entry = i4(name-or-id) + i4(target); target high bit = subdir;
 //     subdir targets are tree-relative, data offsets are
 //     dirRva(0x2500)-relative (treeBaseRaw = 0x660 in the builder).
-//   - The cap constants: maxWin32TotalLeaves = 1,000,000,
-//     maxWin32TotalBytes = 512 MiB.
+//   - The cap constants (plan 2026_09_02 phase B, D-10): the object
+//     guards — per-directory entries 1,000,000, total leaves
+//     1,000,000 — survive; the aggregate and per-leaf BYTE budgets
+//     (512 MiB) are gone: leaves are extent-checked zero-copy slices.
 
 package io.spicelabs.cilantro.cil
 
@@ -83,6 +85,33 @@ class Win32ResourceAggregateTests extends munit.FunSuite {
   }
 
   private val dirRva = 0x2500
+
+  // Plan 2026_09_02 phase B (D-3): leaf payloads are stream views
+  // (PayloadSource). Stream helpers count/hash without materializing
+  // (large leaves are extent-only now).
+  private def payloadLength(p: io.spicelabs.cilantro.PayloadSource): Long =
+    p.processStream { in =>
+      var count = 0L
+      val b = new Array[Byte](65536)
+      var n = in.read(b)
+      while (n >= 0) {
+        if (n > 0) count += n
+        n = in.read(b)
+      }
+      count
+    }
+
+  private def payloadSha256(p: io.spicelabs.cilantro.PayloadSource): String =
+    p.processStream { in =>
+      val md = java.security.MessageDigest.getInstance("SHA-256")
+      val buf = new Array[Byte](65536)
+      var n = in.read(buf)
+      while (n >= 0) {
+        if (n > 0) md.update(buf, 0, n)
+        n = in.read(buf)
+      }
+      md.digest().map(b => f"${b & 0xff}%02x").mkString
+    }
 
   // Cursor-based tree builder: root(ids=typeCount) -> one aliased name
   // dir -> one aliased language dir -> one shared data entry (1-byte
@@ -223,7 +252,7 @@ class Win32ResourceAggregateTests extends munit.FunSuite {
       readResources(path) match {
         case Success(resources) =>
           assertEquals(resources.length, 65535, "each language entry emits exactly one leaf")
-          assertEquals(resources.map(_.blob.length).distinct.toVector, Vector(1), "all leaves share the 1-byte blob")
+          assertEquals(resources.map(r => payloadLength(r)).distinct.toVector, Vector(1L), "all leaves share the 1-byte blob")
         case Failure(t) => fail(s"the aliased tree must walk: $t")
       }
     }
@@ -246,11 +275,15 @@ class Win32ResourceAggregateTests extends munit.FunSuite {
     }
   }
 
-  test("H4-03: two 512 MiB leaves fail the aggregate byte cap before the second read") {
+  test("H4-03: two 512 MiB leaves now enumerate as extent-only slices (D-10)") {
+    // Plan 2026_09_02 phase B (D-10): the aggregate BYTE budget is
+    // gone with the array path — a leaf's declared size is checked
+    // only against the file extent, so two in-file 512 MiB leaves
+    // both enumerate as zero-copy slices. (The full 512 MiB read is
+    // pinned under a bounded heap by SliceViewTests CP-3d; here the
+    // enumeration + the slice extents are the assertion.)
     // Tree: root -> name dir -> language dir(2 entries) -> data entry 1
-    // (1 byte) + data entry 2 (claims 512 MiB). The per-blob checks pass
-    // (size == cap, offset + size <= sparse file size); the aggregate
-    // check must fail on the second leaf's size, before any big read.
+    // (1 byte) + data entry 2 (claims 512 MiB, sparsely extended).
     val rootSize = 24
     val nameDirOff = rootSize
     val langDirOff = nameDirOff + 24
@@ -278,8 +311,8 @@ class Win32ResourceAggregateTests extends munit.FunSuite {
     out.close()
     try {
       // Extend the file sparsely so the 512 MiB claim passes the
-      // per-blob extent check (blobRaw + size <= fileSize) without
-      // physically writing 512 MiB.
+      // extent check (blobRaw + size <= fileSize) without physically
+      // writing 512 MiB.
       val raf = new RandomAccessFile(file, "rw")
       try {
         val treeBaseRaw = 0x160 + (dirRva - 0x2000) // builder bodyOffset + dir offset
@@ -289,8 +322,14 @@ class Win32ResourceAggregateTests extends munit.FunSuite {
         raf.close()
       }
       readResources(file.getAbsolutePath) match {
-        case Success(_) => fail("two 512 MiB leaves must exceed the aggregate byte cap")
-        case Failure(_) => ()
+        case Success(resources) =>
+          assertEquals(resources.length, 2, "both in-file leaves must enumerate")
+          assertEquals(payloadLength(resources(0)), 1L, "the 1-byte leaf")
+          resources(1).processStream { in =>
+            assertEquals(in.available(), 0x20000000, "the 512 MiB leaf is a full slice")
+            assertEquals(in.read(), 0, "the sparse region reads as zeros")
+          }
+        case Failure(t) => fail(s"two in-file 512 MiB leaves must enumerate: $t")
       }
     } finally {
       file.delete()
@@ -305,10 +344,9 @@ class Win32ResourceAggregateTests extends munit.FunSuite {
         assertEquals(r.typeNameOrId, "RT_VERSION")
         assertEquals(r.nameId, 1)
         assertEquals(r.language, 0)
-        assertEquals(r.blob.length, 1110)
-        val sha = java.security.MessageDigest.getInstance("SHA-256").digest(r.blob).map(b => f"${b & 0xff}%02x").mkString
+        assertEquals(payloadLength(r), 1110L)
         assertEquals(
-          sha,
+          payloadSha256(r),
           "5bd2a0f900755c12a17b123b78a6280d22f4cdaad481f44c490661132f928fcc",
           "the pinned RT_VERSION blob sha256"
         )
@@ -316,7 +354,11 @@ class Win32ResourceAggregateTests extends munit.FunSuite {
     }
   }
 
-  test("H4-05 (Slow): corpus leaf and byte totals stay below the caps".tag(Slow)) {
+  test("H4-05 (Slow): corpus leaf counts stay below the count caps".tag(Slow)) {
+    // Plan 2026_09_02 phase B (D-10): the aggregate byte-total
+    // assertion is gone (byte budgets died with the array path); the
+    // object guards are asserted. Leaf byte totals are reported only
+    // (informational — leaves are extent-only slices now).
     import org.json4s._
     val manifest = org.json4s.native.JsonMethods.parse(
       new String(java.nio.file.Files.readAllBytes(corpusRoot.resolve("manifest.json")), "UTF-8"))
@@ -333,7 +375,7 @@ class Win32ResourceAggregateTests extends munit.FunSuite {
               if (resources.nonEmpty) {
                 withResources += 1
                 maxLeaves = Math.max(maxLeaves, resources.length.toLong)
-                maxBytes = Math.max(maxBytes, resources.map(_.blob.length.toLong).sum)
+                maxBytes = Math.max(maxBytes, resources.map(r => payloadLength(r)).sum)
               }
             case Failure(t) => fail(s"$rel resource walk threw: $t")
           }
@@ -342,6 +384,6 @@ class Win32ResourceAggregateTests extends munit.FunSuite {
     }
     assert(withResources >= 140, s"nearly every corpus assembly carries resources, got $withResources")
     assert(maxLeaves < 1000000L, s"corpus max leaves $maxLeaves must stay below the leaf cap")
-    assert(maxBytes < 512L * 1024 * 1024, s"corpus max bytes $maxBytes must stay below the byte cap")
+    println(s"H4-05 informational: corpus max leaf bytes = $maxBytes")
   }
 }
