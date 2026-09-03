@@ -1,9 +1,0 @@
-/work/scripts/fixtures/x64/bin/Release/net8.0/X64Fixture.deps.json
-/work/scripts/fixtures/x64/bin/Release/net8.0/X64Fixture.dll
-/work/scripts/fixtures/x64/obj/Release/net8.0/X64Fixture.GeneratedMSBuildEditorConfig.editorconfig
-/work/scripts/fixtures/x64/obj/Release/net8.0/X64Fixture.AssemblyInfoInputs.cache
-/work/scripts/fixtures/x64/obj/Release/net8.0/X64Fixture.AssemblyInfo.cs
-/work/scripts/fixtures/x64/obj/Release/net8.0/X64Fixture.csproj.CoreCompileInputs.cache
-/work/scripts/fixtures/x64/obj/Release/net8.0/X64Fixture.dll
-/work/scripts/fixtures/x64/obj/Release/net8.0/refint/X64Fixture.dll
-/work/scripts/fixtures/x64/obj/Release/net8.0/ref/X64Fixture.dll

@@ -360,4 +360,20 @@ class DotnetProbeTests extends munit.FunSuite {
     g.close()
     out.toByteArray
   }
+
+  test("CP-1g: the probe creates no temp files — forked with an unusable tmpdir") {
+    // Plan 2026_09_02 (CP-1 mapping): no D1 test observes temp-file
+    // creation, so this behavioral test fills the gap. The child runs
+    // the probe with -Djava.io.tmpdir set to a nonexistent directory;
+    // any temp-file creation would throw IOException, the probe would
+    // fail closed (false), and the child's TRUE verdict would not
+    // print. A genuine assembly must still probe TRUE.
+    val dll = new File("../../test-files/smoke/Smoke.dll").getAbsolutePath
+    val (code, outText) = io.spicelabs.cilantro.testutil.ForkSupport.runForked(
+      List("probe", dll),
+      extraJvmArgs = List("-Djava.io.tmpdir=/nonexistent-cilantro-tmpdir")
+    )
+    assertEquals(code, 0, s"the child must exit cleanly; output: $outText")
+    assert(outText.contains("TRUE"), s"the probe must classify under an unusable tmpdir: $outText")
+  }
 }

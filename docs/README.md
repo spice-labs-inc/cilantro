@@ -9,9 +9,10 @@ Table of contents for the human and LLM documentation.
 | [README.md](../README.md) | Project readme (root) |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | How cilantro reads a .NET assembly; the model; pinned reader semantics; security posture; corpus provisioning gate (ADR-0009) |
 | [OPERATIONS.md](OPERATIONS.md) | Getting started, suites, corpus operations (provision, fetch, golden regeneration), parity-failure interpretation, troubleshooting |
-| [GR_INTEGRATION.md](GR_INTEGRATION.md) | Golden-helper integration |
+| [GR_INTEGRATION.md](GR_INTEGRATION.md) | Goat Rodeo handoff: probe → walk → wrap over streams (ADR-0014) |
 | [PUBLISHING.md](PUBLISHING.md) | Publishing |
 | [adr/0009_corpus_ground_truth_and_on_demand_provisioning.md](adr/0009_corpus_ground_truth_and_on_demand_provisioning.md) | ADR-0009: committed ground truth, on-demand cache provisioning |
+| [plans/adr/ADR-0014_streaming_assembly_walk.md](../plans/adr/ADR-0014_streaming_assembly_walk.md) | ADR-0014: the streaming entry model (probe → walk → wrap) |
 
 ## LLM docs
 

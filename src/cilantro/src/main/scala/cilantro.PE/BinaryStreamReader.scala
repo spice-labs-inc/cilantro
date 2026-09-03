@@ -72,4 +72,17 @@ class BinaryStreamReader(protected val fileInputStream: FileInputStream) {
     def readDataDirectory() = {
         DataDirectory(readInt32(), readInt32())
     }
+
+    // Streaming slice view (plan 2026_09_02, phase B): a bounded,
+    // zero-copy PayloadSource over [position, position + length) of
+    // the mapped file. The declared length must fit the mapped
+    // extent or this refuses with DataFormatException BEFORE any
+    // allocation or stream exists (CP-3). The buffer position is not
+    // advanced (the slice carries its own offset). Scope: internal
+    // seam for the accessors, the walk, and the in-repo test
+    // packages; not part of the frozen public surface (CP-7).
+    private[cilantro] def payloadSlice(length: Int) = {
+        val pos = byteBuffer.position()
+        MappedSliceSource(byteBuffer, pos, length)
+    }
 }

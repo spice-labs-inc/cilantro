@@ -16,7 +16,7 @@ narrative: README.md.
 
 ## Commands (from `src/cilantro/`)
 
-- Fast suite: `sbt -batch test` — 165 tests, Slow-tagged excluded
+- Fast suite: `sbt -batch test` — 291 tests (fast), Slow-tagged excluded
   (build.sbt: `Test / testOptions += Tests.Argument("--exclude-tags=Slow")`).
 - Slow suite: `sbt -batch 'set Test / testOptions := Seq.empty' "testOnly io.spicelabs.cilantro.cil.ParityHarnessTests io.spicelabs.cilantro.cil.CorpusPropertyTests"` — 7 tests (2 parity + 5 corpus properties).
 - Warning gate: `sbt -batch clean test` → 0 warnings, 0 errors.

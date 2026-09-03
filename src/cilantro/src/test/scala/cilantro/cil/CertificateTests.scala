@@ -84,8 +84,23 @@ class CertificateTests extends munit.FunSuite {
     }
   }
 
-  private def sha256(bytes: Array[Byte]): String =
-    java.security.MessageDigest.getInstance("SHA-256").digest(bytes).map(b => f"${b & 0xff}%02x").mkString
+  // Plan 2026_09_02 phase B (D-3): payloads are stream views
+  // (PayloadSource); the pinned content is read through
+  // processStream and hashed.
+  private def payloadSha256(p: io.spicelabs.cilantro.PayloadSource): String =
+    p.processStream { in =>
+      val md = java.security.MessageDigest.getInstance("SHA-256")
+      val buf = new Array[Byte](65536)
+      var n = in.read(buf)
+      while (n >= 0) {
+        if (n > 0) md.update(buf, 0, n)
+        n = in.read(buf)
+      }
+      md.digest().map(b => f"${b & 0xff}%02x").mkString
+    }
+
+  private def payloadBytes(p: io.spicelabs.cilantro.PayloadSource): Array[Byte] =
+    p.processStream(in => in.readAllBytes())
 
   test("C5-03a: the pinned signed assembly's certificate table matches pinned constants") {
     readEntries(corpusRoot.resolve("bin/Newtonsoft.Json/12.0.3/net20/Newtonsoft.Json.dll").toString) match {
@@ -94,7 +109,7 @@ class CertificateTests extends munit.FunSuite {
         assertEquals(entries(0).revision, 0x0200, "the signature revision is WIN_CERT_REVISION_2_0")
         assertEquals(entries(0).certificateType, 2, "PKCS_SIGNED_DATA")
         assertEquals(
-          sha256(entries(0).blob),
+          payloadSha256(entries(0)),
           "0f8fc2643529f9d670bcccc427a83cf29999e94c6f4d568676f8bfc0329dac9c",
           "the pinned signature blob sha256 (overlay table, VA == file offset)"
         )
@@ -123,10 +138,13 @@ class CertificateTests extends munit.FunSuite {
   }
 
   test("C5-03c: an entry-count bomb fails cleanly") {
-    val table = (1 to 1025).flatMap(_ => winCert(8, 0x0200, 2)).toArray
+    // Plan 2026_09_02 phase B (D-10): the entry-count guard is now
+    // 1,000,000; a table claiming one entry past the cap refuses
+    // before the per-entry loop can build a huge result.
+    val table = (1 to 1000001).flatMap(_ => winCert(8, 0x0200, 2)).toArray
     withPe(table) { path =>
       readEntries(path) match {
-        case Success(_) => fail("1025 entries must exceed the count cap")
+        case Success(_) => fail("1,000,001 entries must exceed the count cap")
         case Failure(_) => ()
       }
     }

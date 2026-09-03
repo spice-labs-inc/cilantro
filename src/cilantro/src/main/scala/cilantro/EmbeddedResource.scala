@@ -90,5 +90,10 @@ class EmbeddedResource(name: String, attributes: Int) extends Resource(name, att
     }
   }
 
+  // Internal seam (plan 2026_09_02, phase B): the manifest offset of
+  // an offset-backed resource, for the zero-copy managed-resource
+  // payload accessor. Not part of the frozen public surface.
+  private[cilantro] def resourceOffset: Option[Int] = _offset
+
     override def resourceType = ResourceType.embedded
 }

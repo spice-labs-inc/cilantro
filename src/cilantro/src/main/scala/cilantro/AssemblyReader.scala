@@ -15,7 +15,6 @@ package io.spicelabs.cilantro
 import io.spicelabs.cilantro.PE.ByteBuffer
 import io.spicelabs.cilantro.PE.Image
 import io.spicelabs.cilantro.PE.BinaryStreamReader
-import io.spicelabs.cilantro.PE.ImageReader
 import io.spicelabs.cilantro.metadata.CodedIndex
 import io.spicelabs.cilantro.metadata.Table
 import scala.collection.mutable.ArrayBuffer
@@ -26,7 +25,7 @@ import io.spicelabs.cilantro.cil.PortablePdbReader
 import io.spicelabs.cilantro.cil.DefaultSymbolReaderProvider
 import javax.naming.OperationNotSupportedException
 import java.util.zip.DataFormatException
-import java.nio.file.Paths
+import java.nio.file.{Path, Paths}
 import io.spicelabs.cilantro.metadata.Row3
 import io.spicelabs.cilantro.metadata.ElementType
 import io.spicelabs.cilantro.metadata.Row2
@@ -789,20 +788,45 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
             case Some(start) => readManagedResourceLength(start)
         }
     }
-    private val maxCertificateEntries = 1024
 
-    private val maxDebugEntryData = ImageReader.MaxDebugDataSize
+    // Streaming view of a managed-resource payload (plan 2026_09_02,
+    // phase B): the same offset resolution and extent refusals as
+    // getManagedResource, but zero-copy — the blob is never
+    // materialized (CP-3; ADR-0014 D-10). The walk's EmbeddedResource
+    // entries and the phase-B slice tests consume this seam; the
+    // frozen public accessors (EmbeddedResource.resourceData /
+    // resourceLength / getResourceStream) are unchanged.
+    private[cilantro] def managedResourcePayload(offset: Int): PayloadSource = {
+        managedResourceBlobStart(offset) match {
+            case None => throw DataFormatException()
+            case Some(start) =>
+                val declared = readManagedResourceLength(start)
+                image.stream match {
+                    case None => throw DataFormatException()
+                    case Some(disposable) =>
+                        val reader = BinaryStreamReader(disposable.value)
+                        reader.moveTo(start + 4)
+                        reader.payloadSlice(declared)
+                }
+        }
+    }
+    private val maxCertificateEntries = 1000000
 
-    // Debug-directory data exposure (plan 13, C5-05): the directory
-    // entries already parse during the header walk; this returns each
-    // entry's pointed-to data blob (CodeView, embedded PDB, ...), raw,
-    // bounds-checked against the file.
+    // Debug-directory data exposure (plan 13, C5-05; plan 2026_09_02,
+    // phase B): the directory entries already parse during the header
+    // walk; this returns each entry's pointed-to data (CodeView,
+    // embedded PDB, ...) as a zero-copy slice payload (D-10), raw,
+    // bounds-checked against the file. Out-of-range entries are
+    // skipped exactly as before.
     def readDebugEntryData(): ArrayBuffer[DebugEntryData] = {
         val entries = ArrayBuffer[DebugEntryData]()
         image.debugHeader.foreach { header =>
             header.entties.foreach { entry =>
                 val dir = entry.directory
-                if (dir.sizeOfData > 0 && dir.sizeOfData < maxDebugEntryData) {
+                // D-9/D-10: no byte budget on debug payloads — the
+                // header walk already validated the extent; zero-size
+                // entries are absent.
+                if (dir.sizeOfData > 0) {
                     image.stream.foreach { disposable =>
                         val fileSize = disposable.value.getChannel.size()
                         val raw = if (dir.pointerToRawData > 0) {
@@ -814,7 +838,7 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
                         if (raw >= 0 && raw.toLong + dir.sizeOfData.toLong <= fileSize) {
                             val reader = BinaryStreamReader(disposable.value)
                             reader.moveTo(raw)
-                            entries.addOne(DebugEntryData(dir.`type`.value, reader.readBytes(dir.sizeOfData)))
+                            entries.addOne(DebugEntryData(dir.`type`.value, reader.payloadSlice(dir.sizeOfData)))
                         }
                     }
                 }
@@ -823,383 +847,68 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         entries
     }
 
-    // Embedded portable PDB walk (plan 13, C5-05): the type-17 debug
-    // entry's blob is a portable PDB (a metadata root); this walks its
-    // Document + CustomDebugInformation tables and extracts the
-    // EmbeddedSource documents (named source files, deflate-expanded).
-    // The deeper symbol machinery (sequence points, scopes) stays cut
-    // (ADR-0008 as amended by ADR-0011). Hostile blobs fail cleanly.
-    def readEmbeddedPortablePdb(): Option[EmbeddedPdb] = {
-        val embeddedSourceKind: Array[Byte] = Array(
-            0x1b.toByte, 0x57.toByte, 0x8a.toByte, 0x0e.toByte, 0x26.toByte, 0x69.toByte, 0x6e.toByte, 0x46.toByte,
-            0xb4.toByte, 0xad.toByte, 0x8a.toByte, 0xb0.toByte, 0x46.toByte, 0x11.toByte, 0xf5.toByte, 0xfe.toByte
-        )
+    // Embedded portable PDB (plan 2026_09_02, phase D; ADR-0014
+    // D-6/D-12/D-13): the type-17 debug entry's payload is an MPDB
+    // envelope (magic + declared uncompressed size + a raw deflate of
+    // the BSJB metadata root). It must be decompressed to be walked
+    // at all, and under the streaming design the decompression goes
+    // to a scratch file the CALLER's spool directory provides:
+    //
+    //   readEmbeddedPortablePdb(spoolDir) -> Try[Option[PDBView]]
+    //     Try Failure   = hostile refusal (declaration >= 2^31,
+    //                    size mismatch, IO) — never silent;
+    //     None          = absent: no type-17 entry, or its payload is
+    //                    not an MPDB envelope (benign, like the old
+    //                    not-a-PDB None);
+    //     Some(PDBView) = the spooled view; sources stream lazily;
+    //                    close() releases the map and deletes the
+    //                    scratch file cilantro created (the spool
+    //                    DIRECTORY is the caller's — never deleted).
+    //   spoolDir = None -> None (no in-memory fallback: one would
+    //   need exactly the byte budget this design removes).
+    def readEmbeddedPortablePdb(spoolDir: Option[Path]): scala.util.Try[Option[PDBView]] = scala.util.Try {
+        spoolDir match {
+            case None => None
+            case Some(dir) =>
+                if (!java.nio.file.Files.isDirectory(dir)) {
+                    throw DataFormatException()
+                }
+                embeddedPdbPayload() match {
+                    case None => None
+                    case Some(payload) => PortablePdbSpool.spoolAndParse(payload, dir)
+                }
+        }
+    }
+
+    // The type-17 debug entry's data as a slice payload (first match,
+    // the pre-spool rule), or None when absent.
+    private def embeddedPdbPayload(): Option[PayloadSource] = {
         image.debugHeader.flatMap { header =>
             header.entties.find(_.directory.`type` == io.spicelabs.cilantro.cil.ImageDebugType.embeddedPortablePdb).flatMap { entry =>
-                // The embedded-PDB blob is "MPDB" + u32 uncompressed size +
-                // a raw (no zlib header) deflate stream of the BSJB
-                // metadata root.
-                val data = entry.data
-                if (data.length < 12 || (data(0) & 0xff) != 'M' || (data(1) & 0xff) != 'P' || (data(2) & 0xff) != 'D' || (data(3) & 0xff) != 'B') {
-                    None
-                }
-                else {
-                    val uncompressed = u32le(data, 4)
-                    if (uncompressed <= 0 || uncompressed > maxDebugEntryData) {
-                        None
+                val dir = entry.directory
+                image.stream.flatMap { disposable =>
+                    val fileSize = disposable.value.getChannel.size()
+                    val raw = if (dir.pointerToRawData > 0) {
+                        dir.pointerToRawData
                     }
                     else {
-                        val payload = java.util.Arrays.copyOfRange(data, 8, data.length)
-                        rawInflate(payload, uncompressed.toLong).flatMap { root =>
-                            if (root.length != uncompressed) {
-                                None
-                            }
-                            else {
-                                parseEmbeddedPdb(root, embeddedSourceKind)
-                            }
-                        }
+                        image.resolveVirtualAddress(dir.addressOfRawData).getOrElse(-1)
+                    }
+                    if (raw >= 0 && dir.sizeOfData > 0 && raw.toLong + dir.sizeOfData.toLong <= fileSize) {
+                        val reader = BinaryStreamReader(disposable.value)
+                        reader.moveTo(raw)
+                        Some(reader.payloadSlice(dir.sizeOfData))
+                    }
+                    else {
+                        None
                     }
                 }
             }
         }
     }
 
-    // H3 (ADR-0013): inflate with a hard output cap — the output is
-    // checked DURING inflation so a hostile deflate stream cannot grow
-    // unboundedly (declared sizes are only compared afterwards, and
-    // embedded sources have no declared size at all). Failing the cap
-    // returns None — the "not present" shape, never an exception.
-    // private[cilantro] is the test seam for the cap boundary tests.
-    private[cilantro] def rawInflate(bytes: Array[Byte], maxOutput: Long): Option[Array[Byte]] = {
-        val inflater = java.util.zip.Inflater(true)
-        try {
-            inflater.setInput(bytes)
-            val out = java.io.ByteArrayOutputStream()
-            val buffer = Array.ofDim[Byte](8192)
-            while (!inflater.finished()) {
-                val n = inflater.inflate(buffer)
-                if (n <= 0) {
-                    if (inflater.needsInput() || inflater.needsDictionary()) {
-                        return None
-                    }
-                }
-                else {
-                    out.write(buffer, 0, n)
-                    if (out.size().toLong > maxOutput) {
-                        return None
-                    }
-                }
-            }
-            Some(out.toByteArray)
-        }
-        finally {
-            inflater.end()
-        }
-    }
-
-    private def parseEmbeddedPdb(blob: Array[Byte], embeddedSourceKind: Array[Byte]): Option[EmbeddedPdb] = {
-        if (blob.length < 32) {
-            return None
-        }
-        def fail(): None.type = None
-        // Metadata root: BSJB + version + stream headers.
-        if ((blob(0) & 0xff) != 'B' || (blob(1) & 0xff) != 'S' || (blob(2) & 0xff) != 'J' || (blob(3) & 0xff) != 'B') {
-            return None
-        }
-        val versionLength = u32le(blob, 12)
-        var pos = 16 + versionLength
-        pos = (pos + 3) & ~3
-        if (pos + 4 > blob.length) {
-            return None
-        }
-        val streamCount = u16le(blob, pos + 2)
-        pos += 4
-        var tables: Option[(Array[Byte], Long, Int)] = None
-        var strings: Option[Array[Byte]] = None
-        var guids: Option[Array[Byte]] = None
-        var blobs: Option[Array[Byte]] = None
-        var i = 0
-        while (i < streamCount) {
-            if (pos + 8 > blob.length) {
-                return None
-            }
-            val offset = u32le(blob, pos)
-            val size = u32le(blob, pos + 4)
-            var namePos = pos + 8
-            val nameStart = namePos
-            while (namePos < blob.length && blob(namePos) != 0) {
-                namePos += 1
-            }
-            val name = new String(blob, nameStart, namePos - nameStart, "UTF-8")
-            namePos += 1
-            pos = (namePos + 3) & ~3
-            val streamData = if (offset.toLong + size.toLong <= blob.length) {
-                java.util.Arrays.copyOfRange(blob, offset, offset + size)
-            }
-            else {
-                return None
-            }
-            name match {
-                case "#~" | "#-" => tables = Some((streamData, 0L, 0))
-                case "#Strings" => strings = Some(streamData)
-                case "#GUID" => guids = Some(streamData)
-                case "#Blob" => blobs = Some(streamData)
-                case _ => ()
-            }
-            i += 1
-        }
-        (tables, strings, guids, blobs) match {
-            case (Some((tablesData, _, _)), Some(stringsData), Some(guidsData), Some(blobsData)) =>
-                parseEmbeddedPdbTables(tablesData, stringsData, guidsData, blobsData, embeddedSourceKind)
-            case _ => None
-        }
-    }
-
-    private def u16le(bytes: Array[Byte], offset: Int): Int = {
-        (bytes(offset) & 0xff) | ((bytes(offset + 1) & 0xff) << 8)
-    }
-
-    private def u32le(bytes: Array[Byte], offset: Int): Int = {
-        (bytes(offset) & 0xff) | ((bytes(offset + 1) & 0xff) << 8) |
-          ((bytes(offset + 2) & 0xff) << 16) | ((bytes(offset + 3) & 0xff) << 24)
-    }
-
-    private def parseEmbeddedPdbTables(
-        tablesData: Array[Byte],
-        stringsData: Array[Byte],
-        guidsData: Array[Byte],
-        blobsData: Array[Byte],
-        embeddedSourceKind: Array[Byte]
-    ): Option[EmbeddedPdb] = {
-        if (tablesData.length < 24) {
-            return None
-        }
-        val heapSizes = tablesData(6) & 0xff
-        val strIdxSize = if ((heapSizes & 0x1) != 0) 4 else 2
-        val guidIdxSize = if ((heapSizes & 0x2) != 0) 4 else 2
-        val blobIdxSize = if ((heapSizes & 0x4) != 0) 4 else 2
-        val valid = u64le(tablesData, 8)
-        val documentTable = 0x30
-        val customDebugTable = 0x37
-        if ((valid & (1L << documentTable)) == 0 || (valid & (1L << customDebugTable)) == 0) {
-            return None
-        }
-        // Row counts follow the 24-byte header, in table-id order for the
-        // valid tables; the PDB table ids run 0x30..0x37.
-        val counts = HashMap[Int, Int]()
-        var pos = 24
-        var tableId = 0
-        while (tableId < 64) {
-            if ((valid & (1L << tableId)) != 0) {
-                if (pos + 4 > tablesData.length) {
-                    return None
-                }
-                val count = u32le(tablesData, pos)
-                if (count < 0 || count > maxWin32EntriesPerDirectory) {
-                    return None
-                }
-                counts.put(tableId, count)
-                pos += 4
-            }
-            tableId += 1
-        }
-        // Row offsets, in table-id order.
-        var documentOffset = -1
-        var documentCount = 0
-        var customOffset = -1
-        var customCount = 0
-        var tableId2 = 0
-        while (tableId2 < 64) {
-            counts.get(tableId2).foreach { count =>
-                if (tableId2 == documentTable) {
-                    documentOffset = pos
-                    documentCount = count
-                }
-                else if (tableId2 == customDebugTable) {
-                    customOffset = pos
-                    customCount = count
-                }
-                // Portable-PDB table row sizes (2-byte indexes; the 4-byte
-                // variants only appear for huge tables, which the row-count
-                // cap rules out).
-                val rowSize = tableId2 match {
-                    case 0x30 => blobIdxSize + guidIdxSize + blobIdxSize + guidIdxSize // Document
-                    case 0x31 => 2 + blobIdxSize // MethodDebugInformation: Document + SequencePoints
-                    case 0x32 => 2 + 2 + 2 + 2 + 4 + 4 // LocalScope
-                    case 0x33 => 2 + 2 + strIdxSize // LocalVariable
-                    case 0x34 => strIdxSize + blobIdxSize // LocalConstant
-                    case 0x35 => 2 + blobIdxSize // ImportScope
-                    case 0x36 => 2 + 2 // StateMachineMethod
-                    case 0x37 => 2 + guidIdxSize + blobIdxSize // CustomDebugInformation (2-byte coded parent)
-                    case _ => 4
-                }
-                pos += rowSize * count
-            }
-            tableId2 += 1
-        }
-        if (documentOffset < 0 || customOffset < 0) {
-            return None
-        }
-        def readIndex(size: Int, at: Int): Int = {
-            if (size == 4) u32le(tablesData, at) else u16le(tablesData, at)
-        }
-        def readBlobBytesAt(index: Int, maxLen: Int): Option[Array[Byte]] = {
-            if (index <= 0 || index.toLong >= blobsData.length) {
-                return None
-            }
-            val first = blobsData(index) & 0xff
-            if (first < 0x80) {
-                if (first > maxLen || index + 1 + first > blobsData.length) {
-                    return None
-                }
-                Some(java.util.Arrays.copyOfRange(blobsData, index + 1, index + 1 + first))
-            }
-            else {
-                if (index + 1 >= blobsData.length) {
-                    return None
-                }
-                val length = ((first & 0x7f) << 8) | (blobsData(index + 1) & 0xff)
-                if (length > maxLen || index + 2 + length > blobsData.length) {
-                    return None
-                }
-                Some(java.util.Arrays.copyOfRange(blobsData, index + 2, index + 2 + length))
-            }
-        }
-        // Cecil's ReadDocumentName: the name blob is [separator byte]
-        // [compressed-uint parts], each part a blob-heap index whose
-        // entry is a compressed-length-prefixed UTF8 string; a zero part
-        // is an empty path segment (and still advances the separator
-        // logic).
-        // The portable PDB stores guid-heap indexes as 1-based entry
-        // ordinals (16 bytes per entry), unlike the assembly tables'
-        // byte-offset convention.
-        def guidAt(index: Int): Boolean = {
-            val base = (index - 1) * 16
-            if (index <= 0 || base.toLong + 16 > guidsData.length) {
-                return false
-            }
-            var i = 0
-            while (i < 16) {
-                if (guidsData(base + i) != embeddedSourceKind(i)) {
-                    return false
-                }
-                i += 1
-            }
-            true
-        }
-        def readDocumentName(nameIndex: Int): Option[String] = {
-            readBlobBytesAt(nameIndex, 1 << 20).flatMap { nameBlob =>
-                if (nameBlob.length < 1) {
-                    None
-                }
-                else {
-                    var keepGoing = true
-                    var failed = false
-                    val separator = (nameBlob(0) & 0xff).toChar
-                    val builder = StringBuilder()
-                    var p = 1
-                    var partIndex = 0
-                    while (p < nameBlob.length && keepGoing && !failed) {
-                        val first = nameBlob(p) & 0xff
-                        var value = 0
-                        if (first < 0x80) {
-                            value = first
-                            p += 1
-                        }
-                        else {
-                            if (p + 1 >= nameBlob.length) {
-                                failed = true
-                                value = 0
-                            }
-                            else {
-                                value = ((first & 0x7f) << 8) | (nameBlob(p + 1) & 0xff)
-                                p += 2
-                            }
-                        }
-                        if (partIndex > 0 && separator != 0) {
-                            builder.append(separator)
-                        }
-                        if (value != 0) {
-                            readBlobBytesAt(value, 1 << 20) match {
-                                case Some(partBytes) => builder.append(new String(partBytes, "UTF-8"))
-                                case None => failed = true
-                            }
-                        }
-                        partIndex += 1
-                    }
-                    if (failed) None else Some(builder.toString)
-                }
-            }
-        }
-        val unusedMarkerAfterDocumentName = 0
-        def documentName(documentRow: Int): Option[String] = {
-            val nameIndex = readIndex(blobIdxSize, documentRow)
-            readDocumentName(nameIndex)
-        }
-        val sources = ArrayBuffer[EmbeddedSourceFile]()
-        val customRowSize = 2 + guidIdxSize + blobIdxSize
-        var row = 0
-        while (row < customCount) {
-            val rowAt = customOffset + row * customRowSize
-            if (rowAt + customRowSize > tablesData.length) {
-                return None
-            }
-            val parentCoded = readIndex(2, rowAt)
-            val kindIndex = readIndex(guidIdxSize, rowAt + 2)
-            val valueIndex = readIndex(blobIdxSize, rowAt + 2 + guidIdxSize)
-            if (guidAt(kindIndex)) {
-                val parentTag = parentCoded & 0x1f
-                val parentRid = parentCoded >>> 5
-                if (parentTag == 22 && parentRid >= 1 && parentRid <= documentCount) {
-                    val documentRow = documentOffset + (parentRid - 1) * (blobIdxSize + guidIdxSize + blobIdxSize + guidIdxSize)
-                    documentName(documentRow).foreach { name =>
-                        // The value blob: [compressed length][payload], the
-                        // payload [format u32][uncompressed u32][raw deflate
-                        // or raw bytes].
-                        readBlobBytesAt(valueIndex, 1 << 24) match {
-                            case Some(payload) if payload.length >= 8 =>
-                                // Cecil's ReadEmbeddedSourceDebugInformation:
-                                // [i32 format][the payload]; the payload is
-                                // sig_length - 4 bytes, and the format (when
-                                // positive) is the DECOMPRESSED length, not
-                                // a separate field.
-                                val format = u32le(payload, 0)
-                                val rest = java.util.Arrays.copyOfRange(payload, 4, payload.length)
-                                val bytes = if (format == 0) {
-                                    Some(rest)
-                                }
-                                else {
-                                    // H3: cap at the declared uncompressed size, never
-                                    // beyond the absolute ceiling.
-                                    rawInflate(rest, Math.min(format.toLong, maxDebugEntryData.toLong))
-                                }
-                                bytes.foreach { b =>
-                                    sources.addOne(EmbeddedSourceFile(name, b))
-                                }
-                            case _ => ()
-                        }
-                    }
-                }
-            }
-            row += 1
-        }
-        Some(EmbeddedPdb(sources))
-    }
-
-    private def u64le(bytes: Array[Byte], offset: Int): Long = {
-        var result = 0L
-        var i = 7
-        while (i >= 0) {
-            result = (result << 8) | (bytes(offset + i) & 0xff).toLong
-            i -= 1
-        }
-        result
-    }
-
-    private val maxWin32EntriesPerDirectory = 65536
-    private val maxWin32ResourceBlob = 512 * 1024 * 1024
+    private val maxWin32EntriesPerDirectory = 1000000
     private val maxWin32TotalLeaves = 1000000
-    private val maxWin32TotalBytes = 512 * 1024 * 1024
 
     private val win32ResourceTypeNames: Map[Int, String] = Map(
         1 -> "RT_CURSOR", 2 -> "RT_BITMAP", 3 -> "RT_ICON", 4 -> "RT_MENU",
@@ -1210,13 +919,18 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         21 -> "RT_ANICURSOR", 22 -> "RT_ANIICON", 23 -> "RT_HTML", 24 -> "RT_MANIFEST"
     )
 
-    // Win32 resource tree walk (plan 13, C5-04). The tree lives at the
-    // Resource data directory: three directory levels (type / name /
-    // language) then data entries. Every tree offset is an RVA resolved
-    // through the section map and bounds-checked against the file; a
-    // hostile tree (entry counts, bad offsets, oversize data) fails
-    // cleanly with DataFormatException. Blobs are raw — cilantro never
-    // interprets ICON / VERSION / MANIFEST contents.
+    // Win32 resource tree walk (plan 13, C5-04; plan 2026_09_02,
+    // phase B). The tree lives at the Resource data directory: three
+    // directory levels (type / name / language) then data entries.
+    // Every tree offset is an RVA resolved through the section map and
+    // bounds-checked against the file; a hostile tree (bad offsets,
+    // oversize data) fails cleanly with DataFormatException. Leaves
+    // are exposed as zero-copy slice payloads with no byte budget
+    // (D-10): the only payload rule is that the declared size lies
+    // inside the file. Object guards: per-directory entries and total
+    // leaves capped at 1,000,000; the directory visited set makes the
+    // walk cycle-safe. Blobs are raw — cilantro never interprets ICON
+    // / VERSION / MANIFEST contents.
     def readWin32Resources(): ArrayBuffer[Win32Resource] = {
         val resources = ArrayBuffer[Win32Resource]()
         image.win32Resources match {
@@ -1228,13 +942,13 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
                     case Some(disposable) =>
                         val fileSize = disposable.value.getChannel.size()
                         val reader = BinaryStreamReader(disposable.value)
-                        // H4 (ADR-0013): aggregate work caps + a visited
-                        // set on directory raw offsets — hostile
-                        // directory-offset aliasing must not multiply the
-                        // walk, and total leaves/bytes must stay bounded.
+                        // H4/ADR-0014 (D-10): a visited set on directory
+                        // raw offsets — hostile directory-offset aliasing
+                        // must not multiply the walk — plus the total-leaf
+                        // object guard (1,000,000). Byte budgets are gone;
+                        // leaf sizes are extent-checked only.
                         val visitedDirectories = scala.collection.mutable.HashSet[Int]()
                         var totalLeaves = 0L
-                        var totalBytes = 0L
                         // The .rsrc section quirk: the tree lives at the
                         // section's raw start; directory-entry targets are
                         // offsets relative to the tree's raw position, and
@@ -1315,7 +1029,7 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
                             reader.moveTo(dataRaw)
                             val offset = reader.readInt32()
                             val size = reader.readInt32()
-                            if (size < 0 || size > maxWin32ResourceBlob) {
+                            if (size < 0) {
                                 throw DataFormatException()
                             }
                             val blobRaw = dataOffsetRaw(offset)
@@ -1323,12 +1037,11 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
                                 throw DataFormatException()
                             }
                             totalLeaves += 1
-                            totalBytes += size.toLong
-                            if (totalLeaves > maxWin32TotalLeaves || totalBytes > maxWin32TotalBytes) {
+                            if (totalLeaves > maxWin32TotalLeaves) {
                                 throw DataFormatException()
                             }
                             reader.moveTo(blobRaw)
-                            resources.addOne(Win32Resource(typeId, typeName, nameId, name, language, reader.readBytes(size)))
+                            resources.addOne(Win32Resource(typeId, typeName, nameId, name, language, reader.payloadSlice(size)))
                         }
                         val rootRaw = treeBaseRaw
                         val (rootNamed, rootIds) = readDirectoryHeader(rootRaw)
@@ -1445,8 +1158,8 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
                             }
                             val revision = reader.readUInt16().toInt
                             val certificateType = reader.readUInt16().toInt
-                            val blob = reader.readBytes(dwLength - 8)
-                            entries.addOne(CertificateEntry(revision, certificateType, blob))
+                            val payload = reader.payloadSlice(dwLength - 8)
+                            entries.addOne(CertificateEntry(revision, certificateType, payload))
                             val consumed = (dwLength.toLong + 7L) & ~7L
                             remaining -= consumed
                             reader.moveTo(base + (dir.size.toLong - remaining).toInt)
