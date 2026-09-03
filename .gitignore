@@ -18,6 +18,9 @@ corpus/nupkg/
 corpus/bin/
 corpus/golden/bin/
 
-# GoldenDumper build outputs (regenerable from the committed sources)
-scripts/GoldenDumper/bin/
-scripts/GoldenDumper/obj/
+# Dotnet helper build outputs under scripts/ (GoldenDumper, fixture
+# projects) — regenerable from the committed sources with `dotnet
+# build`; the fetch image bakes its own dumper. The committed fixture
+# DLLs live only at corpus/fixtures/ (sha-pinned).
+scripts/**/bin/
+scripts/**/obj/
