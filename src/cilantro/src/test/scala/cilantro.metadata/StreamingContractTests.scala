@@ -71,6 +71,19 @@ class StreamingContractTests extends munit.FunSuite {
     assertEquals(seenCert, Some(false), "Smoke.dll is unsigned")
   }
 
+  test("CP-7: the standalone portable PDB surface is frozen") {
+    // 2026-09-04 follow-up: PortablePdbFile serves PDB bytes that
+    // arrive on their own (no DLL required).
+    val openFile: File => scala.util.Try[Option[PDBView]] = (f: File) => PortablePdbFile.open(f)
+    val openPath: Path => scala.util.Try[Option[PDBView]] = (p: Path) => PortablePdbFile.open(p)
+    val probeFile: File => Boolean = (f: File) => PortablePdbFile.isPortablePdb(f)
+    val probeName: String => Boolean = (n: String) => PortablePdbFile.isPortablePdb(n)
+    assertEquals(openFile.hashCode() != 0, true)
+    assertEquals(openPath.hashCode() != 0, true)
+    assertEquals(probeFile.hashCode() != 0, true)
+    assertEquals(probeName.hashCode() != 0, true)
+  }
+
   test("CP-7: the PDB accessor and view shapes are frozen") {
     val accessor: (MetadataReader, Option[Path]) => scala.util.Try[Option[PDBView]] =
       (r, dir) => r.readEmbeddedPortablePdb(dir)

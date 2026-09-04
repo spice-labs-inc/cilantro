@@ -39,7 +39,6 @@ class DebugEntryTests extends munit.FunSuite {
 
   override def munitTimeout = scala.concurrent.duration.Duration(120, "min")
 
-  private val Slow = new munit.Tag("Slow")
 
   private def i2(v: Int): Array[Byte] = Array((v & 0xff).toByte, ((v >> 8) & 0xff).toByte)
 
@@ -150,7 +149,7 @@ class DebugEntryTests extends munit.FunSuite {
     }
   }
 
-  test("C5-05b (Slow): every corpus assembly's debug data reads or is empty — never throws".tag(Slow)) {
+  test("C5-05b: every corpus assembly's debug data reads or is empty — never throws") {
     import org.json4s._
     val manifest = org.json4s.native.JsonMethods.parse(
       new String(java.nio.file.Files.readAllBytes(corpusRoot.resolve("manifest.json")), "UTF-8"))

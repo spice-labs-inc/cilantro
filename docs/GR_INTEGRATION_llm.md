@@ -1,8 +1,7 @@
-# GR_INTEGRATION (LLM copy) — contract facts for machine readers
+GR_INTEGRATION (LLM copy) — contract facts for machine readers
 
-This is the machine-oriented copy of GR_INTEGRATION.md (same content, LLM framing). All claims are pinned by cilantro tests: the walk semantics by AssemblyWalkerTests CP-2a..e, the spool contract by PdbSpoolTests CP-5a..f, hints by CP-7 (StreamingContractTests), payload streams by SliceViewTests CP-3a..d.
+This is the machine-oriented copy of GR_INTEGRATION.md (same content, LLM framing). All claims are pinned by cilantro tests: the walk semantics by AssemblyWalkerTests CP-2a..e, the spool contract by PdbSpoolTests CP-5a..f, the standalone-PDB surface by PortablePdbFileTests A1-A4, hints by CP-7 (StreamingContractTests), payload streams by SliceViewTests CP-3a..d.
 
-# GR_INTEGRATION — How to Wire the Streaming DLL Traversal Into Goat Rodeo
 
 This guide describes, from the cilantro side, exactly how the Goat
 Rodeo integrator wires the streaming .NET traversal into GR's walker
@@ -63,6 +62,12 @@ DotnetNameSanitizer.sanitize(name: String): String   // D-5
 MetadataReader.readEmbeddedPortablePdb(spoolDir: Option[Path]): Try[Option[PDBView]]
 PDBView.sources: Vector[EmbeddedSourceFile]   // close() releases + deletes the scratch
 EmbeddedSourceFile extends PayloadSource      // (name, stream)
+// Standalone portable PDB (2026-09-04): PDB bytes on their own — a
+// .pdb file next to an assembly. BSJB-gated; no DLL required; the
+// file is mapped directly (no decompression, no spool, never
+// modified or deleted by cilantro).
+PortablePdbFile.open(file | path): Try[Option[PDBView]]   // None = not a portable PDB
+PortablePdbFile.isPortablePdb(file | path | name): Boolean
 ```
 
 ## The walk contract (what GR can rely on)

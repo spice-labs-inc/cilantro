@@ -120,7 +120,7 @@ private[cilantro] object PortablePdbSpool {
             try {
                 val map = channel.map(FileChannel.MapMode.READ_ONLY, 0, Files.size(scratch))
                 map.order(ByteOrder.LITTLE_ENDIAN)
-                Some(parseRoot(map, scratch))
+                Some(parseRoot(map, Some(scratch)))
             }
             finally {
                 channel.close()
@@ -198,7 +198,12 @@ private[cilantro] object PortablePdbSpool {
         blobs: (Long, Long)
     )
 
-    private def parseRoot(map: ByteBuffer, scratch: Path): PDBView = {
+    // Parses a memory-mapped portable-PDB root (BSJB + streams).
+    // scratch = the spool file the map came from when cilantro created
+    // it (deleted at view close); None for caller-owned files (the
+    // standalone PortablePdbFile path — cilantro never deletes a
+    // caller's file).
+    private[cilantro] def parseRoot(map: ByteBuffer, scratch: Option[Path]): PDBView = {
         val mapLen = map.limit().toLong
         if (mapLen < 32) {
             throw DataFormatException()
@@ -252,6 +257,34 @@ private[cilantro] object PortablePdbSpool {
         }
     }
 
+    // Reads only the metadata-root magic: true when the file starts
+    // with BSJB (a portable PDB root). Bounded, never throws, no temp
+    // files — the standalone classifier's probe.
+    private[cilantro] def isBsjbRoot(channel: FileChannel): Boolean = {
+        try {
+            if (channel.size() < 4) {
+                false
+            }
+            else {
+                val head = java.nio.ByteBuffer.allocate(4)
+                var off = 0
+                while (off < 4) {
+                    val n = channel.read(head, off.toLong)
+                    if (n <= 0) {
+                        off = 4
+                    }
+                    else {
+                        off += n
+                    }
+                }
+                head.flip()
+                head.get(0) == 'B'.toByte && head.get(1) == 'S'.toByte && head.get(2) == 'J'.toByte && head.get(3) == 'B'.toByte
+            }
+        } catch {
+            case _: java.io.IOException => false
+        }
+    }
+
     private def indexWidth(count: Long): Int = if (count < 65536) 2 else 4
 
     private def codedWidth(bits: Int, counts: collection.Map[Int, Long], tables: List[Int]): Int = {
@@ -274,7 +307,7 @@ private[cilantro] object PortablePdbSpool {
         stringsRegion: (Long, Long),
         guidsRegion: (Long, Long),
         blobsRegion: (Long, Long),
-        scratch: Path
+        scratch: Option[Path]
     ): PDBView = {
         val (tablesOff, tablesSize) = tablesRegion
         if (tablesSize < 24) {
@@ -462,7 +495,7 @@ private[cilantro] object PortablePdbSpool {
         stringsRegion: (Long, Long),
         guidsRegion: (Long, Long),
         blobsRegion: (Long, Long),
-        scratch: Path
+        scratch: Option[Path]
     ): PDBView = {
         val documentCount = layout.counts.getOrElse(documentTable, 0L)
         val customCount = layout.counts.getOrElse(customDebugTable, 0L)
@@ -517,7 +550,7 @@ private[cilantro] object PortablePdbSpool {
             }
             row += 1
         }
-        new PDBView(sources.result(), Some(scratch), Some(map))
+        new PDBView(sources.result(), scratch, Some(map))
     }
 
     private def sliceSource(map: ByteBuffer, offset: Long, length: Long): PayloadSource = {

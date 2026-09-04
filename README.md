@@ -16,18 +16,14 @@ oracle run in Docker).
 
 ```
 cd src/cilantro
-sbt -batch test          # fast suite: 291 tests, no Slow tests
+sbt -batch test          # the whole suite: 312 tests, no exclusions
 ```
 
-- The fast suite is the default regression gate: model accessors,
-  the opcode table, the CIL decoder, exception handlers, body reading,
-  the security caps, the re-encode round trip and the log sanitizer.
-- The slow suite (full-corpus parity + corpus property tests) is
-  munit-tagged `Slow` and excluded by default. Run it explicitly:
-
-```
-sbt -batch 'set Test / testOptions := Seq.empty' "testOnly io.spicelabs.cilantro.cil.ParityHarnessTests io.spicelabs.cilantro.cil.CorpusPropertyTests"
-```
+`sbt test` runs EVERY test — no fast/slow split, no tag exclusions
+(user decision 2026-09-04): model accessors, the opcode table, the
+CIL decoder, exception handlers, body reading, the security caps,
+the re-encode round trip, the log sanitizer, and the full-corpus
+parity + corpus-property runs all execute in the default gate.
 
 A clean build is warning-free (`sbt -batch clean test` must print zero
 warnings — this is a project gate).

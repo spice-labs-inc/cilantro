@@ -91,7 +91,6 @@ lazy val root = project
 
     libraryDependencies += "org.scalameta" %% "munit" % "1.3.5" % Test,
     libraryDependencies += "org.json4s" %% "json4s-native" % "4.0.7" % Test,
-    Test / testOptions += Tests.Argument("--exclude-tags=Slow"),
     Test / fork := true,
     Test / javaOptions += "-Xmx6g",
     Test / javaOptions += "-Xss16m"

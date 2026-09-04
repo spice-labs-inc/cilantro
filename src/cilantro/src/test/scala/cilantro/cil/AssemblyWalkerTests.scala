@@ -44,7 +44,6 @@ class AssemblyWalkerTests extends munit.FunSuite {
 
   override def munitTimeout = scala.concurrent.duration.Duration(120, "min")
 
-  private val Slow = new munit.Tag("Slow")
 
   private def corpusRoot = CorpusProvisioner.ensureCorpus()
 
@@ -593,7 +592,7 @@ class AssemblyWalkerTests extends munit.FunSuite {
     }
   }
 
-  test("CP-2b (Slow): the class subsequence matches the model's own order across the corpus".tag(Slow)) {
+  test("CP-2b: the class subsequence matches the model's own order across the corpus") {
     import org.json4s._
     val manifest = org.json4s.native.JsonMethods.parse(
       new String(java.nio.file.Files.readAllBytes(corpusRoot.resolve("manifest.json")), "UTF-8"))

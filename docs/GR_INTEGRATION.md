@@ -59,6 +59,12 @@ DotnetNameSanitizer.sanitize(name: String): String   // D-5
 MetadataReader.readEmbeddedPortablePdb(spoolDir: Option[Path]): Try[Option[PDBView]]
 PDBView.sources: Vector[EmbeddedSourceFile]   // close() releases + deletes the scratch
 EmbeddedSourceFile extends PayloadSource      // (name, stream)
+// Standalone portable PDB (2026-09-04): PDB bytes on their own — a
+// .pdb file next to an assembly. BSJB-gated; no DLL required; the
+// file is mapped directly (no decompression, no spool, never
+// modified or deleted by cilantro).
+PortablePdbFile.open(file | path): Try[Option[PDBView]]   // None = not a portable PDB
+PortablePdbFile.isPortablePdb(file | path | name): Boolean
 ```
 
 ## The walk contract (what GR can rely on)

@@ -50,7 +50,6 @@ import java.util.zip.{ZipOutputStream, GZIPOutputStream}
 
 class DotnetProbeTests extends munit.FunSuite {
 
-  private val Slow = new munit.Tag("Slow")
 
   private def corpusRoot = CorpusProvisioner.ensureCorpus()
 
@@ -309,7 +308,7 @@ class DotnetProbeTests extends munit.FunSuite {
     assertEquals(DotnetAssemblyProbe.maxHeaderReadBudget, 64 * 1024, "the documented 64 KiB budget")
   }
 
-  test("D1-11 (Slow): full-corpus agreement — probe verdict == full-read success".tag(Slow)) {
+  test("D1-11: full-corpus agreement — probe verdict == full-read success") {
     val manifest = org.json4s.native.JsonMethods.parse(
       new String(Files.readAllBytes(corpusRoot.resolve("manifest.json")), "UTF-8"))
     implicit val formats: DefaultFormats.type = DefaultFormats

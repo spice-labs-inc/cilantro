@@ -16,9 +16,8 @@ narrative: README.md.
 
 ## Commands (from `src/cilantro/`)
 
-- Fast suite: `sbt -batch test` — 291 tests (fast), Slow-tagged excluded
-  (build.sbt: `Test / testOptions += Tests.Argument("--exclude-tags=Slow")`).
-- Slow suite: `sbt -batch 'set Test / testOptions := Seq.empty' "testOnly io.spicelabs.cilantro.cil.ParityHarnessTests io.spicelabs.cilantro.cil.CorpusPropertyTests"` — 7 tests (2 parity + 5 corpus properties).
+- Whole suite: `sbt -batch test` — 312 tests, every test, no tag
+  exclusions (the fast/slow split was removed 2026-09-04).
 - Warning gate: `sbt -batch clean test` → 0 warnings, 0 errors.
 - JVM for tests: forked, `-Xmx6g -Xss16m` (set in build.sbt).
 - Corpus check: `scripts/ensure_corpus.sh` (from repo root). Maven
@@ -35,7 +34,7 @@ narrative: README.md.
   `ReadSymbols = false`, NullResolver, never executes assembly code.
   Docker image `cilantro-corpus-fetch:1` (pinned base digest).
 - Parity: tier1 + tier2 JSON dumps byte-identical to the goldens for
-  all 151 assemblies (`ParityHarnessTests`, Slow full-corpus).
+  all 151 assemblies (`ParityHarnessTests`, full-corpus).
 - Caps (ImageReader): sections ≤ 96, section sizes ≤ 512 MB, table
   rows ≤ 10M, named heaps ≤ 256 MB; bodies ≤ 64 MB, switch ≤ 65536,
   type/signature/type-string recursion ≤ 128 (cycles memoized by early
@@ -74,7 +73,7 @@ alongside (00–10, phase-N-claims.md).
 ## What breaks when
 
 - Changing any reader semantic pinned by the goldens (ADR-0006) breaks
-  `ParityHarnessTests` (fast gate + Slow).
+  `ParityHarnessTests` (part of the default suite).
 - Changing the caps breaks `CapTests`.
 - Regenerating goldens requires the deliberate script run
   (OPERATIONS.md); never automatic.

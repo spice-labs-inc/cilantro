@@ -7,7 +7,7 @@ steps and the frozen contract.
 ## Prerequisites
 
 - The zero-warnings clean build: `sbt -batch clean test` (0 warnings,
-  0 errors) and the Slow suites green.
+  0 errors) — the whole suite runs, no exclusions.
 - The corpus cache verified: `scripts/ensure_corpus.sh`.
 - GPG keys configured (the pom already binds the maven-gpg-plugin).
 

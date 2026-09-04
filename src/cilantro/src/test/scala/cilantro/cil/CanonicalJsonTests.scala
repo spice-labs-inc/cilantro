@@ -44,7 +44,6 @@ class CanonicalJsonTests extends munit.FunSuite {
 
   override def munitTimeout = scala.concurrent.duration.Duration(120, "min")
 
-  private val Slow = new munit.Tag("Slow")
 
   private def loadNet20(): AssemblyDefinition = {
     val root = CorpusProvisioner.ensureCorpus()
@@ -110,7 +109,7 @@ class CanonicalJsonTests extends munit.FunSuite {
     }
   }
 
-  test("C5-01a (Slow): every type of the net20 assembly matches its tier1 slice".tag(Slow)) {
+  test("C5-01a: every type of the net20 assembly matches its tier1 slice") {
     val assembly = loadNet20()
     val dump = tier1Dump(assembly)
     val module = assembly.mainModule.get

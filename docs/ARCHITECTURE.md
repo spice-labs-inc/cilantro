@@ -130,10 +130,10 @@ Red → green everywhere. Suites by phase: C0 style gates, C1 corpus and
 goldens, C2 decoder, C3 EH and integration, C4 parity/caps/properties,
 P1 provisioning-gate unit tests. The full traceability table (every
 Cx-xx test and the claim it pins) lives in the workspace
-`TRACEABILITY.md`. Fast vs Slow: anything that needs the corpus is
-`Slow`-tagged; the fast suite is the default gate. The provisioning
-tests (P1-xx) run in the default suite with synthetic corpora — no
-docker, no network.
+`TRACEABILITY.md`. There is no fast/slow split (removed 2026-09-04):
+`sbt test` runs every test, including the full-corpus parity and
+corpus-property suites. The provisioning tests (P1-xx) run in the
+default suite with synthetic corpora — no docker, no network.
 
 ## Style
 
