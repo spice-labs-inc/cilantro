@@ -1,22 +1,35 @@
 // AssemblyEntry + AssemblyEntryKind — the container-walk entry
-// contract (plan 2026_09_02, phases C/D; ADR-0014, D-1/D-2/D-4/D-8).
+// contract (plans 2026_09_02 + 2026_09_04; ADR-0014, D-1/D-2/D-4/D-8
+// and the byte-faithful amendment B-1..B-11).
 //
 // AssemblyWalker.withinAssemblyStream hands Goat Rodeo one complete
-// Vector[AssemblyEntry] or None (all-or-nothing): every entry carries
-// its pre-hardened name (DotnetNameSanitizer), its kind, the
-// cilantro-owned MIME hint (D-4), and its payload through
-// PayloadSource.processStream (D-8) — cleanup is guaranteed when
-// processStream exits. Entries are valid only inside the owning walk
-// call: after it returns they refuse cleanly (IOException). Names are
-// hardened but NOT guaranteed unique (documented; consumers key by
+// Vector[AssemblyEntry] or None (all-or-nothing). Every entry carries
+// its pre-hardened name (DotnetNameSanitizer), its kind (routing), its
+// MIME hint, its LENGTH, and its payload through
+// PayloadSource.processStream.
+//
+// The byte-faithful principle (2026_09_04, B-9): an entry only
+// delivers bytes — no decompression, no envelope checks, no magic
+// sniffing, no payload-validity logic of any kind. For file-backed
+// payloads, `length` is the exact count of the bytes as they exist in
+// the artifact (a zero-copy slice); for the Class kind, `length` is
+// the canonical-JSON byte count — the single documented exception
+// (a class has no contiguous in-file bytes; the JSON is the
+// deterministic content-addressed identity text, spec 2.3/9.2).
+// `length` is captured at entry construction (never re-derived from
+// the file) and needs no read beyond construction-time reads.
+//
+// Entries are valid only inside the owning walk call: after it
+// returns, `processStream` and `length` refuse cleanly (IOException),
+// while the pure metadata (name/kind/hint/facts) stays readable.
+// Names are hardened but NOT guaranteed unique (consumers key by
 // vector position).
 //
-// The sealed per-kind carriers keep the kind-specific model data on
-// the entry so consumers never own PE/metadata mechanics: a
-// certificate entry exposes certificateRevision/certificateType
-// (spec 2.2's "cert kind carries revision/type"); a class entry
-// carries its TypeDefinition; a win32 entry carries the Win32Resource
-// (type/name/language facts).
+// MIME hints are cilantro-owned (D-4). The DebugBlob hint is the one
+// per-entry override: the type-17 debug payload (the compressed
+// portable-PDB envelope) is routed as `pe/debug; format=mpdb` — a
+// claim about the DECLARED debug-directory type, never a content-
+// validity promise (B-9: the walk does not sniff payload magic).
 
 package io.spicelabs.cilantro
 
@@ -28,20 +41,28 @@ enum AssemblyEntryKind(val mimeHint: Option[String]) {
     case AuthenticodeCertificate extends AssemblyEntryKind(None)
     case Win32Resource extends AssemblyEntryKind(Some("pe/resource"))
     case DebugBlob extends AssemblyEntryKind(Some("pe/debug"))
-    case EmbeddedSource extends AssemblyEntryKind(None)
 }
 
 sealed trait AssemblyEntry extends PayloadSource {
     def name: String
     def kind: AssemblyEntryKind
     def mimeHint: Option[String] = kind.mimeHint
+
+    // The exact byte count of the payload this entry delivers (B-4):
+    // for file-backed payloads the bytes as they exist in the
+    // artifact; for Class the canonical-JSON bytes (the documented
+    // exception). Refuses after the owning walk ends, exactly like
+    // processStream.
+    def length: Long
 }
 
-// Internal: the owning walk's liveness flag. Entries check it before
-// serving a stream so that retained entries refuse cleanly after the
-// walk returns (CP-2e(3)), instead of reading maps whose owning scope
-// has ended.
-private[cilantro] final class AssemblyWalkSession {
+// Internal: the owning call's liveness flag. Entries (and the PDB
+// view's sources) check it before serving so retained references
+// refuse cleanly after the owning call ends (CP-2e(3)), instead of
+// reading maps whose owning scope has ended.
+private[cilantro] final class AssemblyWalkSession(
+    private val refuseMessage: String = "assembly walk ended; entry no longer usable"
+) {
     @volatile private var _closed: Boolean = false
 
     private[cilantro] def close(): Unit = {
@@ -50,13 +71,14 @@ private[cilantro] final class AssemblyWalkSession {
 
     private[cilantro] def ensureOpen(): Unit = {
         if (_closed) {
-            throw IOException("assembly walk ended; entry no longer usable")
+            throw IOException(refuseMessage)
         }
     }
 }
 
 // The walk's per-kind carriers. Each name is pre-hardened at
-// construction (single place, CP-6).
+// construction (single place, CP-6); each length is captured at
+// construction (byte-faithfulness, B-4/B-11).
 final class ClassEntry private[cilantro] (
     private val _name: String,
     private val typeDefinition: TypeDefinition,
@@ -66,6 +88,12 @@ final class ClassEntry private[cilantro] (
     def name = _name
     def kind = AssemblyEntryKind.Class
     def `type`: TypeDefinition = typeDefinition
+
+    // The documented exception: the canonical-JSON byte count.
+    def length: Long = {
+        session.ensureOpen()
+        jsonBytes.length.toLong
+    }
 
     def processStream[T](f: InputStream => T): T = {
         session.ensureOpen()
@@ -81,10 +109,16 @@ final class ClassEntry private[cilantro] (
 final class EmbeddedResourceEntry private[cilantro] (
     private val _name: String,
     private val payload: PayloadSource,
+    private val payloadLength: Long,
     private val session: AssemblyWalkSession
 ) extends AssemblyEntry {
     def name = _name
     def kind = AssemblyEntryKind.EmbeddedResource
+
+    def length: Long = {
+        session.ensureOpen()
+        payloadLength
+    }
 
     def processStream[T](f: InputStream => T): T = {
         session.ensureOpen()
@@ -102,6 +136,11 @@ final class AuthenticodeCertificateEntry private[cilantro] (
 
     def certificateRevision: Int = certificate.revision
     def certificateType: Int = certificate.certificateType
+
+    def length: Long = {
+        session.ensureOpen()
+        certificate.payloadByteLength
+    }
 
     def processStream[T](f: InputStream => T): T = {
         session.ensureOpen()
@@ -121,6 +160,11 @@ final class Win32ResourceEntry private[cilantro] (
     def resourceNameId: Int = resource.nameId
     def resourceLanguage: Int = resource.language
 
+    def length: Long = {
+        session.ensureOpen()
+        resource.payloadByteLength
+    }
+
     def processStream[T](f: InputStream => T): T = {
         session.ensureOpen()
         resource.processStream(f)
@@ -131,27 +175,24 @@ final class DebugBlobEntry private[cilantro] (
     private val _name: String,
     private val debugEntryType: Int,
     private val payload: PayloadSource,
+    private val payloadLength: Long,
     private val session: AssemblyWalkSession
 ) extends AssemblyEntry {
     def name = _name
     def kind = AssemblyEntryKind.DebugBlob
     def debugEntryTypeValue: Int = debugEntryType
 
-    def processStream[T](f: InputStream => T): T = {
-        session.ensureOpen()
-        payload.processStream(f)
-    }
-}
+    // B-7: the type-17 debug payload is the compressed portable-PDB
+    // envelope — routed with the discriminating hint. The hint is a
+    // claim about the DECLARED debug-directory type; the walk never
+    // validates payload content (B-9).
+    override def mimeHint: Option[String] =
+        if (debugEntryType == 17) Some("pe/debug; format=mpdb") else Some("pe/debug")
 
-// Produced by the Phase D spool path; declared now so the kind set is
-// complete and contract-pinned (CP-7).
-final class EmbeddedSourceEntry private[cilantro] (
-    private val _name: String,
-    private val payload: PayloadSource,
-    private val session: AssemblyWalkSession
-) extends AssemblyEntry {
-    def name = _name
-    def kind = AssemblyEntryKind.EmbeddedSource
+    def length: Long = {
+        session.ensureOpen()
+        payloadLength
+    }
 
     def processStream[T](f: InputStream => T): T = {
         session.ensureOpen()

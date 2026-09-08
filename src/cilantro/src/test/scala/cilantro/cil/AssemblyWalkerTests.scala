@@ -39,12 +39,12 @@ import io.spicelabs.cilantro.dump.CanonicalJson
 import io.spicelabs.cilantro.metadata.CorpusProvisioner
 import io.spicelabs.cilantro.testutil.ForkSupport
 import java.io.File
+import java.nio.file.Files
 
 class AssemblyWalkerTests extends munit.FunSuite {
 
   override def munitTimeout = scala.concurrent.duration.Duration(120, "min")
 
-  private val Slow = new munit.Tag("Slow")
 
   private def corpusRoot = CorpusProvisioner.ensureCorpus()
 
@@ -70,7 +70,7 @@ class AssemblyWalkerTests extends munit.FunSuite {
       calls += 1
       captured = entries
       body(entries)
-    }(None)
+    }
     val callCount = if (outcome.isDefined) calls else 0
     (outcome.map(_ => callCount), captured)
   }
@@ -130,10 +130,8 @@ class AssemblyWalkerTests extends munit.FunSuite {
           Seen(c.kind.toString, c.name, c.mimeHint, payloadBytes(c), None, -1, jsonOk = expected.length > 0 && payloadBytes(c).toSeq == expected.toSeq)
         case r: EmbeddedResourceEntry =>
           Seen(r.kind.toString, r.name, r.mimeHint, payloadBytes(r), None, -1, jsonOk = false)
-        case s2: EmbeddedSourceEntry =>
-          Seen(s2.kind.toString, s2.name, s2.mimeHint, payloadBytes(s2), None, -1, jsonOk = false)
       }
-    }(None)
+    }
     outcome match {
       case None => fail("Newtonsoft net20 must walk")
       case Some(seen) =>
@@ -183,7 +181,7 @@ class AssemblyWalkerTests extends munit.FunSuite {
     }
     val outcome = AssemblyWalker.withinAssemblyStream[Vector[(String, String, Option[String], Array[Byte])]](fixture) { entries =>
       entries.collect { case r: EmbeddedResourceEntry => (r.name, r.kind.toString, r.mimeHint, payloadBytes(r)) }
-    }(None)
+    }
     outcome match {
       case None => fail("the resources fixture must walk")
       case Some(resources) =>
@@ -280,7 +278,7 @@ class AssemblyWalkerTests extends munit.FunSuite {
     withFile(bytes) { file =>
       val outcome = AssemblyWalker.withinAssemblyStream[Vector[(String, String, Array[Byte])]](file) { entries =>
         entries.map(e => (e.kind.toString, e.name, payloadBytes(e)))
-      }(None)
+      }
       outcome match {
         case None => fail("the combined assembly must walk")
         case Some(captured) =>
@@ -293,6 +291,186 @@ class AssemblyWalkerTests extends munit.FunSuite {
           ), "cross-section order: classes -> resources -> certificates -> win32 -> debug")
           // The debug blob really reads the payload bytes it points at.
           assertEquals(captured.last._3.toSeq, payload.toSeq)
+      }
+    }
+  }
+
+  test("CP-2a: the type-17 entry is a raw, byte-faithful MPDB with the discriminating hint") {
+    // 2026_09_04 (B-7/B-9/B-10): the walk never decompresses; the
+    // type-17 payload is one DebugBlob entry whose bytes ARE the raw
+    // MPDB envelope, with length == the in-file sizeOfData.
+    val fixture = corpusRoot.resolve("fixtures/embedded_pdb_fixture.dll")
+    val fullBytes = Files.readAllBytes(fixture)
+    // Locate the raw type-17 region directly in the file (independent
+    // of the model): find the debug directory via a module read, then
+    // slice the raw file bytes.
+    val rawRegion: (Int, Int, Array[Byte]) = ModuleDefinition.readModule(fixture.toString) match {
+      case Success(module) =>
+        try {
+          module.image.flatMap(_.debugHeader).flatMap { header =>
+            header.entties.find(_.directory.`type` == io.spicelabs.cilantro.cil.ImageDebugType.embeddedPortablePdb)
+              .map(e => (e.directory.pointerToRawData, e.directory.sizeOfData))
+          }.map { case (p, sz) => (p, sz, java.util.Arrays.copyOfRange(fullBytes, p, p + sz)) }
+            .getOrElse(fail("type-17 region missing"))
+        } finally {
+          module.close()
+        }
+      case Failure(e) => fail(s"fixture read failed: $e")
+    }
+    val outcome = AssemblyWalker.withinAssemblyStream[Vector[(String, Option[String], Long, Array[Byte], String)]](fixture.toFile) { entries =>
+      entries.collect {
+        case d: DebugBlobEntry if d.debugEntryTypeValue == 17 =>
+          (d.name, d.mimeHint, d.length, payloadBytes(d), "raw")
+      }
+    }
+    outcome match {
+      case None => fail("the fixture must walk")
+      case Some(blobs) =>
+        assertEquals(blobs.length, 1)
+        assertEquals(blobs(0)._1, "embedded-portable-pdb")
+        assertEquals(blobs(0)._2, Some("pe/debug; format=mpdb"))
+        assertEquals(blobs(0)._3, 6888L, "length == the in-file sizeOfData")
+        val raw = rawRegion._3
+        assertEquals(blobs(0)._4.toSeq, raw.toSeq, "the stream is byte-for-byte the raw MPDB from the file")
+        assertEquals(new String(raw, 0, 4, "UTF-8"), "MPDB", "the raw bytes really are the envelope")
+    }
+  }
+
+  test("CP-2a: full vector of the embedded-PDB fixture is pinned (byte-faithful, no sources)") {
+    val fixture = corpusRoot.resolve("fixtures/embedded_pdb_fixture.dll").toFile
+    val outcome = AssemblyWalker.withinAssemblyStream[Vector[(String, Long)]](fixture) { entries =>
+      entries.map(e => (e.kind.toString + "|" + e.name, e.length))
+    }
+    outcome match {
+      case None => fail("the fixture must walk")
+      case Some(vector) =>
+        assertEquals(
+          vector.map(_._1),
+          Vector(
+            "Class|<Module>",
+            "Class|EmbeddedFixture.Widget",
+            "Win32Resource|RT_VERSION-1-0",
+            "DebugBlob|codeview",
+            "DebugBlob|pdbchecksum",
+            "DebugBlob|embedded-portable-pdb"
+          ),
+          "the full fixture vector is pinned; no EmbeddedSource entries exist"
+        )
+        assert(!vector.exists(_._1.startsWith("EmbeddedSource")), "byte-faithful: no decompressed sources in the walk")
+    }
+  }
+
+  test("CP-2a: byte-faithfulness — every file-backed entry's length equals its stream's byte count and the pinned in-file sizes") {
+    val newtonsoft = corpusRoot.resolve("bin/Newtonsoft.Json/12.0.3/net20/Newtonsoft.Json.dll").toFile
+    val fixture = corpusRoot.resolve("fixtures/embedded_pdb_fixture.dll").toFile
+    val resources = corpusRoot.resolve("fixtures/resources_fixture.dll").toFile
+    def pins(path: java.io.File): Option[Vector[(String, Long, Array[Byte])]] =
+      AssemblyWalker.withinAssemblyStream[Vector[(String, Long, Array[Byte])]](path) { entries =>
+        entries.map(e => (e.kind.toString, e.length, payloadBytes(e)))
+      }
+    def check(path: java.io.File, expected: Map[String, Long]): Unit = {
+      val got = pins(path).getOrElse(fail(s"$path must walk"))
+      got.foreach { case (kind, len, bytes) =>
+        assertEquals(bytes.length.toLong, len, s"$kind: length == stream bytes")
+      }
+      expected.foreach { case (kind, len) =>
+        val actual = got.collect { case (k, l, _) if k == kind => l }.sum
+        assertEquals(actual, len, s"$path $kind total length")
+      }
+    }
+    check(newtonsoft, Map(
+      "AuthenticodeCertificate" -> 8096L,
+      "Win32Resource" -> 1110L,
+      "DebugBlob" -> (85L + 39L)
+    ))
+    check(fixture, Map("DebugBlob" -> (47L + 39L + 6888L)))
+    // Embedded resources: the stream bytes equal the frozen
+    // resourceData path byte-for-byte, and the walk length equals it.
+    AssemblyWalker.withinAssemblyStream[Vector[(String, Long, Array[Byte])]](resources) { entries =>
+      entries.collect { case r: EmbeddedResourceEntry => (r.name, r.length, payloadBytes(r)) }
+    } match {
+      case Some(res) =>
+        AssemblyDefinition.readAssembly(resources.getAbsolutePath) match {
+          case Success(ad) =>
+            try {
+              ad.modules.foreach { m =>
+                val embedded = m.resources.collect { case r: EmbeddedResource => r }
+                assertEquals(embedded.length, res.length)
+                embedded.zip(res).foreach { case (r, (name, len, bytes)) =>
+                  val viaData = r.resourceData() match {
+                    case Success(b) => b
+                    case Failure(e) => fail(s"resourceData failed: $e")
+                  }
+                  assertEquals(len, viaData.length.toLong, s"$name: walk length == resourceData length")
+                  assertEquals(bytes.toSeq, viaData.toSeq, s"$name: walk stream == resourceData (prefix excluded)")
+                }
+              }
+            } finally {
+              ad.close()
+            }
+          case Failure(e) => fail(s"readAssembly failed: $e")
+        }
+      case None => fail("the resources fixture must walk")
+    }
+  }
+
+  test("CP-2e: post-walk refusal matrix — length and processStream refuse for every kind; metadata stays live") {
+    // The combined assembly carries all five walk kinds (built in the
+    // cross-section test): Class, EmbeddedResource,
+    // AuthenticodeCertificate, Win32Resource, DebugBlob.
+    def combined(): Array[Byte] = {
+      val payload = "cross-section-resource-bytes".getBytes("UTF-8")
+      val prefixAndPayload = i4(payload.length) ++ payload
+      val certTable = i4(16) ++ i2(0x0200) ++ i2(2) ++ Array[Byte](1, 2, 3, 4, 5, 6, 7, 8)
+      def tree(blob: Array[Byte]): Array[Byte] = {
+        val nameDir = 16 + 8
+        val langDir = nameDir + 16 + 8
+        val dataEntry = langDir + 16 + 8
+        val blobOff = dataEntry + 16
+        val rootBytes = zero(12) ++ i2(0) ++ i2(1) ++ i4(10) ++ i4(0x80000000 | nameDir)
+        val nameBytes = zero(12) ++ i2(0) ++ i2(1) ++ i4(1) ++ i4(0x80000000 | langDir)
+        val langBytes = zero(12) ++ i2(0) ++ i2(1) ++ i4(0x409) ++ i4(dataEntry)
+        val dataBytes = i4(0x2500 + blobOff) ++ i4(blob.length) ++ zero(8)
+        rootBytes ++ nameBytes ++ langBytes ++ dataBytes ++ blob
+      }
+      def resourceRow(nameIdx: Int): Array[Byte] = i4(0) ++ i4(0) ++ i2(nameIdx) ++ i2(0)
+      val extraStrings = Array[Byte](0, 'B'.toByte, 0)
+      val managedRaw = 0x160 + 0x700
+      val payloadRaw = managedRaw + 4
+      val debugDir = zero(12) ++ i4(2) ++ i4(payload.length) ++ i4(0) ++ i4(payloadRaw)
+      new MinimalPeBuilder(
+        extraStrings = extraStrings,
+        extraTables = Seq(
+          (0x20, asmTableRow.length, asmTableRow),
+          (2, 14, typeDefRow(1)),
+          (0x28, resourceRow(4).length, resourceRow(4))
+        ),
+        certificateTable = Some(certTable),
+        win32ResourceTree = Some(tree(payload)),
+        managedResourceBlob = Some(prefixAndPayload),
+        debugDirectory = Some(debugDir)
+      ).build()
+    }
+    withFile(combined()) { file =>
+      var retained: Vector[AssemblyEntry] = Vector.empty
+      AssemblyWalker.withinAssemblyStream[Int](file) { entries =>
+        assertEquals(entries.map(_.kind).distinct.length, 5, "all five walk kinds are present")
+        retained = entries
+        entries.length
+      }
+      retained.foreach { e =>
+        // Metadata stays live.
+        assertEquals(e.name.nonEmpty, true)
+        assertEquals(e.kind.toString.nonEmpty, true)
+        // length and processStream refuse identically, in both orders.
+        val l1 = scala.util.Try(e.length)
+        val p1 = scala.util.Try(payloadBytes(e))
+        val p2 = scala.util.Try(payloadBytes(e))
+        val l2 = scala.util.Try(e.length)
+        Seq(l1, p1, p2, l2).foreach { r =>
+          assert(r.isFailure, s"${e.kind}: post-walk access must refuse")
+          assertEquals(r.failed.toOption.map(_.getClass.getSimpleName), Some("IOException"), s"${e.kind}: refusal type")
+        }
       }
     }
   }
@@ -331,6 +509,35 @@ class AssemblyWalkerTests extends munit.FunSuite {
       ("unknown-debug-type", new MinimalPeBuilder(
         debugDirectory = Some(zero(12) ++ i4(3) ++ i4(0) ++ i4(0) ++ i4(0)),
         extraTables = asmTable
+      ).build()),
+      // Mixed certificate table: one well-formed entry followed by a
+      // bomb — the all-or-nothing refusal fires mid-table.
+      ("cert-mixed-good-then-bomb", new MinimalPeBuilder(
+        certificateTable = Some(
+          i4(16) ++ i2(0x0200) ++ i2(2) ++ Array[Byte](1, 2, 3, 4, 5, 6, 7, 8) ++
+            i4(0x7fffffff) ++ zero(4)
+        ),
+        extraTables = asmTable
+      ).build()),
+      // Mixed win32 tree: one well-formed leaf followed by a leaf whose
+      // data entry declares a size far past the file's extent.
+      ("win32-mixed-good-then-bomb", new MinimalPeBuilder(
+        win32ResourceTree = Some(
+          {
+            val nameDir = 16 + 8
+            val langDir = nameDir + 16 + 8
+            val data1 = langDir + 16 + 8
+            val data2 = data1 + 16
+            val blobOff = data2 + 16
+            zero(12) ++ i2(0) ++ i2(1) ++ i4(10) ++ i4(0x80000000 | nameDir) ++
+              zero(12) ++ i2(0) ++ i2(1) ++ i4(1) ++ i4(0x80000000 | langDir) ++
+              zero(12) ++ i2(0) ++ i2(2) ++ i4(0x409) ++ i4(data1) ++ i4(0x409) ++ i4(data2) ++
+              i4(0x2500 + blobOff) ++ i4(3) ++ zero(8) ++
+              i4(0x2500 + blobOff) ++ i4(0x7fffffff) ++ zero(8) ++
+              Array[Byte](9, 9, 9)
+          }
+        ),
+        extraTables = asmTable
       ).build())
     )
     cases.foreach { case (label, bytes) =>
@@ -367,7 +574,7 @@ class AssemblyWalkerTests extends munit.FunSuite {
         calls += 1
         assertEquals(entries.length, 0, "the valid empty assembly has no entries")
         entries.length
-      }(None)
+      }
       assertEquals(outcome, Some(0))
       assertEquals(calls, 1, "f must run exactly once")
     }
@@ -391,7 +598,7 @@ class AssemblyWalkerTests extends munit.FunSuite {
     while (at <= limit) {
       val truncated = java.util.Arrays.copyOf(smokeBytes, at)
       withFile(truncated) { file =>
-        val r = scala.util.Try(AssemblyWalker.withinAssemblyStream[Int](file)(_ => 0)(None))
+        val r = scala.util.Try(AssemblyWalker.withinAssemblyStream[Int](file)(_ => 0))
         assert(r.isSuccess, s"a truncated walk at byte $at must not raise")
         assert(r.get.isEmpty || r.get.isDefined)
       }
@@ -406,7 +613,7 @@ class AssemblyWalkerTests extends munit.FunSuite {
       val pos = (seed + flip * 31) % mutated.length
       mutated(pos) = (mutated(pos) ^ (0x5a + (flip % 250)).toByte).toByte
       withFile(mutated) { file =>
-        val r = scala.util.Try(AssemblyWalker.withinAssemblyStream[Int](file)(_ => 0)(None))
+        val r = scala.util.Try(AssemblyWalker.withinAssemblyStream[Int](file)(_ => 0))
         assert(r.isSuccess, s"a flipped walk #$flip must not raise")
       }
       flip += 1
@@ -423,7 +630,7 @@ class AssemblyWalkerTests extends munit.FunSuite {
       } finally {
         raf.close()
       }
-      val r = scala.util.Try(AssemblyWalker.withinAssemblyStream[Int](sparse)(_ => 0)(None))
+      val r = scala.util.Try(AssemblyWalker.withinAssemblyStream[Int](sparse)(_ => 0))
       assert(r.isSuccess, "a >= 2 GiB artifact must not raise out of the walk")
       assertEquals(r.get, None, "the map ceiling refuses cleanly")
     } finally {
@@ -456,6 +663,42 @@ class AssemblyWalkerTests extends munit.FunSuite {
     }
   }
 
+  test("CP-2d: the debug directory and the type-17 payload survive seeded flips and truncations") {
+    // The byte-faithful walk over the embedded-PDB fixture: seeded
+    // flips anywhere in the file (debug directory + MPDB body
+    // included) and truncations never throw, and whenever the walk
+    // yields Some, every DebugBlob's length equals its stream bytes.
+    val fixtureBytes = java.nio.file.Files.readAllBytes(corpusRoot.resolve("fixtures/embedded_pdb_fixture.dll"))
+    def walkCheck(file: File): Unit = {
+      val r = scala.util.Try(AssemblyWalker.withinAssemblyStream[Boolean](file) { entries =>
+        entries.collect { case d: DebugBlobEntry => (d.length, payloadBytes(d).length.toLong) }
+          .forall { case (a, b) => a == b }
+      })
+      assert(r.isSuccess, "the walk must never throw")
+      r.get.foreach(ok => assert(ok, "when Some, DebugBlob length == stream bytes"))
+    }
+    // Truncations at every 256-byte boundary of the first 8 KiB.
+    var at = 0
+    val limit = Math.min(8192, fixtureBytes.length)
+    while (at <= limit) {
+      withFile(java.util.Arrays.copyOf(fixtureBytes, at)) { file =>
+        val r = scala.util.Try(AssemblyWalker.withinAssemblyStream[Int](file)(_.length))
+        assert(r.isSuccess, s"truncation at $at must not throw")
+      }
+      at += 256
+    }
+    // Seeded single-byte flips across the whole file (the debug
+    // directory and the type-17 payload are in the first ~100 KiB).
+    var flip = 0
+    while (flip < 150) {
+      val mutated = fixtureBytes.clone()
+      val pos = (0x11e7 + flip * 7919) % mutated.length
+      mutated(pos) = (mutated(pos) ^ (0xa5 + (flip % 150)).toByte).toByte
+      withFile(mutated)(walkCheck)
+      flip += 1
+    }
+  }
+
   test("CP-2e: the processStream contract — fresh streams, f exceptions propagate, post-walk refusal") {
     val fixture = corpusRoot.resolve("fixtures/ilasm_fixture.dll").toFile
     // (1) Two processStream calls inside the walk deliver the same
@@ -465,12 +708,12 @@ class AssemblyWalkerTests extends munit.FunSuite {
       val first = payloadBytes(classEntry)
       val second = payloadBytes(classEntry)
       first.toSeq == second.toSeq
-    }(None)
+    }
     assertEquals(streamsEqual, Some(true), "each processStream call is an independent fresh stream")
     // (2) f throwing propagates out of withinAssemblyStream.
     val thrown = scala.util.Try(AssemblyWalker.withinAssemblyStream[Int](fixture) { _ =>
       sys.error("callback boom")
-    }(None))
+    })
     thrown match {
       case Failure(e) if e.getMessage == "callback boom" => ()
       case Success(_) => fail("f's exception must propagate")
@@ -481,7 +724,7 @@ class AssemblyWalkerTests extends munit.FunSuite {
     AssemblyWalker.withinAssemblyStream[Int](fixture) { entries =>
       retained = Some(entries.head)
       0
-    }(None)
+    }
     val post = scala.util.Try(payloadBytes(retained.get))
     assert(post.isFailure, "a retained entry must refuse after the walk")
     assertEquals(
@@ -521,7 +764,7 @@ class AssemblyWalkerTests extends munit.FunSuite {
     withFile(bytes) { file =>
       val outcome = AssemblyWalker.withinAssemblyStream[Vector[(String, String)]](file) { entries =>
         entries.collect { case r: EmbeddedResourceEntry => (r.name, new String(payloadBytes(r), "UTF-8")) }
-      }(None)
+      }
       outcome match {
         case None => fail("the duplicate-resource file must walk")
         case Some(resources) =>
@@ -593,7 +836,7 @@ class AssemblyWalkerTests extends munit.FunSuite {
     }
   }
 
-  test("CP-2b (Slow): the class subsequence matches the model's own order across the corpus".tag(Slow)) {
+  test("CP-2b: the class subsequence matches the model's own order across the corpus") {
     import org.json4s._
     val manifest = org.json4s.native.JsonMethods.parse(
       new String(java.nio.file.Files.readAllBytes(corpusRoot.resolve("manifest.json")), "UTF-8"))

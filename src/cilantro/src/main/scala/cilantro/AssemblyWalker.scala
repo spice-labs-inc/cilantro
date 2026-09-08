@@ -1,8 +1,9 @@
-// AssemblyWalker — the container walk (plan 2026_09_02, phase C;
-// ADR-0014, D-1/D-2/D-4/D-5/D-8/D-11).
+// AssemblyWalker — the container walk (plan 2026_09_02 + the
+// 2026_09_04 byte-faithful amendment; ADR-0014, D-1/D-2/D-4/D-5/D-8
+// + B-1..B-11).
 //
-// withinAssemblyStream[T](artifact)(f)(spoolRoot) hands Goat Rodeo
-// one complete Vector[AssemblyEntry] or None:
+// withinAssemblyStream[T](artifact)(f) hands Goat Rodeo one complete
+// Vector[AssemblyEntry] or None:
 //
 //   - None: the artifact is not readable as a .NET assembly (no MZ,
 //     probe-false, open/model-read failure) OR any part of the
@@ -47,19 +48,13 @@ object AssemblyWalker {
     // clean refusal (hostile-scale derived text).
     private val maxClassCanonicalBytes: Int = 1024 * 1024
 
-    def withinAssemblyStream[T](artifact: File)(f: Vector[AssemblyEntry] => T)(spoolRoot: Option[Path]): Option[T] =
-        withinAssemblyStream(artifact.toPath)(f)(spoolRoot)
+    def withinAssemblyStream[T](artifact: File)(f: Vector[AssemblyEntry] => T): Option[T] =
+        withinAssemblyStream(artifact.toPath)(f)
 
-    def withinAssemblyStream[T](artifact: Path)(f: Vector[AssemblyEntry] => T)(spoolRoot: Option[Path]): Option[T] = {
-        // spoolRoot validation happens here so a bad spool directory
-        // refuses before any work: it must be an existing directory
-        // (CP-5a). When provided, the type-17 embedded PDB is spooled
-        // into it and its sources become EmbeddedSource entries (the
-        // spooled view is closed after f; the DIRECTORY is the
-        // caller's — never touched by cilantro).
-        if (spoolRoot.exists(p => !java.nio.file.Files.isDirectory(p))) {
-            return None
-        }
+    def withinAssemblyStream[T](artifact: Path)(f: Vector[AssemblyEntry] => T): Option[T] = {
+        // 2026_09_04 (B-2/B-9): the walk is byte-faithful — it takes no
+        // spool directory, never decompresses, and contains zero
+        // payload logic.
         AssemblyDefinition.readAssembly(artifact.toString) match {
             case Failure(_) => None
             case Success(assembly) =>
@@ -72,7 +67,7 @@ object AssemblyWalker {
                         val enumerated = Try {
                             module.reader match {
                                 case None => throw DataFormatException()
-                                case Some(reader) => AssemblyEnumerator.enumerate(module, reader, session, spoolRoot)
+                                case Some(reader) => AssemblyEnumerator.enumerate(module, reader, session)
                             }
                         }
                         enumerated match {
@@ -80,13 +75,12 @@ object AssemblyWalker {
                                 session.close()
                                 assembly.close()
                                 None
-                            case Success((entries, views)) =>
+                            case Success(entries) =>
                                 try {
                                     val result = f(entries)
                                     Some(result)
                                 } finally {
                                     session.close()
-                                    views.foreach(_.close())
                                     assembly.close()
                                 }
                         }
@@ -104,18 +98,15 @@ object AssemblyWalker {
         def enumerate(
             module: ModuleDefinition,
             reader: MetadataReader,
-            session: AssemblyWalkSession,
-            spoolRoot: Option[Path]
-        ): (Vector[AssemblyEntry], Vector[PDBView]) = {
+            session: AssemblyWalkSession
+        ): Vector[AssemblyEntry] = {
             val builder = Vector.newBuilder[AssemblyEntry]
-            val views = Vector.newBuilder[PDBView]
             enumerateClasses(module, session, builder)
             enumerateResources(module, reader, session, builder)
             enumerateCertificates(reader, session, builder)
             enumerateWin32(reader, session, builder)
             enumerateDebugBlobs(reader, session, builder)
-            enumerateEmbeddedSources(reader, session, spoolRoot, builder, views)
-            (builder.result(), views.result())
+            builder.result()
         }
 
         // Classes: module.types (attribute-top-level, table order),
@@ -189,9 +180,11 @@ object AssemblyWalker {
                 case r: EmbeddedResource =>
                     r.resourceOffset match {
                         case Some(offset) =>
+                            val payload = reader.managedResourcePayload(offset)
                             builder += new EmbeddedResourceEntry(
                                 DotnetNameSanitizer.sanitize(r.name),
-                                reader.managedResourcePayload(offset),
+                                payload,
+                                PayloadBytes.lengthOf(payload),
                                 session
                             )
                         case None => throw DataFormatException()
@@ -248,38 +241,15 @@ object AssemblyWalker {
                 val ordinal = occurrences.getOrElse(entry.entryType, 0)
                 occurrences.update(entry.entryType, ordinal + 1)
                 val name = if (ordinal == 0) base else base + "-" + ordinal
-                builder += new DebugBlobEntry(DotnetNameSanitizer.sanitize(name), entry.entryType, entry, session)
-            }
-        }
-
-        // Embedded portable PDB sources (phase D, D-6/D-13): only when
-        // spoolRoot is provided AND the type-17 payload is a genuine
-        // MPDB envelope (magic-valid). Absent or magic-invalid ->
-        // DebugBlob only, no sources, no refusal. Any spool refusal
-        // (hostile declaration, mismatch, IO) propagates -> the walk
-        // returns None (all-or-nothing). Sources are appended after
-        // the debug blobs, in PDB table order.
-        private def enumerateEmbeddedSources(
-            reader: MetadataReader,
-            session: AssemblyWalkSession,
-            spoolRoot: Option[Path],
-            builder: mutable.Builder[AssemblyEntry, Vector[AssemblyEntry]],
-            views: mutable.Builder[PDBView, Vector[PDBView]]
-        ): Unit = {
-            spoolRoot.foreach { dir =>
-                reader.readEmbeddedPortablePdb(Some(dir)) match {
-                    case Success(Some(view)) =>
-                        view.sources.foreach { source =>
-                            builder += new EmbeddedSourceEntry(
-                                DotnetNameSanitizer.sanitize(source.name),
-                                source,
-                                session
-                            )
-                        }
-                        views += view
-                    case Success(None) => ()
-                    case Failure(_) => throw DataFormatException()
-                }
+                // B-4: the type-17 payload length is its in-file sizeOfData;
+                // the hint override (format=mpdb) lives on the entry.
+                builder += new DebugBlobEntry(
+                    DotnetNameSanitizer.sanitize(name),
+                    entry.entryType,
+                    entry,
+                    entry.payloadByteLength,
+                    session
+                )
             }
         }
     }

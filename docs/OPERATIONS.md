@@ -32,15 +32,10 @@ by the provisioner (ADR-0009).
 
 | Suite | Command | What it proves |
 |---|---|---|
-| Default | `sbt -batch test` | 291 tests: style gates, corpus pins, provisioning gate, model contract, decoder, EH, bodies, caps, re-encode, sanitizer, slice views, walk, names, PDB spool, probe, fixture + corpus parity |
-| Slow parity | `sbt -batch 'set Test / testOptions := Seq.empty' "testOnly io.spicelabs.cilantro.cil.ParityHarnessTests"'` | every corpus assembly's tier1+tier2 dumps are byte-identical to the goldens |
-| Slow properties | `... "testOnly io.spicelabs.cilantro.cil.CorpusPropertyTests"` | parse-all accounting, token round-trip, mutation fuzz (incl. oracle verdict comparison), cyclic-token resolution |
+| Whole suite | `sbt -batch test` | 318 tests, no exclusions (the fast/slow split was removed 2026-09-04): style gates, corpus pins, provisioning gate, model contract, decoder, EH, bodies, caps, re-encode, sanitizer, slice views, walk, names, PDB spool, probe, full-corpus parity + corpus properties |
 | Clean gate | `sbt -batch clean test` | 0 warnings, 0 errors — a project gate |
 
-The `Slow` tag is excluded from the default run by `build.sbt`
-(`--exclude-tags=Slow`); the `set Test / testOptions := Seq.empty`
-incantation is required because the exclusion also applies to
-`testOnly`.
+`sbt test` runs every test; there is no tag exclusion in `build.sbt`.
 
 ## Corpus operations
 
@@ -128,8 +123,8 @@ Workflow:
   copy `corpus/golden/bin` from a machine that has it.
 - **"committed ground truth modified"** — a fetch attempted to write
   the committed trees; report it, do not clear it.
-- **Slow tests "Ignored"** — the build.sbt exclusion applies to
-  `testOnly` too; use `set Test / testOptions := Seq.empty` first.
+- **Tests "Ignored"** — there is no tag exclusion anymore (removed
+  2026-09-04); an ignored test indicates a real `munit.Ignore`.
 - **Timeouts** — corpus suites raise munit's timeout to 120 min (a
   cold-cache population can legitimately take minutes); a timeout on a
   warm cache points at a hung fetch — check `corpus/.populating.lock`

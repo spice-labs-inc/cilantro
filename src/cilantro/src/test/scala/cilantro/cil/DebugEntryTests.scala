@@ -39,7 +39,6 @@ class DebugEntryTests extends munit.FunSuite {
 
   override def munitTimeout = scala.concurrent.duration.Duration(120, "min")
 
-  private val Slow = new munit.Tag("Slow")
 
   private def i2(v: Int): Array[Byte] = Array((v & 0xff).toByte, ((v >> 8) & 0xff).toByte)
 
@@ -56,30 +55,40 @@ class DebugEntryTests extends munit.FunSuite {
   private def payloadBytes(p: io.spicelabs.cilantro.PayloadSource): Array[Byte] =
     p.processStream(in => in.readAllBytes())
 
-  // Plan 2026_09_02 phase D (D-6/D-13): the embedded PDB accessor
-  // takes the caller's spool directory and returns a PDBView whose
-  // sources stream. Runs inside a per-call temp dir, cleaned after.
-  private def debugInfo(path: String): scala.util.Try[(Vector[io.spicelabs.cilantro.DebugEntryData], Option[io.spicelabs.cilantro.PDBView])] = {
+  // Plan 2026_09_02/04 phase D (D-6/D-13, B-8): the embedded PDB
+  // reader is callback-owned — sources are captured INSIDE f (the
+  // view is live only there) and returned as (name, bytes). Runs
+  // inside a per-call temp dir, cleaned after.
+  private def debugInfo(path: String): scala.util.Try[(Vector[io.spicelabs.cilantro.DebugEntryData], Vector[(String, Array[Byte])])] = {
     AssemblyDefinition.readAssembly(path).flatMap { assembly =>
       assembly.mainModule match {
         case None => scala.util.Failure(new IllegalArgumentException("no main module"))
         case Some(module) =>
-          scala.util.Try {
-            val spool = java.nio.file.Files.createTempDirectory("cilantro-test-spool")
-            try {
-              module.read((Vector.empty[io.spicelabs.cilantro.DebugEntryData], Option.empty[io.spicelabs.cilantro.PDBView]), (_, reader: io.spicelabs.cilantro.MetadataReader) => {
-                val entries = reader.readDebugEntryData()
-                val b = Vector.newBuilder[io.spicelabs.cilantro.DebugEntryData]
-                entries.foreach(e => b += e)
-                val pdbOutcome = reader.readEmbeddedPortablePdb(Some(spool))
-                pdbOutcome match {
-                  case scala.util.Success(v) => (b.result(), v)
-                  case scala.util.Failure(e) => sys.error(e.toString)
-                }
-              })
-            } finally {
-              Helpers.deleteRecursively(spool)
+          val spool = java.nio.file.Files.createTempDirectory("cilantro-test-spool")
+          try {
+            scala.util.Try {
+              module.reader match {
+                case None => sys.error("no metadata reader")
+                case Some(reader) =>
+                  reader.withEmbeddedPdb(Some(spool)) { outcome =>
+                    val entries = reader.readDebugEntryData()
+                    val b = Vector.newBuilder[io.spicelabs.cilantro.DebugEntryData]
+                    entries.foreach(e => b += e)
+                    val sources = outcome match {
+                      case scala.util.Success(Some(view)) =>
+                        view.sources.map(s => (s.name, payloadBytes(s)))
+                      case _ => Vector.empty[(String, Array[Byte])]
+                    }
+                    (b.result(), sources)
+                  } match {
+                    case scala.util.Success(Some(t)) => t
+                    case scala.util.Success(None) => sys.error("withEmbeddedPdb did not run f")
+                    case scala.util.Failure(e) => sys.error(e.toString)
+                  }
+              }
             }
+          } finally {
+            Helpers.deleteRecursively(spool)
           }
       }
     }
@@ -110,7 +119,7 @@ class DebugEntryTests extends munit.FunSuite {
 
   test("C5-05a: the pinned embedded-PDB fixture matches the oracle entries and its own sources") {
     debugInfo(corpusRoot.resolve("fixtures/embedded_pdb_fixture.dll").toString) match {
-      case Success((entries, pdb)) =>
+      case Success((entries, sources)) =>
         // Pinned against the GoldenDumper debug oracle (2026-08-28).
         assertEquals(entries.length, 3, "the size-0 deterministic entry is skipped")
         assertEquals(entries(0).entryType, 2) // CodeView
@@ -120,16 +129,11 @@ class DebugEntryTests extends munit.FunSuite {
         assertEquals(entries(2).entryType, 17) // EmbeddedPortablePdb
         assertEquals(payloadBytes(entries(2)).length, 6888)
 
-        pdb match {
-          case Some(p) =>
-            assertEquals(p.sources.length, 3, "Widget.cs + two generated sources")
-            val widget = p.sources.find(_.name.endsWith("Widget.cs")).getOrElse(fail("Widget.cs missing"))
-            val repoSource = new String(
-              java.nio.file.Files.readAllBytes(java.nio.file.Paths.get("../../scripts/fixtures/embedded/Widget.cs")), "UTF-8")
-            val widgetText = new String(widget.processStream(in => in.readAllBytes()), "UTF-8")
-            assertEquals(widgetText, repoSource, "the embedded Widget.cs must equal the repo source byte-for-byte")
-          case None => fail("the fixture must carry an embedded PDB")
-        }
+        assertEquals(sources.length, 3, "Widget.cs + two generated sources")
+        val widget = sources.find(_._1.endsWith("Widget.cs")).getOrElse(fail("Widget.cs missing"))
+        val repoSource = new String(
+          java.nio.file.Files.readAllBytes(java.nio.file.Paths.get("../../scripts/fixtures/embedded/Widget.cs")), "UTF-8")
+        assertEquals(new String(widget._2, "UTF-8"), repoSource, "the embedded Widget.cs must equal the repo source byte-for-byte")
       case Failure(t) => fail(s"the fixture must read: $t")
     }
   }
@@ -150,7 +154,7 @@ class DebugEntryTests extends munit.FunSuite {
     }
   }
 
-  test("C5-05b (Slow): every corpus assembly's debug data reads or is empty — never throws".tag(Slow)) {
+  test("C5-05b: every corpus assembly's debug data reads or is empty — never throws") {
     import org.json4s._
     val manifest = org.json4s.native.JsonMethods.parse(
       new String(java.nio.file.Files.readAllBytes(corpusRoot.resolve("manifest.json")), "UTF-8"))

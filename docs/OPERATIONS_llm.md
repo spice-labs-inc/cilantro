@@ -5,8 +5,8 @@ tuned for retrieval. Claims carry their pinning test in parentheses.
 
 ## Run model
 
-- Suite: `cd src/cilantro && sbt -batch test` (default excludes the
-  `Slow` tag via build.sbt).
+- Suite: `cd src/cilantro && sbt -batch test` — runs every test; no
+  tag exclusions (fast/slow split removed 2026-09-04).
 - Prerequisites: JVM always; docker only when `corpus/golden/bin` is
   absent (golden regeneration, ADR-0009); network only when the cache
   is cold.

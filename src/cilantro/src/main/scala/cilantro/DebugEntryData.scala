@@ -9,23 +9,31 @@
 // Licensed under the MIT/X11 license.
 
 // DebugEntryData + PDBView + EmbeddedSourceFile — the debug-directory
-// data exposure (plan 13, C5-05; plan 2026_09_02, phases B/D).
+// data exposure (plan 13, C5-05; plans 2026_09_02/2026_09_04).
 // Cilantro exposes raw blobs only; it never interprets the
 // codeview/PDB internals beyond the embedded-source walk documented
 // in ADR-0011/ADR-0014.
 //
-// Phase D shapes (ADR-0014, D-8/D-13):
+// Phase D shapes (ADR-0014, D-8/D-13) + the 2026_09_04 byte-faithful
+// amendment (B-8/B-11):
 //   - DebugEntryData's payload is a streaming, zero-copy slice view
-//     (PayloadSource) over the file (phase B).
-//   - The embedded portable PDB root is decompressed into the
-//     caller-provided spool directory and memory-mapped (D-6/D-12);
-//     PDBView walks the tables from that map and exposes its sources.
+//     (PayloadSource) over the file; its exact in-file length is
+//     available through the internal payloadByteLength seam.
+//   - PDB reading is a callback-owned capability entirely separate
+//     from the walk: PortablePdbFile.withPdb and
+//     MetadataReader.withEmbeddedPdb hand f the open/parse outcome
+//     (Try[Option[PDBView]]); the view is live only inside f; when f
+//     returns or throws, cleanup is automatic (map released,
+//     cilantro's scratch deleted, the caller's spool directory never
+//     touched). PDBView has no public close() — liveness is
+//     session-gated like walk entries; retained sources refuse
+//     cleanly after the owning call.
 //   - EmbeddedSourceFile is (name, PayloadSource): format-0 sources
 //     stream as map slices; deflate-format sources are pull-inflated
-//     inside processStream, bounded by their declared size — cleanup
-//     is guaranteed when processStream exits (D-8).
+//     inside processStream, bounded by their declared size.
 
 package io.spicelabs.cilantro
+
 
 final class DebugEntryData(
     private val _entryType: Int,
@@ -34,6 +42,11 @@ final class DebugEntryData(
     def entryType = _entryType
 
     def processStream[T](f: java.io.InputStream => T): T = payload.processStream(f)
+
+    // Internal byte-faithful length (2026_09_04, B-4): the exact
+    // in-file byte count (sizeOfData) of the data this entry
+    // delivers.
+    private[cilantro] def payloadByteLength: Long = PayloadBytes.lengthOf(payload)
 }
 
 final class EmbeddedSourceFile(
@@ -45,19 +58,33 @@ final class EmbeddedSourceFile(
     def processStream[T](f: java.io.InputStream => T): T = payload.processStream(f)
 }
 
-// The spooled embedded-portable-PDB view: tables walked from a map of
-// the decompressed root; sources stream lazily (D-13). The view owns
-// the spooled scratch file it created (the spool DIRECTORY is the
-// caller's — D-6): close() releases the mapping and deletes the
-// file. Source streams are usable until close().
+// The portable-PDB view: sources walked from a map of the root bytes.
+// The view is callback-owned (withPdb / withEmbeddedPdb): it is live
+// only inside the callback and refuses afterwards (session gate on
+// every source). The scratch file is cilantro's own creation inside
+// the caller's spool DIRECTORY (which cilantro never creates or
+// deletes — D-6); cleanup deletes the scratch and releases the map.
 final class PDBView private[cilantro] (
-    private val sourcesIn: Vector[EmbeddedSourceFile],
+    rawSources: Vector[EmbeddedSourceFile],
     private val scratch: Option[java.nio.file.Path],
-    private val map: Option[java.nio.ByteBuffer]
-) extends AutoCloseable {
-    def sources: Vector[EmbeddedSourceFile] = sourcesIn
+    private val map: Option[Any]
+) {
+    private val session = new AssemblyWalkSession(
+        "portable pdb view ended; source no longer usable"
+    )
 
-    override def close(): Unit = {
+    // Session-gated sources: usable inside the owning call only.
+    val sources: Vector[EmbeddedSourceFile] = rawSources.map { source =>
+        new EmbeddedSourceFile(source.name, new PayloadSource {
+            def processStream[T](f: java.io.InputStream => T): T = {
+                session.ensureOpen()
+                source.processStream(f)
+            }
+        })
+    }
+
+    private[cilantro] def closeNow(): Unit = {
+        session.close()
         map.foreach(_ => ()) // release the reference
         scratch.foreach(p => try {
             java.nio.file.Files.deleteIfExists(p)

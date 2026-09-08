@@ -48,7 +48,6 @@ import java.io.RandomAccessFile
 
 class Win32ResourceAggregateTests extends munit.FunSuite {
 
-  private val Slow = new munit.Tag("Slow")
 
   private def corpusRoot = CorpusProvisioner.ensureCorpus()
 
@@ -354,7 +353,7 @@ class Win32ResourceAggregateTests extends munit.FunSuite {
     }
   }
 
-  test("H4-05 (Slow): corpus leaf counts stay below the count caps".tag(Slow)) {
+  test("H4-05: corpus leaf counts stay below the count caps") {
     // Plan 2026_09_02 phase B (D-10): the aggregate byte-total
     // assertion is gone (byte budgets died with the array path); the
     // object guards are asserted. Leaf byte totals are reported only

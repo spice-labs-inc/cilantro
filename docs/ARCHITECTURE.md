@@ -130,10 +130,10 @@ Red → green everywhere. Suites by phase: C0 style gates, C1 corpus and
 goldens, C2 decoder, C3 EH and integration, C4 parity/caps/properties,
 P1 provisioning-gate unit tests. The full traceability table (every
 Cx-xx test and the claim it pins) lives in the workspace
-`TRACEABILITY.md`. Fast vs Slow: anything that needs the corpus is
-`Slow`-tagged; the fast suite is the default gate. The provisioning
-tests (P1-xx) run in the default suite with synthetic corpora — no
-docker, no network.
+`TRACEABILITY.md`. There is no fast/slow split (removed 2026-09-04):
+`sbt test` runs every test, including the full-corpus parity and
+corpus-property suites. The provisioning tests (P1-xx) run in the
+default suite with synthetic corpora — no docker, no network.
 
 ## Style
 
@@ -175,18 +175,28 @@ probe, walk, wrap. Three mechanisms back it (claims → tests):
    (D-9): in-file blobs of any size are legal, past-EOF declarations
    refuse at open (`DebugHeaderCapTests` H6-01..H6-05,
    `DebugEntryTests` C5-05c).
-3. **The walk** — `AssemblyWalker.withinAssemblyStream` hands the
+3. **The walk** — byte-faithful (2026_09_04 amendment B-1..B-11):
+   `AssemblyWalker.withinAssemblyStream(artifact)(f)` hands the
    consumer one complete `Vector[AssemblyEntry]` or `None`
-   (all-or-nothing, D-1/D-2). Claim: "the vector is either populated
-   or not; f runs exactly once" → `AssemblyWalkerTests` CP-2c/CP-2e.
-   Class enumeration is cycle-safe (ancestor-RID set; a NestedClass
-   cycle refuses, never loops) → CP-2c/CP-2d. Entry names are
-   hardened at the source by `DotnetNameSanitizer` (injective
-   percent-escapes for controls/surrogates/separators; 255-unit cap;
-   never empty) → `NameHardeningTests` CP-6a..d. Entries are valid
-   only inside the callback; retained entries refuse cleanly with
-   `IOException` → CP-2e. The canonical per-class bytes remain the
-   golden `"cilantro-type"` v1 JSON (unchanged; `CanonicalJsonTests`).
+   (all-or-nothing, D-1/D-2) and takes NO spool directory. Every
+   entry carries `name`, `kind`, `mimeHint`, and `length` — the exact
+   byte count of the payload it delivers (in-file for file-backed
+   payloads; the canonical-JSON byte count is the single documented
+   exception for Class). The walk contains ZERO payload logic: no
+   decompression, no envelope checks, no magic sniffing (B-9) — a
+   hostile PDB never affects the walk (B-10). Claims: "entries only
+   deliver raw bytes; the type-17 payload is one raw-MPDB DebugBlob
+   with length == its in-file size" → `AssemblyWalkerTests` CP-2a;
+   "length == stream bytes for every file-backed kind" → CP-2a
+   byte-faithfulness; "the vector is either populated or not; f runs
+   exactly once" → CP-2c/CP-2e; "cycle-safe class enumeration"
+   → CP-2c/CP-2d; "seeded flips/truncations over the debug directory
+   and type-17 payload never throw" → CP-2d; "names hardened at the
+   source" → `NameHardeningTests` CP-6a..d; "after the walk,
+   `length` and `processStream` refuse for every kind while
+   name/kind/hint stay live" → CP-2e refusal matrix. The canonical
+   per-class bytes remain the golden `"cilantro-type"` v1 JSON
+   (unchanged; `CanonicalJsonTests`).
 4. **Embedded portable PDBs** — the MPDB root is decompressed into a
    scratch file the CALLER's spool directory provides (D-6), mapped,
    and its tables walked from the map with Long extent arithmetic;
@@ -197,10 +207,12 @@ probe, walk, wrap. Three mechanisms back it (claims → tests):
    refuses cleanly and output never exceeds declared" → CP-5d;
    "a partial read performs only partial work" → CP-5f.
 
-The payload model lives in `PayloadSource.scala`,
+The payload model lives in `PayloadSource.scala` (+ the internal
+`PayloadBytes` exact-length seam — deliberately NOT on the trait),
 `cilantro.PE/MappedSliceSource.scala` (+ `BufferSliceInputStream`),
 `cilantro.PE/RawInflate.scala` (push `pump` + pull
-`RawInflateInputStream`), `AssemblyEntry.scala`,
-`AssemblyWalker.scala`, `DotnetNameSanitizer.scala`,
-`PortablePdbSpool.scala` (PDB root/tables parser) and
+`RawInflateInputStream`), `AssemblyEntry.scala` (length + the
+DebugBlob type-17 hint override), `AssemblyWalker.scala`,
+`DotnetNameSanitizer.scala`, `PortablePdbSpool.scala` (PDB
+root/tables parser), `PortablePdbFile.scala` (withPdb) and
 `DebugEntryData.scala` (PDBView/EmbeddedSourceFile).

@@ -48,7 +48,6 @@ class CorpusPropertyTests extends munit.FunSuite {
 
   override def munitTimeout = scala.concurrent.duration.Duration(120, "min")
 
-  private val Slow = new munit.Tag("Slow")
 
   implicit val formats: DefaultFormats.type = DefaultFormats
 
@@ -71,7 +70,7 @@ class CorpusPropertyTests extends munit.FunSuite {
     CorpusHelpers.corpusRoot.resolve(rel)
   }
 
-  test("C4-04: parse-all over the corpus never throws and failures are accounted".tag(Slow)) {
+  test("C4-04: parse-all over the corpus never throws and failures are accounted") {
     var ok = 0
     var failed = 0
     var total = 0
@@ -101,7 +100,7 @@ class CorpusPropertyTests extends munit.FunSuite {
     assert(ok > 0, "at least one corpus assembly must parse")
   }
 
-  test("C4-05: every resolvable TypeDef/method/field token maps back to its definition".tag(Slow)) {
+  test("C4-05: every resolvable TypeDef/method/field token maps back to its definition") {
     corpusAssemblies().foreach { case (rel, _, corrupt) =>
       if (!corrupt) {
         AssemblyDefinition.readAssembly(corpusPath(rel).toString) match {
@@ -140,7 +139,7 @@ class CorpusPropertyTests extends munit.FunSuite {
     }
   }
 
-  test("C4-07: seeded mutations over corpus bytes yield clean Success/Failure verdicts".tag(Slow)) {
+  test("C4-07: seeded mutations over corpus bytes yield clean Success/Failure verdicts") {
     val seed = 0xC40_007L
     corpusAssemblies().foreach { case (rel, _, _) =>
       val original = Files.readAllBytes(corpusPath(rel))
@@ -182,7 +181,7 @@ class CorpusPropertyTests extends munit.FunSuite {
     }
   }
 
-  test("C4-07: mutation verdicts match the golden helper's Cecil verdicts".tag(Slow)) {
+  test("C4-07: mutation verdicts match the golden helper's Cecil verdicts") {
     // One representative assembly, the same mutation set as the local
     // property, verdicts compared against the pinned helper (Cecil
     // 0.11.6 + NullResolver, metadata-only, never executes code).
@@ -256,7 +255,7 @@ class CorpusPropertyTests extends munit.FunSuite {
     out.split("SEP").toVector.map(_.linesIterator.find(_.startsWith("ok ")).map(_ => "ok").getOrElse("fail"))
   }
 
-  test("C4-09: self-referential base-type chain resolves without stack overflow".tag(Slow)) {
+  test("C4-09: self-referential base-type chain resolves without stack overflow") {
     val rel = "bin/FluentAssertions/6.12.2/netcoreapp2.1/FluentAssertions.dll"
     AssemblyDefinition.readAssembly(corpusPath(rel).toString) match {
       case Success(assembly) =>

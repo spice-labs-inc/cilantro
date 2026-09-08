@@ -158,38 +158,25 @@ class StyleRulesSuite extends munit.FunSuite {
     )
   }
 
-  test("C4-10: corpus parity suite is tagged Slow and excluded by default") {
-    // The plan requires the corpus parity run to be a tagged (slow)
-    // suite that runs explicitly, never as part of the default fast
-    // gate. Pinning the tag and the build.sbt exclusion means removing
-    // either turns this test red.
+  test("C4-10: no test-tag exclusion gates the default run (2026-09-04)") {
+    // User decision 2026-09-04: there is no fast-vs-slow split —
+    // `sbt test` runs EVERY test, no exceptions. This pins the
+    // absence: build.sbt must not exclude any tag, and no test source
+    // may declare or use a Slow tag (a re-introduction turns this red).
     val buildLines = buildSbtLines
     assert(
-      buildLines.exists(_.contains("--exclude-tags=Slow")),
-      "build.sbt must exclude the Slow tag from the default test run"
+      !buildLines.exists(_.contains("--exclude-tags")),
+      "build.sbt must not exclude any tag from the default test run"
     )
-    val paritySource = Files
-      .readAllLines(Paths.get("src/test/scala/cilantro/cil/ParityHarnessTests.scala"))
-      .toArray
-      .map(_.toString)
-      .toSeq
-    assert(
-      paritySource.exists(_.contains("new munit.Tag(\"Slow\")")),
-      "ParityHarnessTests must declare the Slow tag"
-    )
-    val slowTagged = paritySource.exists(line =>
-      line.contains("full-corpus tier1/tier2") || line.contains("tag(Slow)")
-    )
-    assert(slowTagged, "the full-corpus parity test must be tagged Slow")
-    val corpusSource = Files
-      .readAllLines(Paths.get("src/test/scala/cilantro/cil/CorpusPropertyTests.scala"))
-      .toArray
-      .map(_.toString)
-      .toSeq
-    assert(
-      corpusSource.exists(_.contains("new munit.Tag(\"Slow\")")) &&
-        corpusSource.exists(_.contains("tag(Slow)")),
-      "CorpusPropertyTests must declare and use the Slow tag"
+    val allSources = scalaSourcesUnder("src/test")
+    val offenders = allSources.filter { f =>
+      val text = codeTextOf(f)
+      text.contains("new munit.Tag(\"Slow\")") || text.contains("tag(Slow)")
+    }
+    assertEquals(
+      offenders,
+      Seq.empty[String],
+      "no test source may declare or use a Slow tag"
     )
   }
 }

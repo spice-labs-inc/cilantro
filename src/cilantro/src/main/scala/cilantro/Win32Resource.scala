@@ -38,4 +38,8 @@ final class Win32Resource(
     def nameOrId = _name.getOrElse(_nameId.toString)
 
     def processStream[T](f: java.io.InputStream => T): T = payload.processStream(f)
+
+    // Internal byte-faithful length (2026_09_04, B-4): the exact
+    // in-file byte count of the leaf this entry delivers.
+    private[cilantro] def payloadByteLength: Long = PayloadBytes.lengthOf(payload)
 }

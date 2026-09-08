@@ -40,8 +40,11 @@ class ContractTests extends munit.FunSuite {
     val debugDataShape: io.spicelabs.cilantro.MetadataReader => scala.collection.mutable.ArrayBuffer[io.spicelabs.cilantro.DebugEntryData] =
       (r: io.spicelabs.cilantro.MetadataReader) => r.readDebugEntryData()
 
-    val embeddedPdbShape: io.spicelabs.cilantro.MetadataReader => (Option[java.nio.file.Path]) => scala.util.Try[Option[io.spicelabs.cilantro.PDBView]] =
-      (r: io.spicelabs.cilantro.MetadataReader) => r.readEmbeddedPortablePdb
+    val embeddedPdbShape: io.spicelabs.cilantro.MetadataReader =>
+      (Option[java.nio.file.Path]) =>
+        ((scala.util.Try[Option[io.spicelabs.cilantro.PDBView]]) => Vector[Int]) =>
+          scala.util.Try[Option[Vector[Int]]] =
+      (r: io.spicelabs.cilantro.MetadataReader) => spool => f => r.withEmbeddedPdb[Vector[Int]](spool)(f)
 
     val securityDirShape: io.spicelabs.cilantro.PE.Image => Option[io.spicelabs.cilantro.PE.DataDirectory] =
       (i: io.spicelabs.cilantro.PE.Image) => i.securityDirectory

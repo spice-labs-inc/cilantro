@@ -54,7 +54,6 @@ class SliceViewTests extends munit.FunSuite {
 
   override def munitTimeout = scala.concurrent.duration.Duration(120, "min")
 
-  private val Slow = new munit.Tag("Slow")
 
   private def corpusRoot = CorpusProvisioner.ensureCorpus()
 

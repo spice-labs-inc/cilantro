@@ -7,7 +7,7 @@ steps and the frozen contract.
 ## Prerequisites
 
 - The zero-warnings clean build: `sbt -batch clean test` (0 warnings,
-  0 errors) and the Slow suites green.
+  0 errors) — the whole suite runs, no exclusions.
 - The corpus cache verified: `scripts/ensure_corpus.sh`.
 - GPG keys configured (the pom already binds the maven-gpg-plugin).
 
@@ -34,7 +34,9 @@ io.spicelabs.cilantro.PE.Image.securityDirectory: Option[DataDirectory]
 io.spicelabs.cilantro.MetadataReader.readCertificateEntries(): ArrayBuffer[CertificateEntry]
 io.spicelabs.cilantro.MetadataReader.readWin32Resources(): ArrayBuffer[Win32Resource]
 io.spicelabs.cilantro.MetadataReader.readDebugEntryData(): ArrayBuffer[DebugEntryData]
-io.spicelabs.cilantro.MetadataReader.readEmbeddedPortablePdb(): Option[EmbeddedPdb]
+io.spicelabs.cilantro.MetadataReader.readDebugEntryData(): ArrayBuffer[DebugEntryData]
+io.spicelabs.cilantro.MetadataReader.withEmbeddedPdb[T](spoolDir)(f: Try[Option[PDBView]] => T): Try[Option[T]]
+io.spicelabs.cilantro.PortablePdbFile.withPdb[T](file, spoolDir)(f: Try[Option[PDBView]] => T): Try[Option[T]]
 ```
 
 The whole surface is Option/Try, no null — the same contract as the

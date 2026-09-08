@@ -28,7 +28,6 @@ class ParityHarnessTests extends munit.FunSuite {
 
   implicit val formats: DefaultFormats.type = DefaultFormats
 
-  val Slow = new munit.Tag("Slow")
 
   private def manifest: JValue = {
     val root = CorpusProvisioner.ensureCorpus()
@@ -99,7 +98,7 @@ class ParityHarnessTests extends munit.FunSuite {
     assemblies.foreach { case (rel, mixed, corrupt) => diffAssembly(rel, mixed, corrupt) }
   }
 
-  test("C4-01: full-corpus tier1/tier2 diff passes against pinned goldens".tag(Slow)) {
+  test("C4-01: full-corpus tier1/tier2 diff passes against pinned goldens") {
     val packages = (manifest \ "packages").children
     packages.foreach { pkg =>
       packageAssemblies(pkg).foreach { case (rel, mixed, corrupt) =>

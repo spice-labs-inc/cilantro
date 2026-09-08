@@ -90,7 +90,7 @@ object ForkedHelper {
     }
 
     private def walkAssembly(file: String): Int = {
-        AssemblyWalker.withinAssemblyStream[Int](new java.io.File(file))(_ => 0)(None) match {
+        AssemblyWalker.withinAssemblyStream[Int](new java.io.File(file))(_ => 0) match {
             case None => println("WALK-NONE")
             case Some(_) => println("WALK-SOME")
         }

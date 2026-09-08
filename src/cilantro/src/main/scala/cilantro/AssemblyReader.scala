@@ -847,36 +847,49 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
         entries
     }
 
-    // Embedded portable PDB (plan 2026_09_02, phase D; ADR-0014
-    // D-6/D-12/D-13): the type-17 debug entry's payload is an MPDB
-    // envelope (magic + declared uncompressed size + a raw deflate of
-    // the BSJB metadata root). It must be decompressed to be walked
-    // at all, and under the streaming design the decompression goes
-    // to a scratch file the CALLER's spool directory provides:
+    // Embedded portable PDB — callback-owned (2026_09_04, B-8): the
+    // type-17 debug entry's payload is an MPDB envelope (magic +
+    // declared uncompressed size + a raw deflate of the BSJB metadata
+    // root). Reading a PDB (which may include decompression) is
+    // entirely separate from the walk and from entry semantics:
     //
-    //   readEmbeddedPortablePdb(spoolDir) -> Try[Option[PDBView]]
-    //     Try Failure   = hostile refusal (declaration >= 2^31,
-    //                    size mismatch, IO) — never silent;
-    //     None          = absent: no type-17 entry, or its payload is
-    //                    not an MPDB envelope (benign, like the old
-    //                    not-a-PDB None);
-    //     Some(PDBView) = the spooled view; sources stream lazily;
-    //                    close() releases the map and deletes the
-    //                    scratch file cilantro created (the spool
-    //                    DIRECTORY is the caller's — never deleted).
-    //   spoolDir = None -> None (no in-memory fallback: one would
-    //   need exactly the byte budget this design removes).
-    def readEmbeddedPortablePdb(spoolDir: Option[Path]): scala.util.Try[Option[PDBView]] = scala.util.Try {
-        spoolDir match {
-            case None => None
-            case Some(dir) =>
-                if (!java.nio.file.Files.isDirectory(dir)) {
-                    throw DataFormatException()
-                }
-                embeddedPdbPayload() match {
+    //   withEmbeddedPdb[T](spoolDir)(f: Try[Option[PDBView]] => T):
+    //       Try[Option[T]]
+    //     f is ALWAYS invoked exactly once with the outcome:
+    //       Success(Some(view)) = the spooled view (live only inside
+    //                             f; cleanup automatic when f returns
+    //                             or throws);
+    //       Success(None)        = absent: no type-17 entry, or its
+    //                             payload is not an MPDB envelope
+    //                             (benign; spoolDir = None is also
+    //                             absent — no in-memory fallback);
+    //       Failure(e)           = hostile refusal (declaration >=
+    //                             2^31, size mismatch, IO) — never
+    //                             silent.
+    //     The outer result passes f's value back (Failure only if f
+    //     threw). Cleanup: map released, cilantro's scratch deleted,
+    //     the caller's spool DIRECTORY never touched (D-6).
+    def withEmbeddedPdb[T](spoolDir: Option[Path])(f: scala.util.Try[Option[PDBView]] => T): scala.util.Try[Option[T]] = {
+        scala.util.Try {
+            val outcome = scala.util.Try {
+                spoolDir match {
                     case None => None
-                    case Some(payload) => PortablePdbSpool.spoolAndParse(payload, dir)
+                    case Some(dir) =>
+                        if (!java.nio.file.Files.isDirectory(dir)) {
+                            throw DataFormatException()
+                        }
+                        embeddedPdbPayload() match {
+                            case None => None
+                            case Some(payload) => PortablePdbSpool.spoolAndParse(payload, dir)
+                        }
                 }
+            }
+            val view = outcome.toOption.flatten
+            try {
+                Some(f(outcome))
+            } finally {
+                view.foreach(_.closeNow())
+            }
         }
     }
 
