@@ -28,4 +28,8 @@ final class CertificateEntry(
     def certificateType = _certificateType
 
     def processStream[T](f: java.io.InputStream => T): T = payload.processStream(f)
+
+    // Internal byte-faithful length (2026_09_04, B-4): the exact
+    // in-file byte count of the blob this entry delivers.
+    private[cilantro] def payloadByteLength: Long = PayloadBytes.lengthOf(payload)
 }

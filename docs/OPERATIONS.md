@@ -32,7 +32,7 @@ by the provisioner (ADR-0009).
 
 | Suite | Command | What it proves |
 |---|---|---|
-| Whole suite | `sbt -batch test` | 312 tests, no exclusions (the fast/slow split was removed 2026-09-04): style gates, corpus pins, provisioning gate, model contract, decoder, EH, bodies, caps, re-encode, sanitizer, slice views, walk, names, PDB spool, probe, full-corpus parity + corpus properties |
+| Whole suite | `sbt -batch test` | 318 tests, no exclusions (the fast/slow split was removed 2026-09-04): style gates, corpus pins, provisioning gate, model contract, decoder, EH, bodies, caps, re-encode, sanitizer, slice views, walk, names, PDB spool, probe, full-corpus parity + corpus properties |
 | Clean gate | `sbt -batch clean test` | 0 warnings, 0 errors — a project gate |
 
 `sbt test` runs every test; there is no tag exclusion in `build.sbt`.

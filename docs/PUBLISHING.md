@@ -34,7 +34,9 @@ io.spicelabs.cilantro.PE.Image.securityDirectory: Option[DataDirectory]
 io.spicelabs.cilantro.MetadataReader.readCertificateEntries(): ArrayBuffer[CertificateEntry]
 io.spicelabs.cilantro.MetadataReader.readWin32Resources(): ArrayBuffer[Win32Resource]
 io.spicelabs.cilantro.MetadataReader.readDebugEntryData(): ArrayBuffer[DebugEntryData]
-io.spicelabs.cilantro.MetadataReader.readEmbeddedPortablePdb(): Option[EmbeddedPdb]
+io.spicelabs.cilantro.MetadataReader.readDebugEntryData(): ArrayBuffer[DebugEntryData]
+io.spicelabs.cilantro.MetadataReader.withEmbeddedPdb[T](spoolDir)(f: Try[Option[PDBView]] => T): Try[Option[T]]
+io.spicelabs.cilantro.PortablePdbFile.withPdb[T](file, spoolDir)(f: Try[Option[PDBView]] => T): Try[Option[T]]
 ```
 
 The whole surface is Option/Try, no null — the same contract as the

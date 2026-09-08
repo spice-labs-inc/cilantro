@@ -16,7 +16,7 @@ oracle run in Docker).
 
 ```
 cd src/cilantro
-sbt -batch test          # the whole suite: 312 tests, no exclusions
+sbt -batch test          # the whole suite: 318 tests, no exclusions
 ```
 
 `sbt test` runs EVERY test — no fast/slow split, no tag exclusions

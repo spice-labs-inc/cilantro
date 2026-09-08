@@ -51,6 +51,10 @@ final class MappedSliceSource private[cilantro] (
             in.close()
         }
     }
+
+    // The exact in-file byte count of this slice (2026_09_04, B-4):
+    // the walk's byte-faithful length seam reads it from here.
+    def regionLength: Int = length
 }
 
 object MappedSliceSource {

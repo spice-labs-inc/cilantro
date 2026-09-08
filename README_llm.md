@@ -16,7 +16,7 @@ narrative: README.md.
 
 ## Commands (from `src/cilantro/`)
 
-- Whole suite: `sbt -batch test` — 312 tests, every test, no tag
+- Whole suite: `sbt -batch test` — 318 tests, every test, no tag
   exclusions (the fast/slow split was removed 2026-09-04).
 - Warning gate: `sbt -batch clean test` → 0 warnings, 0 errors.
 - JVM for tests: forked, `-Xmx6g -Xss16m` (set in build.sbt).

@@ -21,7 +21,24 @@
 package io.spicelabs.cilantro
 
 import java.io.InputStream
+import java.util.zip.DataFormatException
+import io.spicelabs.cilantro.PE.MappedSliceSource
 
 trait PayloadSource {
     def processStream[T](f: InputStream => T): T
+}
+
+// Internal byte-faithful length seam (2026_09_04, B-4/B-11). Entry
+// lengths are CAPTURED at slice/entry construction and never
+// re-derived from the file. The walk's file-backed payloads are all
+// MappedSliceSources built from a validated declared length; the
+// exact length lives on the slice. Deliberately NOT on the
+// PayloadSource trait: the PDB reader's deflate wrapper's exact
+// length is unknowable before inflation, so a trait-level length
+// could lie.
+private[cilantro] object PayloadBytes {
+    def lengthOf(p: PayloadSource): Long = p match {
+        case m: MappedSliceSource => m.regionLength.toLong
+        case _ => throw DataFormatException()
+    }
 }
