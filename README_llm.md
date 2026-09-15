@@ -80,3 +80,6 @@ alongside (00–10, phase-N-claims.md).
 - Adding a warning (unused import, non-local return, deprecation)
   breaks the clean-build gate. json4s Manifest synthesis is the one
   documented `-Wconf` exemption.
+
+
+Tests shared with Surveyor's integration suite: see `AGENTS.md` (ids, `test-fixtures.json`, provenance).

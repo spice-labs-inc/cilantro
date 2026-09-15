@@ -1,0 +1,50 @@
+{
+  "$comment": [
+    "What Surveyor's integration tests take from this repository, at the commit its jar was built",
+    "from (./build-surveyor expectations). tests[]: unit-test source roots; expectations[]: the data",
+    "files that drive tests (their id field is the test ID); fixtures[]: paths to export by tier",
+    "(0 committed and small, 1 nightly, 2 full corpora); downloads[]: fetched at the given tier."
+  ],
+  "schemaVersion": 1,
+  "component": "cilantro",
+  "tests": [
+    "src/cilantro/src/test/scala"
+  ],
+  "expectations": [
+    {
+      "glob": "corpus/manifest.json",
+      "format": "cilantro-corpus-manifest"
+    },
+    {
+      "glob": "corpus/golden-index.json",
+      "format": "cilantro-golden-index"
+    }
+  ],
+  "fixtures": [
+    {
+      "path": "test-files",
+      "tier": 0
+    },
+    {
+      "path": "corpus/fixtures",
+      "tier": 0
+    },
+    {
+      "path": "corpus/golden",
+      "tier": 0
+    },
+    {
+      "path": "corpus/manifest.json",
+      "tier": 0
+    },
+    {
+      "path": "corpus/packages.json",
+      "tier": 0
+    },
+    {
+      "path": "corpus/golden-index.json",
+      "tier": 0
+    }
+  ],
+  "downloads": []
+}
