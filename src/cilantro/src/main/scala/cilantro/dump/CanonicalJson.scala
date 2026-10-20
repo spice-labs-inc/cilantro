@@ -211,7 +211,6 @@ object CanonicalJson {
     case io.spicelabs.cilantro.CilNullConstant => writer.print("\"null\"")
     case s: String => writer.print(q(s))
     case t: TypeReference => writer.print("\"typeof(" + jsonEscape(t.fullName) + ")\"")
-    case Some(t: TypeReference) => writer.print("\"typeof(" + jsonEscape(t.fullName) + ")\"")
     case bytes: Array[Byte] => writer.print(q(bytes.map(b => f"$b%02x").mkString))
     case nested: io.spicelabs.cilantro.CustomAttributeArgument =>
       writer.print("{\"type\":" + q(nested.`type`.fullName) + ",\"value\":")

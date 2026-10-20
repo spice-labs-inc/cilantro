@@ -250,7 +250,7 @@ object TypeParser {
     private def getTypeReference(module: Option[ModuleDefinition], type_info: TypeParser#Type, type_def_only: Boolean): Option[TypeReference] = {
         val `type` = tryGetDefinition(module, type_info) match {
             case Some(atype) =>
-                Some(createSpecs(atype, type_info))
+                Some(atype)
             case None =>
                 if (type_def_only) {
                     None

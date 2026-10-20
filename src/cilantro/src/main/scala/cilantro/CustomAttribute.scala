@@ -14,6 +14,7 @@ package io.spicelabs.cilantro
 
 import scala.collection.mutable.ArrayBuffer
 import javax.naming.OperationNotSupportedException
+import scala.util.control.NonFatal
 
 class CustomAttributeArgument(private val _type: TypeReference, private val _value: Any)
 {
@@ -134,7 +135,7 @@ sealed class CustomAttribute(var _signature: Int, private var _constructor: Meth
     }
     def getBlob(): Array[Byte] = {
         if (_blob.length > 0) {
-            _blob
+            return _blob
         }
         if (!hasImage) {
             throw OperationNotSupportedException();
@@ -162,14 +163,15 @@ sealed class CustomAttribute(var _signature: Int, private var _constructor: Meth
                         ()
                     }
                     catch {
-                        case r: ResolutionException =>
+                        // Cecil catches only ResolutionException; any other
+                        // decode failure is treated the same, so callers never
+                        // see a partially-read argument list.
+                        case NonFatal(_) =>
                             _arguments.foreach(_.clear())
                             _fields.foreach(_.clear())
                             _properties.foreach(_.clear())
                             _resolved = false
                             ()
-                        case _ => ()
-
                     }
                 })
             }

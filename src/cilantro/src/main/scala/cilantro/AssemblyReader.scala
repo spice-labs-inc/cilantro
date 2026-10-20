@@ -30,6 +30,7 @@ import io.spicelabs.cilantro.metadata.Row3
 import io.spicelabs.cilantro.metadata.ElementType
 import io.spicelabs.cilantro.metadata.Row2
 import scala.util.boundary, boundary.break
+import scala.util.control.NonFatal
 import io.spicelabs.cilantro.MetadataReader.addRange
 import io.spicelabs.cilantro.SignatureReader.checkGenericContext
 import io.spicelabs.cilantro.AnyExtension.as
@@ -1307,17 +1308,31 @@ sealed class MetadataReader(val image: Image, val module: ModuleDefinition, val 
             return ()
         
         }
+        // Read every row before resolving any constructor: a lookup that
+        // fails part-way can leave the table cursor out of place.
+        val rows = ArrayBuffer.empty[(MetadataToken, Int)]
         for i <- 0 until range.length do {
             readMetadataToken(CodedIndex.hasCustomAttribute)
+            val token = readMetadataToken(CodedIndex.customAttributeType)
+            rows.addOne((token, readBlobIndex()))
+        }
 
-            val constructor = lookupToken(readMetadataToken(CodedIndex.customAttributeType)).map(_.asInstanceOf[MethodReference]).getOrElse(throw OperationNotSupportedException())
-            val signature = readBlobIndex()
-            custom_attributes.addOne(CustomAttribute(signature, constructor))
-        
-
-
+        // An attribute whose constructor can't be read is skipped, rather
+        // than losing every attribute on the owner.
+        val context = this._context
+        for (token, signature) <- rows do {
+            try {
+                lookupToken(token) match {
+                    case Some(constructor: MethodReference) =>
+                        custom_attributes.addOne(CustomAttribute(signature, constructor))
+                    case _ => ()
+                }
+            }
+            catch {
+                case NonFatal(_) => this._context = context
             }
         }
+    }
     private def readType(rid: Int): Option[TypeDefinition] =  {
         if (!moveTo(Table.typeDef, rid)) {
             None
@@ -3001,7 +3016,7 @@ sealed class SignatureReader(blob: Int, private val _reader: MetadataReader) ext
                 }
             case ElementType.none =>
                 if (thisType.isTypeOf("System", "Type")) {
-                    readTypeReference()
+                    readTypeReference().getOrElse(CilNullConstant)
                 }
                 else {
                     readCustomAttributeEnum(thisType)
